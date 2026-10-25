@@ -72,13 +72,15 @@ presets/             factory presets (JSON source → embedded)
 3. α trigger and $T_{\text{eff}} = (1-\alpha)\,\text{Threshold} + \alpha\,\text{Rise}$; knee ramp; Above/Below mode.
 4. Ballistics: attack / hold / release on the normalized scalar → $D_m$.
 5. Per-band modulation for Gain (dB), Freq (oct) and Morph targets, with Global Scale and clamping. Modulation is evaluated at control rate and flows through the same interpolation as static changes.
-6. Detector filters per band type, and the "Internal Band-Sum" path computed *before* dynamic modulation (feed-forward guarantee).
+6. Detector filters per band type, and the "Internal Band-Sum" path computed from the dry input (feed-forward guarantee).
+7. Lookahead: an audio-path delay line (preallocated for 10 ms at the maximum sample rate) applied to the chain input and the dry, delta and bypass paths; detectors read the undelayed signals. The engine exposes `latencySamples()`.
 
 **Tests:**
 * α=0 on a stepped sine: trigger tracks level within 0.1 dB after settling.
 * α=1 on a steady sine at −40 and −6 dBFS: trigger ≈ 0 dB at both. Transient bursts at different levels give the same peak trigger within 1 dB.
 * Ballistics: measured attack/release times within 5% of setting; hold behaves as specified.
 * Feed-forward: a boosting band subscribed to Internal Band-Sum cannot latch (bounded output over a 60 s noise render).
+* Lookahead: with L ms, output equals the L-delayed output of the zero-lookahead engine fed the same sidechain advanced by L (within tolerance); a static configuration is exactly an L-sample delay of the 0 ms result; bypass and delta stay time-aligned; `latencySamples()` matches.
 * Resonant sweep stress (touch-wah): Peak `+12 dB`, `Q = 6`, with Freq driven 20 Hz→0.45 fs by a 0–1 square-wave $D_m$ at attack 0.5 ms. Output stays bounded with no NaN, and the Vowel morph sweep across 0→4 gives continuous formant centers (no jumps at anchor boundaries).
 * Use-case renders via `tools/render`: snare split, bass crossover, F-M loudness, vowel carving, dynamic HP, touch-wah (Peak + Vowel morph). Listen-check and save as golden files with tolerance-based regression comparison.
 
@@ -89,7 +91,7 @@ presets/             factory presets (JSON source → embedded)
 4. Factory presets covering the six use cases (touch-wah ships as two presets: Peak and Vowel) plus basic EQ starting points.
 
 ## Phase 6 — Plugin integration
-1. I/O config: stereo in, stereo sidechain in, stereo out (mono variants where hosts need them). Zero reported latency.
+1. I/O config: stereo in, stereo sidechain in, stereo out (mono variants where hosts need them). Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in each host.
 2. Per-format checks: AU (auval, Logic), VST3 (Reaper, Cubase, Live, Bitwig), CLAP (Bitwig, Reaper).
 3. Automation smoothness under host automation of every continuous parameter.
 

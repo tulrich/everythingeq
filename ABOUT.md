@@ -4,7 +4,7 @@
 A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting **AU** for Logic Pro, **VST3** on macOS and Windows, and **CLAP**) that unifies parametric EQ, psychoacoustic macro contours (Fletcher-Munson, broadband tilt, vowel formants), a continuous level-to-transient dynamics engine, and subtractive split routing inside a single utilitarian interface.
 
 **Core Principles:**
-* **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free. No oversampling.
+* **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free. No oversampling. The only source of latency is the optional detector **Lookahead** (0–10 ms, default 0).
 * **Decoupled Group Dynamics:** Up to 10 polymorphic filter bands can operate statically or subscribe to 4 shared Dynamics Groups, each with independent per-band range scaling ($\pm\text{dB}$, $\pm\text{octaves}$, or $\pm$ vowel-morph index).
 * **Unified Level/Transient Continuum:** A single parameter $\alpha \in [0, 1]$ morphs any detector from standard RMS/Peak level compression ($\alpha = 0$) to log-derivative transient/sustain detection ($\alpha = 1$).
 * **Phase-Accurate Subtractive Split:** Any band can be tapped out of the main chain into a single **Aux** stream, using Linkwitz-Riley complements or algebraic subtraction (`x - y`), so that the outputs always recombine exactly (see §3.D for the precise identities).
@@ -57,7 +57,8 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * Flush denormals (FTZ/DAZ) on the audio thread. Supported sample rates: 44.1–192 kHz.
 
 ### B. Dynamics & Detector Architecture
-* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping (tapping either raw input, external sidechain, or a unit-gain sum of the subscribed bands' detector filters *prior* to dynamic gain modulation) to prevent runaway positive feedback latching when bands are set to expand/boost.
+* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping: the raw dry input, the external sidechain, or a unit-gain sum of the subscribed bands' detector filters applied to the **dry plugin input** (not the mid-chain signal). This prevents runaway positive feedback latching when bands are set to expand/boost, and lets the detectors run ahead of the audio when Lookahead is enabled.
+* **Lookahead (global, 0–10 ms):** The audio path (dry input feeding the band chain, Main, Aux, Delta and Bypass paths) is delayed by `Lookahead` samples, while all detectors read the undelayed input and sidechain. The plugin reports this delay to the host as latency, so hosts with plugin delay compensation keep tracks (and the external sidechain) aligned. It is a single global value, because a plugin reports one latency. It is not automatable; latency changes take effect when the host re-queries (in some hosts, e.g. Logic, on transport restart). At 0 ms there is no delay line and zero reported latency.
 * **Detector filter per band type** (used for `Internal Band-Sum` and band Solo):
   * Peak, Notch, BP, Vowel: unit-gain bandpass at the band's center frequency and Q (for Vowel, the sum of its three formant bandpasses).
   * Low Shelf, LP12, LP24_LR: lowpass at the band's frequency. High Shelf, HP12, HP24_LR: highpass at the band's frequency.
@@ -117,7 +118,7 @@ v1 has **one stereo input, one optional stereo sidechain input, and one stereo o
 * A **fixed, versioned parameter list** (required for host automation):
   * Per band (×10): `Type, X, Y, Z, Option, Dyn Group, Dyn Target, DynRange, Tap, Chan, Bypass, Solo`.
   * Per group (×4): `Input, SC Filter, SC Hz, SC Q, SC Listen, RMS Window, Alpha, Link, Threshold, Rise, Knee, Mode, Attack, Hold, Release`.
-  * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain`.
+  * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
   * X/Y/Z appear with generic names in host automation lanes; the plugin UI shows type-specific names and units.
 * Inactive parameters keep their values when a band's type changes.
 * State is saved through the host's plugin state, with a version field and migration; factory presets are included.
@@ -155,7 +156,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 |     20Hz     50Hz     100Hz    200Hz    500Hz    1kHz    5kHz  | [0.0]|  [██]  Knee:    4.0 dB   |
 +----------------------------------------------------------------+------+  [██] <--Thresh Handle   |
 |  ANALYZER: [Pre+Post v]  Tilt: [4.5dB]  | SCALE: [100%] [Δ] [BYPASS]  |  [██]  Mode: [Above v]   |
-|  OUTPUT: [ Stereo v ]  (Stereo / Split L/R / Split M/S)               |--------------------------|
+|  OUTPUT: [ Stereo v ]           LOOKAHEAD: [ 0.0 ms ]                  |--------------------------|
 +-----------------------------------------------------------------------+  BALLISTICS & ROUTING    |
                                                                         |  Attack: [  3.5 ms ]     |
                                                                         |  Hold:   [  0.0 ms ] (g) |
@@ -178,3 +179,4 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 | D6 | Vowel `Option`: Natural / Flat weighting; Z = Tract Scale only; fixed per-formant Q. | Natural weights made use case 4 (three-notch carving) impossible, and one knob controlling both scale and Q was ambiguous. |
 | D7 | Per-band `Dyn Target` and `Option` parameters. | DynRange needs a defined unit per band (dB / octaves / morph index). |
 | D8 | DSP in a framework-free C++20 library. | Unit-testable offline; insulates the DSP from wrapper choices. |
+| D9 | Global, non-automatable detector Lookahead (0–10 ms, default 0), implemented as an audio-path delay reported to the host; Internal Band-Sum detection reads the dry input. | Lets dynamics catch transients before they arrive; one global value because a plugin reports one latency; default 0 preserves zero latency. |
