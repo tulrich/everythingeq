@@ -1,0 +1,12 @@
+{
+  "description": "Use case 5: HP cutoff rises 1.5 octaves between kicks to tighten rumble (Freq target, trigger below threshold).",
+  "sampleRate": 48000, "seconds": 4,
+  "input": {"generate": "kickRumble", "bpm": 120, "seed": 5},
+  "params": {
+    "groups": [{"input": "InternalDry", "alpha": 0.0, "thresholdDb": -20, "kneeDb": 6, "mode": "Below",
+                "attackMs": 5, "releaseMs": 60}],
+    "bands": [
+      {"type": "HP12", "x": 30, "z": 0.7071, "dynGroup": 0, "dynTarget": "Freq", "dynRange": 1.5}
+    ]
+  }
+}

@@ -15,7 +15,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 ## 2. Major Mixing & Processing Use Cases
 
 1. **Snare Attack vs. Ring Splitting (Single-Interface Drum Sculpting):**
-   * *Setup:* Group 1 set to Transient Mode ($\alpha = 1.0$). Band 1 is a dynamic BP band (static gain `-inf`, DynRange `+60 dB`) at the stick-attack region, tapped to Aux; Band 2 shapes or notches the fundamental boxiness/ring on Main.
+   * *Setup:* Group 1 set to Transient Mode ($\alpha = 1.0$). Band 1 is a dynamic BP band (static gain at the `-60 dB` floor, which means silence, and DynRange `+60 dB`) at the stick-attack region, tapped to Aux; Band 2 shapes or notches the fundamental boxiness/ring on Main.
    * *Routing:* With Output Mode `Split L/R`, the transient stream arrives on the right channel and the residual body (`Dry - Attack`) on the left. Duplicate the track in the DAW, isolate each side (e.g. Logic's Direction Mixer / Gain plugin), and place clippers, gates, or reverbs on each before blending back phase-accurately.
 2. **Bass Guitar Crossover & Adaptive Upper-Harmonic Fuzz/Growl:**
    * *Setup:* A dynamic Vowel or Peak band (Band 1) adds midrange articulation above the sub region; Band 2 is an HP24_LR band at ~150 Hz tapped to Aux. Main carries the clean, LR-complementary low end; Aux carries the articulated highs.
@@ -48,7 +48,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * *Primitives (Peak, Low/High Shelf, LP12, HP12, Notch, BP):* 1x SVF cell.
   * *Linkwitz-Riley Crossovers (LP24_LR, HP24_LR):* 2x cascaded Butterworth SVF cells ($Q = 0.7071$). LP24_LR and HP24_LR at the same cutoff sum to a flat-magnitude all-pass, **not** to the dry signal.
   * *Broadband Tilt:* 1x Low Shelf + 1x High Shelf pivoted inversely around center frequency $f_0$.
-  * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline.
+  * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline (`tools/fmfit`, within ~0.15 dB at a 20-phon delta). Per ISO 226 the presence cell comes out as a small **cut** for positive phon deltas (about −1.2 dB at 2.6 kHz for 20 phon): at lower levels the ear is relatively *more* sensitive there.
   * *Vowel Formant:* 3x peaking SVF cells (see §3.C).
   * *K-Weighting Utility:* 2x fixed SVF stages (+4 dB high-shelf at ~1.68 kHz + 2nd-order RLB high-pass at 38 Hz), matching ITU-R BS.1770 within tolerance at all supported sample rates.
 * **Efficiency & Nyquist Hygiene:**
@@ -64,7 +64,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * Low Shelf, LP12, LP24_LR: lowpass at the band's frequency. High Shelf, HP12, HP24_LR: highpass at the band's frequency.
   * Tilt, Fletcher-Munson, K-Weight: full-band (no filter).
 * **Two-Layer Envelope + Log-Derivative Continuum:**
-  1. **Sidechain Conditioning:** Input Selector (`Internal Dry`, `Internal Band-Sum`, `External SC`) $\rightarrow$ Optional Group SC Filter (`Off`, `BP`, `LP`, `HP`, `Tilt`, `K-Weight`) $\rightarrow$ Power Rectification ($x^2$) $\rightarrow$ stereo combine using `Link` (0% = per-channel detection, 100% = max of channel powers, linear blend between).
+  1. **Sidechain Conditioning:** Input Selector (`Internal Dry`, `Internal Band-Sum`, `External SC`) $\rightarrow$ Optional Group SC Filter (`Off`, `BP`, `LP`, `HP`, `Tilt` (fixed +6 dB high-minus-low around SC Hz), `K-Weight`) $\rightarrow$ Power Rectification ($x^2$) $\rightarrow$ stereo combine using `Link` (0% = per-channel detection, 100% = max of channel powers, linear blend between).
   2. **Layer 1 (Pre-Threshold Symmetric Envelopes):** Run two 1-pole smoothers on $x^2$ in parallel—a fast tracker (`sigA`, fixed $\tau = 1$ ms in v1) and a slower RMS window tracker (`sigB`, $\tau$ = `RMS Window`, 1–400 ms)—and convert both to dB (clamped at a `-70 dB` noise floor to prevent silence chatter).
   3. **The $\alpha$ Continuum Trigger:**
      $$\text{Trigger}_{\text{dB}} = \text{sigA}_{\text{dB}} - \alpha \cdot \text{sigB}_{\text{dB}} = (1-\alpha)\,\text{sigA}_{\text{dB}} + \alpha\,(\text{sigA}_{\text{dB}} - \text{sigB}_{\text{dB}})$$
@@ -105,7 +105,7 @@ v1 has **one stereo input, one optional stereo sidechain input, and one stereo o
   * *Gain-type bands* (Peak, Shelves, Tilt, Fletcher-Munson, Vowel, K-Weight), **Delta tap:** $\text{Aux} \mathrel{+}= y - x$, $\text{Main} = x$. Aux carries exactly what the band adds or removes.
   * *Filter-type bands* (LP12, HP12, BP, Notch), **Split tap:** $\text{Aux} \mathrel{+}= y$, $\text{Main} = x - y$.
   * *LR bands* (LP24_LR, HP24_LR), **Crossover tap:** $\text{Aux} \mathrel{+}= y$, $\text{Main} = $ the complementary LR output (flat-magnitude sum, all-pass phase).
-  * *Recombination identities (unit-tested):* With a single tap, $\text{Main} + \text{Aux}$ equals, to floating-point precision: for a delta tap at the end of the chain, the untapped chain output; for a split tap, the chain with that band removed; for an LR tap, the chain with that band replaced by its LR all-pass. (Mid-chain taps skip the downstream bands for the Aux part, by design.)
+  * *Recombination identities (unit-tested):* Downstream bands process only Main, so with a single tap at band $b$ and $D$ = the bands after it, the output is $\text{Main} + \text{Aux} = D(\text{main}_b) + \text{aux}_b$. In particular, when the tapped band is the **last** active band, $\text{Main} + \text{Aux}$ equals, to floating-point precision: for a delta tap, the untapped chain; for a split tap, the chain with that band removed; for an LR tap, the chain with that band replaced by its LR all-pass.
 * **Output Mode** (global):
   * `Stereo` (default): stereo processing; Aux is summed back into Main (taps are inaudible).
   * `Split L/R`: input summed to mono; $L = \text{Main}$, $R = \text{Aux}$.

@@ -1,0 +1,13 @@
+{
+  "description": "Use case 6 variation: talking wah. Vowel band morphs OO -> OH -> AH with playing level.",
+  "sampleRate": 48000, "seconds": 4,
+  "input": {"generate": "pluck", "bpm": 120, "seed": 6},
+  "params": {
+    "groups": [{"input": "InternalDry", "alpha": 0.3, "thresholdDb": -22, "riseDb": 6, "kneeDb": 20,
+                "attackMs": 5, "releaseMs": 150}],
+    "bands": [
+      {"type": "Vowel", "x": 0.0, "y": 12, "z": 1.0, "weighting": "Natural", "dynGroup": 0,
+       "dynTarget": "Morph", "dynRange": 2.0}
+    ]
+  }
+}

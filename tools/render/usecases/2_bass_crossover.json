@@ -1,0 +1,14 @@
+{
+  "description": "Use case 2: dynamic vowel articulation before an LR24 crossover at 150 Hz; lows on Main (left), highs on Aux (right).",
+  "sampleRate": 48000, "seconds": 4,
+  "input": {"generate": "bass"},
+  "params": {
+    "global": {"outputMode": "SplitLR"},
+    "groups": [{"input": "InternalDry", "alpha": 0.3, "thresholdDb": -14, "riseDb": 6, "kneeDb": 12,
+                "attackMs": 5, "releaseMs": 120}],
+    "bands": [
+      {"type": "Vowel", "x": 2.0, "y": 3, "z": 1.0, "weighting": "Natural", "dynGroup": 0, "dynRange": 6},
+      {"type": "HP24_LR", "x": 150, "tap": "Aux"}
+    ]
+  }
+}

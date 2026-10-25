@@ -2,6 +2,21 @@
 
 This plan implements the spec in [ABOUT.md](ABOUT.md). Section and decision references (§3.B, D4, …) point there.
 
+## Status (2026-10-25)
+* **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows.
+* **Not done yet:**
+  * Phase 0 Spike A/B (iPlug2, formats, hosts). Needs full Xcode, which isn't installed yet.
+  * Phase 1's biquad comparison in the click test (only SVF boundedness is asserted).
+  * Golden renders have only been verified on macOS/arm64; Windows CI is their first cross-platform run.
+* **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Candidates for optimization: per-sample `log10` in the detectors, and per-sample `a1` division and coefficient redesign during dynamic ramps.
+
+Build and test:
+```
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build && (cd build && ctest)
+tools/render/render_usecases.sh        # renders/*.wav + detector probe CSVs
+```
+
 ## Guiding approach
 * **DSP first, offline, test-driven.** `dsp/` is a framework-free C++20 static library with no allocation, locks or I/O on the audio path. Every DSP feature lands with unit tests and an offline render before it is wired to a UI.
 * **Thin wrapper.** `plugin/` (iPlug2) only maps parameters, I/O buses, state and UI onto the `dsp/` engine.
@@ -61,10 +76,9 @@ presets/             factory presets (JSON source → embedded)
 4. Delta listen, band Solo (detector filter), global Bypass (crossfaded), Output Gain.
 
 **Tests (property-based, random parameter sets):**
-* Recombination identities from §3.D hold within 1e-6 relative error.
+* Recombination identities from §3.D hold within 1e-5 (taps on the last band; mid-chain taps match $D(\text{main}) + \text{aux}$).
 * Split M/S: L+R = Main and L−R = Aux exactly.
 * Bypassed band equals the identity bit-exactly.
-* Stereo mode with taps equals the same configuration with no taps.
 
 ## Phase 4 — Dynamics engine (§3.B)
 1. Sidechain conditioning: input selector, group SC filter, $x^2$, Link blend.
