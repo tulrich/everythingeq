@@ -1,32 +1,41 @@
 # Everything EQ - Dynamic Tone & Routing EQ — Architecture & Specification
 
 ## 1. Overview & Design Philosophy
-A zero-latency, minimum-phase C++ audio plugin (targeting Logic Pro AU and VST3 via JUCE) that unifies parametric EQ, psychoacoustic macro contours (Fletcher-Munson, broadband tilt, vowel formants), a continuous level-to-transient dynamics engine, and subtractive multi-output crossover routing inside a single utilitarian interface.
+A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting **AU** for Logic Pro, **VST3** on macOS and Windows, and **CLAP**) that unifies parametric EQ, psychoacoustic macro contours (Fletcher-Munson, broadband tilt, vowel formants), a continuous level-to-transient dynamics engine, and subtractive split routing inside a single utilitarian interface.
 
 **Core Principles:**
-* **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free.
-* **Decoupled Group Dynamics:** Up to 10 polymorphic filter bands can operate statically or subscribe to 4 shared Dynamics Groups, each with independent per-band range scaling ($\pm\text{dB}$ or $\pm\text{octaves}$).
-* **Unified Level/Transient Continuum:** A single parameter $\alpha \in [0, 1]$ morphs any detector from standard RMS/Peak level compression ($\alpha = 0$) to threshold-free log-derivative transient/sustain detection ($\alpha = 1$).
-* **Phase-Accurate Subtractive Taps:** Supports auxiliary DAW output buses using Linkwitz-Riley crossovers or algebraic subtractive splitting (`Dry - Band`) so split streams sum back to unity with zero phase cancellation.
+* **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free. No oversampling.
+* **Decoupled Group Dynamics:** Up to 10 polymorphic filter bands can operate statically or subscribe to 4 shared Dynamics Groups, each with independent per-band range scaling ($\pm\text{dB}$, $\pm\text{octaves}$, or $\pm$ vowel-morph index).
+* **Unified Level/Transient Continuum:** A single parameter $\alpha \in [0, 1]$ morphs any detector from standard RMS/Peak level compression ($\alpha = 0$) to log-derivative transient/sustain detection ($\alpha = 1$).
+* **Phase-Accurate Subtractive Split:** Any band can be tapped out of the main chain into a single **Aux** stream, using Linkwitz-Riley complements or algebraic subtraction (`x - y`), so that the outputs always recombine exactly (see §3.D for the precise identities).
+* **Portable DSP Core:** All DSP lives in a framework-free C++20 library; iPlug2 is only the plugin/UI wrapper.
 
 ---
 
 ## 2. Major Mixing & Processing Use Cases
 
 1. **Snare Attack vs. Ring Splitting (Single-Interface Drum Sculpting):**
-   * *Setup:* Group 1 set to Transient Mode ($\alpha = 1.0$). Band 1 shapes the stick attack; Band 2 shapes or notches the fundamental boxiness/ring.
-   * *Routing:* Option to split the transient stream to `Aux Tap A (Out 3/4)` and the residual body (`Dry - Attack`) to `Main (Out 1/2)` so external clippers, gates, or reverbs can be placed on discrete DAW tracks and blended back phase-accurately.
+   * *Setup:* Group 1 set to Transient Mode ($\alpha = 1.0$). Band 1 is a dynamic BP band (static gain `-inf`, DynRange `+60 dB`) at the stick-attack region, tapped to Aux; Band 2 shapes or notches the fundamental boxiness/ring on Main.
+   * *Routing:* With Output Mode `Split L/R`, the transient stream arrives on the right channel and the residual body (`Dry - Attack`) on the left. Duplicate the track in the DAW, isolate each side (e.g. Logic's Direction Mixer / Gain plugin), and place clippers, gates, or reverbs on each before blending back phase-accurately.
 2. **Bass Guitar Crossover & Adaptive Upper-Harmonic Fuzz/Growl:**
-   * *Setup:* Band 1 acts as an LR24 or subtractive low-pass crossover at ~150 Hz, keeping sub-bass clean and mono on `Main`. High frequencies tap off to `Aux Tap A` (or upper bands) where a dynamic Vowel or Peaking group adds aggressive midrange articulation without intermodulation mud in the sub-bass.
+   * *Setup:* A dynamic Vowel or Peak band (Band 1) adds midrange articulation above the sub region; Band 2 is an HP24_LR band at ~150 Hz tapped to Aux. Main carries the clean, LR-complementary low end; Aux carries the articulated highs.
+   * *Routing:* In `Split L/R` mode, put fuzz/drive on the Aux side in the DAW, so the sub-bass stays free of intermodulation mud. (Bands placed *after* a tap process Main only, so the articulation band must come before the crossover.)
 3. **Dynamic Fletcher-Munson (ISO 226) Loudness Compensation:**
    * *Setup:* A Fletcher-Munson band subscribed to a Dynamics Group using a K-weighted sidechain and a 300 ms RMS window (`Trigger Below Threshold` mode).
    * *Result:* Automatically brings up perceived low-end weight and high-air presence when a track or mix drops in volume, flattening out as the arrangement gets loud.
 4. **Anti-Formant Lead Vocal Pocket Carving:**
-   * *Setup:* Place the plugin on a dense rhythm guitar or keys bus. Set a band to `Vowel` mode (`/a/` or `/e/` profile) with a negative Dynamic Range (`-4 dB`), triggered via external sidechain from the Lead Vocal.
+   * *Setup:* Place the plugin on a dense rhythm guitar or keys bus. Set a band to `Vowel` mode (`/a/` or `/e/` profile) with **Flat** formant weighting and a negative Dynamic Range (`-4 dB`), triggered via external sidechain from the Lead Vocal.
    * *Result:* Instead of scooping a wide, lifeless 1–3 kHz hole out of the instruments, it dynamically notches only the three narrow formant needles where vocal intelligibility lives.
+   * *Limitation:* Formant positions are static (or morph only via the dynamics signal); they do not track the singer's actual formants. Formant tracking is a post-v1 idea.
 5. **Dynamic High-Pass / Low-Pass Filter Sweeps:**
-   * *Setup:* Assign an HP or LP filter band to a Dynamics Group, where `DynRange` modulates cutoff frequency in **octaves** rather than dB.
+   * *Setup:* Assign an HP or LP filter band to a Dynamics Group, with `Dyn Target = Freq` so `DynRange` modulates cutoff frequency in **octaves** rather than dB.
    * *Result:* Tightens rumble between notes or opens up top-end air solely on loud percussive transients.
+6. **Touch-Wah / Envelope Filter (with Vowel-Sweep "Talking" Variation):**
+   * *Setup (classic touch-wah):* On a guitar, clav, or bass track, a single resonant Peak band (`+12 dB`, `Q ≈ 6`) at ~400 Hz is subscribed to a Dynamics Group with `Dyn Target = Freq` and `DynRange = +2.5 oct`. The group uses `Internal Dry`, $\alpha \approx 0.3$ (mostly level-following, with extra kick on pick attacks), `Mode = Above`, a low threshold, and a wide knee (~20 dB) so that $D_m$ follows playing intensity smoothly rather than switching. Fast attack (~5 ms) and a slower release (~150 ms) give the characteristic "quack" and fall-back. For a darker auto-filter flavor, use a resonant LP12 band instead of the Peak.
+   * *Variations:* `Mode = Below` gives an inverted (downward) sweep. $\alpha = 1$ makes every note sweep by the same amount regardless of how hard it's played. An optional HP sidechain filter stops low notes from dominating the detector.
+   * *Vowel-sweep ("talking wah") variation:* Replace the Peak with a `Vowel` band (positive Formant Gain, e.g. `+12 dB`, **Natural** weighting, `X = 0.0` /u/) and set `Dyn Target = Morph`. `DynRange = +2.0` sweeps "OO → OH → AH" ("wow"/"wah"); `+4.0` sweeps the full "OO → EE" axis ("you-ee"). Because the three formants move independently along the morph path, the result sounds vocal rather than like a single moving resonance. Tract Scale (Z) sets the apparent "size" of the voice.
+   * *Tempo-synced auto-wah (sidechain trick):* There is no built-in LFO. Instead, set the group to `External SC` and sidechain from an instrument track that plays a pulse pattern (or a held note through a synth with a tempo-synced amplitude LFO), with that track's output routed to an unused bus so it isn't heard. Use $\alpha = 0$, `Mode = Above`, and set Threshold and a wide Knee to span the synth's level range, so that $D_m$ follows the pulse level. Attack/Release round off the motion. Use a carrier of ~1 kHz or higher (or noise) so the 1 ms fast tracker doesn't leave ripple. All groups share the single external sidechain input.
+   * *Result:* Expressive, playing-dynamics-driven filter motion with zero latency, and no clicks or instability under fast resonant sweeps (the main reason for the ZDF SVF topology).
 
 ---
 
@@ -34,36 +43,44 @@ A zero-latency, minimum-phase C++ audio plugin (targeting Logic Pro AU and VST3 
 
 ### A. Filter Engine: ZDF / TPT State Variable Filters
 * **Topology:** Linear trapezoidal integrated State Variable Filters (Andrew Simper / Cytomic & Vadim Zavalishin TPT formulation).
-* **Why ZDF SVF:** Solves the feedback loop algebraically before discretization, avoiding the 1-sample delay ($z^{-1}$) artifact of standard biquads. Cutoff frequency ($g = \tan(\pi f / f_s)$) and resonance/damping ($k = 1/Q$) remain orthogonal up to Nyquist and can be modulated rapidly without clicks or instability.
-* **Polymorphic Band Slot:** Each of the 10 band slots wraps a small unit cascade (up to 3–4 SVF cells) configured by `Band_Type`:
+* **Why ZDF SVF:** Solves the instantaneous feedback loop algebraically, so cutoff ($g = \tan(\pi f / f_s)$) and damping ($k = 1/Q$) remain orthogonal up to Nyquist, and the state variables stay meaningful when coefficients change every sample. Direct-form biquads add no latency either, but their state is tied to the coefficient set, so fast modulation causes zipper noise, transients, or instability. All shapes (LP/BP/HP/peak/shelf/notch) come from one cell as a linear mix of its outputs.
+* **Polymorphic Band Slot:** Each of the 10 band slots wraps a small unit cascade (up to 4 SVF cells) configured by `Band_Type`:
   * *Primitives (Peak, Low/High Shelf, LP12, HP12, Notch, BP):* 1x SVF cell.
-  * *Linkwitz-Riley Crossovers (LP24_LR, HP24_LR):* 2x cascaded Butterworth SVF cells ($Q = 0.7071$).
+  * *Linkwitz-Riley Crossovers (LP24_LR, HP24_LR):* 2x cascaded Butterworth SVF cells ($Q = 0.7071$). LP24_LR and HP24_LR at the same cutoff sum to a flat-magnitude all-pass, **not** to the dry signal.
   * *Broadband Tilt:* 1x Low Shelf + 1x High Shelf pivoted inversely around center frequency $f_0$.
-  * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps.
-  * *K-Weighting Utility:* 2x fixed biquad/SVF stages (+4 dB high-shelf at ~1.68 kHz + 2nd-order RLB high-pass at 38 Hz).
+  * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline.
+  * *Vowel Formant:* 3x peaking SVF cells (see §3.C).
+  * *K-Weighting Utility:* 2x fixed SVF stages (+4 dB high-shelf at ~1.68 kHz + 2nd-order RLB high-pass at 38 Hz), matching ITU-R BS.1770 within tolerance at all supported sample rates.
 * **Efficiency & Nyquist Hygiene:**
-  * Recalculate transcendental filter coefficients ($\tan$, $10^{\text{dB}/40}$) at a **control sub-block rate** (every 8 or 16 samples) with an epsilon dirty-check (`|ΔdB| > 0.005 dB`), interpolating state weights if moving rapidly.
-  * Use lightweight algebraic Q-prewarping near Nyquist to avoid high-shelf cramping at 44.1/48 kHz without introducing oversampling latency.
+  * Recalculate transcendental filter coefficients ($\tan$, $10^{\text{dB}/40}$) at a **control sub-block rate** (every 16 samples) with an epsilon dirty-check (`|ΔdB| > 0.005 dB`, or an equivalent relative frequency change), linearly interpolating $g$, $k$ and the output-mix weights across the sub-block when they are moving.
+  * Use lightweight algebraic Q-prewarping near Nyquist to avoid high-shelf/bell cramping at 44.1/48 kHz without introducing oversampling latency.
+  * Flush denormals (FTZ/DAZ) on the audio thread. Supported sample rates: 44.1–192 kHz.
 
 ### B. Dynamics & Detector Architecture
-* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping (tapping either raw input, external sidechain, or a unit-gain bandpass sum of subscribed bands *prior* to dynamic gain modulation) to prevent runaway positive feedback latching when bands are set to expand/boost.
+* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping (tapping either raw input, external sidechain, or a unit-gain sum of the subscribed bands' detector filters *prior* to dynamic gain modulation) to prevent runaway positive feedback latching when bands are set to expand/boost.
+* **Detector filter per band type** (used for `Internal Band-Sum` and band Solo):
+  * Peak, Notch, BP, Vowel: unit-gain bandpass at the band's center frequency and Q (for Vowel, the sum of its three formant bandpasses).
+  * Low Shelf, LP12, LP24_LR: lowpass at the band's frequency. High Shelf, HP12, HP24_LR: highpass at the band's frequency.
+  * Tilt, Fletcher-Munson, K-Weight: full-band (no filter).
 * **Two-Layer Envelope + Log-Derivative Continuum:**
-  1. **Sidechain Conditioning:** Input Selector (`Internal Dry`, `Internal Band-Sum`, `External SC`) $\rightarrow$ Optional Group SC Filter (`Off`, `BP`, `LP`, `HP`, `Tilt`, `K-Weight`) $\rightarrow$ Power Rectification ($x^2$).
-  2. **Layer 1 (Pre-Threshold Symmetric Envelopes):** Run two 1-pole smoothers in parallel—a fast tracker (`sigA`) and a slower RMS window tracker (`sigB`, controlled by `RMS Window` up to 400 ms)—and convert both to dB (clamped at a `-70 dB` noise floor to prevent silence chatter).
+  1. **Sidechain Conditioning:** Input Selector (`Internal Dry`, `Internal Band-Sum`, `External SC`) $\rightarrow$ Optional Group SC Filter (`Off`, `BP`, `LP`, `HP`, `Tilt`, `K-Weight`) $\rightarrow$ Power Rectification ($x^2$) $\rightarrow$ stereo combine using `Link` (0% = per-channel detection, 100% = max of channel powers, linear blend between).
+  2. **Layer 1 (Pre-Threshold Symmetric Envelopes):** Run two 1-pole smoothers on $x^2$ in parallel—a fast tracker (`sigA`, fixed $\tau = 1$ ms in v1) and a slower RMS window tracker (`sigB`, $\tau$ = `RMS Window`, 1–400 ms)—and convert both to dB (clamped at a `-70 dB` noise floor to prevent silence chatter).
   3. **The $\alpha$ Continuum Trigger:**
-     $$\text{Trigger}_{\text{dB}} = \text{sigA}_{\text{dB}} - \alpha \cdot \text{sigB}_{\text{dB}}$$
+     $$\text{Trigger}_{\text{dB}} = \text{sigA}_{\text{dB}} - \alpha \cdot \text{sigB}_{\text{dB}} = (1-\alpha)\,\text{sigA}_{\text{dB}} + \alpha\,(\text{sigA}_{\text{dB}} - \text{sigB}_{\text{dB}})$$
      * $\alpha = 0.0$: Pure level detection ($\text{sigA}_{\text{dB}}$).
-     * $\alpha = 1.0$: Pure log-derivative transient detection ($\text{sigA}_{\text{dB}} - \text{sigB}_{\text{dB}}$), providing threshold-free trigger consistency across ghost notes and loud hits alike.
+     * $\alpha = 1.0$: Pure log-derivative transient detection ($\text{sigA}_{\text{dB}} - \text{sigB}_{\text{dB}}$, i.e. "dB of rise above the recent average"), giving consistent triggering across ghost notes and loud hits alike. A steady signal reads ≈ 0 dB.
      * $\alpha \in (0, 1)$: Program-adaptive "auto-riding" threshold biased toward spiky crest factors.
-     * *Threshold Reference Scaling:* Scale the effective threshold offset by $(1 - \alpha)$ so sweeping $\alpha$ from `0` to `1` does not require chasing the Threshold knob across a 30 dB DC shift.
-  4. **Layer 2 (Gain Computer & Post-Threshold Ballistics):** Compare $\text{Trigger}_{\text{dB}}$ against `Threshold`, `Knee`, and `Trigger Mode (Above/Below)` to produce a raw normalized target scalar $\in [0.0, 1.0]$, then smooth with asymmetric `Attack`, `Hold`, and `Release` ballistics to emit the master Group Control signal $D_m \in [0.0, 1.0]$.
-  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale`.
+     * *Threshold Reference Scaling:* Two parameters, `Threshold` (dBFS, used at $\alpha=0$) and `Rise` (dB above the average, used at $\alpha=1$), are blended to match the decomposition above:
+       $$T_{\text{eff}} = (1-\alpha)\cdot\text{Threshold} + \alpha\cdot\text{Rise}$$
+       so sweeping $\alpha$ moves smoothly between the two without chasing the Threshold knob across a 30 dB DC shift. The UI greys `Rise` at $\alpha = 0$ and `Threshold` at $\alpha = 1$. The trigger meter and threshold handle display $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$.
+  4. **Layer 2 (Gain Computer & Post-Threshold Ballistics):** Compare $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$, `Knee`, and `Trigger Mode (Above/Below)` to produce a raw normalized target scalar $\in [0.0, 1.0]$ (a smooth ramp across the knee width centered on $T_{\text{eff}}$; with Knee = 0, a hard 0/1 switch), then smooth with asymmetric `Attack`, `Hold`, and `Release` ballistics to emit the master Group Control signal $D_m \in [0.0, 1.0]$.
+  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index). Results are clamped to each parameter's legal range.
 
 ### C. Vowel & Formant Filter Outline
 * **Acoustic Basis:** Models the first three vocal tract resonances: **$F_1$** (250–900 Hz, jaw openness), **$F_2$** (800–2500 Hz, tongue front/back), and **$F_3$** (2200–3200 Hz, brightness/timbre).
 * **Preset Lookup Table (1D Morph Axis `0.0` to `4.0`):**
 
-| Index | Vowel | Phonetic | $F_1$ (Hz) | $F_2$ (Hz) | $F_3$ (Hz) | Relative Weights ($F_1, F_2, F_3$) |
+| Index | Vowel | Phonetic | $F_1$ (Hz) | $F_2$ (Hz) | $F_3$ (Hz) | Natural Weights ($F_1, F_2, F_3$) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `0.0` | **OO** | `/u/` | 300 | 870 | 2250 | `0 dB, -12 dB, -24 dB` |
 | `1.0` | **OH** | `/o/` | 450 | 1050 | 2600 | `0 dB, -9 dB, -20 dB` |
@@ -72,46 +89,92 @@ A zero-latency, minimum-phase C++ audio plugin (targeting Logic Pro AU and VST3 
 | `4.0` | **EE** | `/i/` | 270 | 2290 | 3010 | `0 dB, -14 dB, -18 dB` |
 
 * **Parameters & Modulation:**
-  * `Param1 (Vowel Morph)`: Smoothly interpolates $\log(F_1), \log(F_2), \log(F_3)$ across the 5 vowel anchors.
-  * `Param2 (Formant Gain)`: Scales the peaking dB depth (positive = resonant formant boost; negative = anti-formant notch carving).
-  * `Param3 (Tract Scale / Q)`: Multiplies all three center frequencies by `0.70x` (baritone) to `1.40x` (alto/child) and sets resonance width.
-  * `DynRange`: Can modulate either Formant Gain ($\pm\text{dB}$) or sweep the Vowel Morph index dynamically on transients.
+  * `X (Vowel Morph)`: Smoothly interpolates $\log(F_1), \log(F_2), \log(F_3)$ and the weights across the 5 vowel anchors.
+  * `Y (Formant Gain)`: Peaking dB depth (positive = resonant formant boost; negative = anti-formant notch carving).
+  * `Z (Tract Scale)`: Multiplies all three center frequencies by `0.70x` (baritone) to `1.40x` (alto/child).
+  * `Option (Weighting)`: **Natural** applies $\text{gain}_i = Y \cdot 10^{w_i/20}$ (a realistic vocal spectrum; good for boosts). **Flat** applies $\text{gain}_i = Y$ to all three formants (needed for carving; Natural weights would leave a −4 dB carve at only ≈ −1 dB on F2 and ≈ −0.25 dB on F3).
+  * Formant Q: fixed per formant (initial values $Q_1 = 5$, $Q_2 = 8$, $Q_3 = 10$; to be tuned by ear).
+  * `DynRange`: Modulates Formant Gain ($\pm\text{dB}$) or sweeps the Vowel Morph index, per `Dyn Target`.
+
+### D. Routing, Taps & Output Modes
+v1 has **one stereo input, one optional stereo sidechain input, and one stereo output** in every format. Logic Pro only offers multiple outputs to instrument plugins, so there are no multi-output buses; instead a Main/Aux pair can be encoded into the single stereo output.
+
+* **Series chain:** Bands 1→10 process in series. A band with `Tap = Aux` splits its input $x$ into a Main part, which continues down the chain, and an Aux part, which is accumulated into the Aux stream. Bands after a tap process Main only.
+* **Tap semantics by band category** ($y$ = the band's normal output for input $x$):
+  * *Gain-type bands* (Peak, Shelves, Tilt, Fletcher-Munson, Vowel, K-Weight), **Delta tap:** $\text{Aux} \mathrel{+}= y - x$, $\text{Main} = x$. Aux carries exactly what the band adds or removes.
+  * *Filter-type bands* (LP12, HP12, BP, Notch), **Split tap:** $\text{Aux} \mathrel{+}= y$, $\text{Main} = x - y$.
+  * *LR bands* (LP24_LR, HP24_LR), **Crossover tap:** $\text{Aux} \mathrel{+}= y$, $\text{Main} = $ the complementary LR output (flat-magnitude sum, all-pass phase).
+  * *Recombination identities (unit-tested):* With a single tap, $\text{Main} + \text{Aux}$ equals, to floating-point precision: for a delta tap at the end of the chain, the untapped chain output; for a split tap, the chain with that band removed; for an LR tap, the chain with that band replaced by its LR all-pass. (Mid-chain taps skip the downstream bands for the Aux part, by design.)
+* **Output Mode** (global):
+  * `Stereo` (default): stereo processing; Aux is summed back into Main (taps are inaudible).
+  * `Split L/R`: input summed to mono; $L = \text{Main}$, $R = \text{Aux}$.
+  * `Split M/S`: input summed to mono; $L = (\text{Main} + \text{Aux})/2$, $R = (\text{Main} - \text{Aux})/2$, so that $L + R = \text{Main}$ and $L - R = \text{Aux}$.
+* **Per-band `Chan`** (`Stereo`, `L`, `R`, `Mid`, `Side`): applies only in `Stereo` output mode; ignored (mono) in the split modes.
+* **Delta listen `[Δ]`:** outputs (processed − dry) so you hear only what the plugin changes.
+* **Band Solo:** auditions the band's detector filter (§3.B) applied to that band's input.
+
+### E. Parameters & State
+* A **fixed, versioned parameter list** (required for host automation):
+  * Per band (×10): `Type, X, Y, Z, Option, Dyn Group, Dyn Target, DynRange, Tap, Chan, Bypass, Solo`.
+  * Per group (×4): `Input, SC Filter, SC Hz, SC Q, SC Listen, RMS Window, Alpha, Link, Threshold, Rise, Knee, Mode, Attack, Hold, Release`.
+  * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain`.
+  * X/Y/Z appear with generic names in host automation lanes; the plugin UI shows type-specific names and units.
+* Inactive parameters keep their values when a band's type changes.
+* State is saved through the host's plugin state, with a version field and migration; factory presets are included.
 
 ---
 
 ## 4. UI Wireframe & Layout Specification
 
-Window target: **`960 x 560 px`**, single-screen utilitarian layout. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
+Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitarian layout. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
+
+**Legend:** `(g)` = may be greyed (35%) depending on other settings (e.g. SC Hz/Q under K-Weight); `(M)` = read-only meter/readout; `*` = selected; `[Δ]` = delta listen; `SCALE` = Global_Scale applied to every band's DynRange; analyzer `Tilt` = display-only slope (dB/oct) for the spectrum analyzer.
 
 ```text
 +--------------------------------------------------------------------------------------------------+
 | [B1: HP] [B2: Peak*] [B3: Tilt] [B4: F-M] [B5: Vowel] [B6: --] [B7: --] [B8: --] [B9: --] [B10]  | <- TOP BAND RIBBON
 +-----------------------------------------------------------------------+--------------------------+
 |  TYPE: [ Vowel Formant v ]   DYN GRP: [ Grp 1 v ]   TAP: [ Main v ]   |  DYNAMICS GROUP          |
-|  X (Morph): [ AH (2.0) ]     Y (Gain): [ -3.0 dB ]  Z (Q/Sz): [ 1.0x ]|  [G1*] [G2] [G3] [G4]    |
+|  X (Morph): [ AH (2.0) ]     Y (Gain): [ -3.0 dB ]  Z (Tract): [1.0x] |  [G1*] [G2] [G3] [G4]    |
 |  DYN RANGE: [ +6.5 dB  ]     CHAN:     [ Stereo v]  [BYP] [SOLO]      |--------------------------|
-+-----------------------------------------------------------------------+  SOURCE & SIDECHAIN      |
-| +18 dB                                                         | +12  |  Input:  [ Int. Band v ] |
-|        .       .         .        .         .         .        |      |  SC Flt: [ K-Weight  v ] |
-| +12 dB .       .    (2)  .        .    _    .         .        |  +6  |  SC Hz:  [ 1000 Hz ] (g) |
-|        .       .   /   \ .        .   / \   .         .        |      |  SC Q:   [ 0.71    ] (g) |
-|  +6 dB .       .  /▒▒▒▒▒\.        .  /▒▒▒\  .         .   (3)  |   0  |  [ SC LISTEN ]           |
-|        .  (1)  . /▒▒▒▒▒▒▒\        . /▒▒▒▒▒\ .         .  .---  |  dB  |--------------------------|
-|   0 dB ---/-----*---------*--------*-------*----------*-/----- |      |  DETECTOR & CONTINUUM    |
-|        . /     .           \      /         \         ./       |  -6  |  RMS Win:[ 15.0 ms ]     |
-|  -6 dB ./      .         .  \____/           \________/        |      |  Alpha:  [ 0.65 (Trans)] |
-|        /       .         .        .         .         .        | -12  |  Link:   [ 100 %   ]     |
-| -12 dB         .         .    ░░░░░░░░░░░░░░░░░░░░░   .        |      |                          |
-|     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ | -24  |  TRIG METER & THRESHOLD  |
-| -18 dB ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ |      |  [||]  Thresh: -14.2 dB  |
-|     20Hz     50Hz     100Hz    200Hz    500Hz    1kHz    5kHz  | [0.0]|  [||]  Knee:    4.0 dB   |
+|  DYN TGT:   [ Gain v   ]     OPTION:   [ Flat v  ]                    |  SOURCE & SIDECHAIN      |
++-----------------------------------------------------------------------+  Input:  [ Int. Band v ] |
+| +18 dB                                                         | +12  |  SC Flt: [ K-Weight  v ] |
+|        .       .         .        .         .         .        |      |  SC Hz:  [ 1000 Hz ] (g) |
+| +12 dB .       .    (2)  .        .    _    .         .        |  +6  |  SC Q:   [ 0.71    ] (g) |
+|        .       .   /   \ .        .   / \   .         .        |      |  [ SC LISTEN ]           |
+|  +6 dB .       .  /▒▒▒▒▒\.        .  /▒▒▒\  .         .   (3)  |   0  |--------------------------|
+|        .  (1)  . /▒▒▒▒▒▒▒\        . /▒▒▒▒▒\ .         .  .---  |  dB  |  DETECTOR & CONTINUUM    |
+|   0 dB ---/-----*---------*--------*-------*----------*-/----- |      |  RMS Win:[ 15.0 ms ]     |
+|        . /     .           \      /         \         ./       |  -6  |  Alpha:  [ 0.65 (Trans)] |
+|  -6 dB ./      .         .  \____/           \________/        |      |  Link:   [ 100 %   ]     |
+|        /       .         .        .         .         .        | -12  |                          |
+| -12 dB         .         .    ░░░░░░░░░░░░░░░░░░░░░   .        |      |  TRIG METER & THRESHOLD  |
+|     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ | -24  |  [||]  Thresh: -14.2 dB  |
+| -18 dB ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ |      |  [||]  Rise:   +6.0 dB(g)|
+|     20Hz     50Hz     100Hz    200Hz    500Hz    1kHz    5kHz  | [0.0]|  [██]  Knee:    4.0 dB   |
 +----------------------------------------------------------------+------+  [██] <--Thresh Handle   |
 |  ANALYZER: [Pre+Post v]  Tilt: [4.5dB]  | SCALE: [100%] [Δ] [BYPASS]  |  [██]  Mode: [Above v]   |
-+-----------------------------------------------------------------------+  [██]                    |
-                                                                        |--------------------------|
-                                                                        |  BALLISTICS & ROUTING    |
+|  OUTPUT: [ Stereo v ]  (Stereo / Split L/R / Split M/S)               |--------------------------|
++-----------------------------------------------------------------------+  BALLISTICS & ROUTING    |
                                                                         |  Attack: [  3.5 ms ]     |
                                                                         |  Hold:   [  0.0 ms ] (g) |
                                                                         |  Release:[ 85.0 ms ]     |
                                                                         |  Grp Out:[ -2.4 dB ] (M) |
                                                                         +--------------------------+
+```
+
+---
+
+## 5. Decision Log
+
+| # | Decision | Rationale |
+| :--- | :--- | :--- |
+| D1 | Framework: **iPlug2**; formats AU (macOS), VST3 (macOS + Windows), CLAP. | Permissive license compatible with this repo's Apache-2.0; JUCE 8 would force AGPL or a commercial license. |
+| D2 | No multi-output buses in v1; Main/Aux encoded into stereo via `Split L/R` or `Split M/S`. | Logic Pro offers multiple outputs only to instrument plugins; one bus layout works in every host. |
+| D3 | Explicit tap semantics (delta / split / LR crossover) with tested recombination identities. | "Dry − Band" was undefined for gain-type and mid-chain bands; LR complements sum to an all-pass, not to dry. |
+| D4 | `Threshold` + `Rise` blended by α. | Scaling a single threshold by (1−α) left the α = 1 threshold with no sensitivity control. |
+| D5 | `sigA` fixed at τ = 1 ms in v1. | It was unspecified; exposing it can come later. |
+| D6 | Vowel `Option`: Natural / Flat weighting; Z = Tract Scale only; fixed per-formant Q. | Natural weights made use case 4 (three-notch carving) impossible, and one knob controlling both scale and Q was ambiguous. |
+| D7 | Per-band `Dyn Target` and `Option` parameters. | DynRange needs a defined unit per band (dB / octaves / morph index). |
+| D8 | DSP in a framework-free C++20 library. | Unit-testable offline; insulates the DSP from wrapper choices. |
