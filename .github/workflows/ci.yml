@@ -24,3 +24,44 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  plugin:
+    name: Plugin build and validation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            configure: -G Ninja -DCMAKE_BUILD_TYPE=Release -DIPLUG2_UNIVERSAL=ON -DEEQ_INSTALL_PLUGINS=ON
+            bundles: |
+              build-plugin/out/EverythingEQ.component
+              build-plugin/out/EverythingEQ.vst3
+              build-plugin/out/EverythingEQ.clap
+          - os: windows-latest
+            configure: -A x64
+            bundles: |
+              build-plugin/out/EverythingEQ.vst3
+              build-plugin/out/EverythingEQ.clap
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Fetch iPlug2 and SDKs
+        run: scripts/setup-deps.sh
+      - name: Configure
+        run: cmake -S plugin -B build-plugin ${{ matrix.configure }}
+      - name: Build
+        run: cmake --build build-plugin --config Release --parallel
+      - name: Validate
+        env:
+          PLUGINVAL_SKIP_GUI: 1
+        run: scripts/validate-plugins.sh build-plugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EverythingEQ-${{ runner.os }}
+          path: ${{ matrix.bundles }}
