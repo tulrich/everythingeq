@@ -5,8 +5,8 @@ This plan implements the spec in [ABOUT.md](ABOUT.md). Section and decision refe
 ## Status (2026-10-25)
 * **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows; the golden renders pass on Windows as well as macOS/arm64.
 * **Spec revised (2026-10-25):** FOSS distribution, mono layouts, parameter ranges, listen precedence and UI scope (ABOUT.md D10–D15).
+* **Phase 0 (in progress):** iPlug2 submodule with pinned SDKs (`scripts/setup-deps.sh`) and local CLAP fixes (`scripts/patches/`), plus `plugin/`, a spike that passes audio through `eeq::Engine` as AU/VST3/CLAP/app. All three layouts and the mono/stereo sidechain are declared. `auval -strict`, `pluginval` (strictness 10, AU and VST3) and `clap-validator` pass locally, and CI builds and validates the plugin on macOS and Windows. **Remaining:** the manual Logic checklist below, and reading the Spike B numbers.
 * **Not done yet:**
-  * Phase 0 Spike A/B (iPlug2, formats, Logic). Xcode is now installed, so this is unblocked and is the next step.
   * Phase 1's biquad comparison in the click test (only SVF boundedness is asserted).
 * **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Optimization is deferred to Phase 8, except that the per-sample `log10` in the detectors gets replaced whenever that code is next touched. Other candidates: per-sample `a1` division and coefficient redesign during dynamic ramps.
 
@@ -15,7 +15,13 @@ Build and test:
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build && (cd build && ctest)
 tools/render/render_usecases.sh        # renders/*.wav + detector probe CSVs
+
+scripts/setup-deps.sh                  # iPlug2 submodule, SDKs, patches
+cmake -S plugin -B build-plugin -G Ninja -DCMAKE_BUILD_TYPE=Release -DEEQ_INSTALL_PLUGINS=ON
+cmake --build build-plugin             # signs and installs to ~/Library/Audio/Plug-Ins
+scripts/validate-plugins.sh            # auval, pluginval, clap-validator
 ```
+(If `xcode-select -p` points at the Command Line Tools, prefix with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.)
 
 ## Guiding approach
 * **DSP first, offline, test-driven.** `dsp/` is a framework-free C++20 static library with no allocation, locks or I/O on the audio path. Every DSP feature lands with unit tests and an offline render before it is wired to a UI.
@@ -47,6 +53,21 @@ presets/             factory presets (JSON source → embedded)
 4. **CI:** GitHub Actions matrix (macos-latest universal, windows-latest), running the build, unit tests, `pluginval` (VST3), `auval` (macOS) and `clap-validator`. Builds are ad-hoc signed on macOS (D11). Upload the plugin bundles as workflow artifacts.
 
 **Exit:** gain plugin loads in Logic in every layout, passes the validators on both platforms, and CI is green.
+
+**Manual Logic checklist (Spike A/B):**
+1. Logic finds "tulrich: EverythingEQ" under Audio Units → tulrich (if not, `killall -9 AudioComponentRegistrar` and restart Logic).
+2. It can be inserted on a mono track (mono → mono and mono → stereo variants offered) and on a stereo track, and the layout readout in the UI matches.
+3. The sidechain menu in the plugin header lists tracks/buses. With a sidechain selected, the Sidechain meters move; with "None", they stay at zero (the spike zeroes Logic's duplicate-main-input quirk).
+4. Audio passes unchanged at 0 dB Output Gain, and Output Gain automation works.
+5. Spike B: the readout in the animated panel shows the draw time and fps at 100% and when the window is resized via the corner (scaling). Target: 60 fps with draw time well under 16 ms on Retina.
+6. Save, close and reopen the project: the Output Gain value is restored.
+
+**Phase 0 findings:**
+* iPlug2 now ships CMake support, CLAP and a sidechain example; the CMake build is used (no Xcode/VS project files).
+* Three iPlug2 CLAP bugs are patched locally (`scripts/patches/iplug2-clap-fixes.patch`): wrong main-port flags in `audio-ports-config`, no parameter-value rescan after state load, and `latency_changed` called outside `activate()`. The latency fix matters for Lookahead in Phase 6. Candidates for upstream PRs.
+* CLAP SDK and clap-helpers are pinned to `main` commits, because current clap-helpers needs draft extensions newer than CLAP 1.2.x.
+* `pluginval` on the AU warns that disabling the sidechain bus fails; harmless for Logic.
+* `clap-validator` warns that random bytes load as state; Phase 5's versioned state fixes this. `auval` warns that the preset name isn't retained in class data; also Phase 5 (state chunks).
 
 ## Phase 1 — Filter core (§3.A)
 1. `SvfCell`: Simper/Zavalishin TPT SVF with outputs (LP, BP, HP) and mix weights for each shape (Peak, Low/High Shelf, LP12, HP12, Notch, BP). Use the standard Cytomic shelf/bell gain mappings ($A = 10^{\text{dB}/40}$).

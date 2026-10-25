@@ -25,6 +25,7 @@ iplug_add_plugin(${PROJECT_NAME}
   SOURCES
     EverythingEQ.cpp
     EverythingEQ.h
+    SpikeStressControl.h
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
