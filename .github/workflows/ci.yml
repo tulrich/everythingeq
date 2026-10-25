@@ -12,7 +12,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            configure: -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
+            configure: "-DCMAKE_OSX_ARCHITECTURES='arm64;x86_64'"
           - os: windows-latest
             configure: ""
     runs-on: ${{ matrix.os }}
