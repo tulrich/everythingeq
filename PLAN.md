@@ -3,12 +3,12 @@
 This plan implements the spec in [ABOUT.md](ABOUT.md). Section and decision references (§3.B, D4, …) point there.
 
 ## Status (2026-10-25)
-* **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows.
+* **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows; the golden renders pass on Windows as well as macOS/arm64.
+* **Spec revised (2026-10-25):** FOSS distribution, mono layouts, parameter ranges, listen precedence and UI scope (ABOUT.md D10–D15).
 * **Not done yet:**
-  * Phase 0 Spike A/B (iPlug2, formats, hosts). Needs full Xcode, which isn't installed yet.
+  * Phase 0 Spike A/B (iPlug2, formats, Logic). Xcode is now installed, so this is unblocked and is the next step.
   * Phase 1's biquad comparison in the click test (only SVF boundedness is asserted).
-  * Golden renders have only been verified on macOS/arm64; Windows CI is their first cross-platform run.
-* **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Candidates for optimization: per-sample `log10` in the detectors, and per-sample `a1` division and coefficient redesign during dynamic ramps.
+* **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Optimization is deferred to Phase 8, except that the per-sample `log10` in the detectors gets replaced whenever that code is next touched. Other candidates: per-sample `a1` division and coefficient redesign during dynamic ramps.
 
 Build and test:
 ```
@@ -42,11 +42,11 @@ presets/             factory presets (JSON source → embedded)
 
 ## Phase 0 — Foundations & spikes (de-risk first)
 1. **Toolchain:** CMake (C++20) for `dsp/`, `tests/` and `tools/`; Catch2 via FetchContent. Add a pinned iPlug2 git submodule; build the plugin with iPlug2's project setup (evaluate its CMake support vs. its Xcode/VS project templates and pick one).
-2. **Spike A (formats):** iPlug2 "hello gain" plugin with a stereo in, stereo sidechain in, stereo out layout, built as AU, VST3 and CLAP on macOS and as VST3 and CLAP on Windows. Verify that the sidechain works in Logic, Reaper, Bitwig, Ableton Live and Cubase. Confirm the state of iPlug2's CLAP support; if it falls short, fall back to clap-wrapper over the VST3 build.
-3. **Spike B (UI):** IGraphics backend choice (NanoVG vs Skia), HiDPI and scaling, plus a 60 fps analyzer test at 960×560.
-4. **CI:** GitHub Actions matrix (macos-latest universal, windows-latest), running the build, unit tests, `pluginval`, `auval` (macOS) and `clap-validator`.
+2. **Spike A (formats):** iPlug2 "hello gain" plugin with a sidechain input, built as AU, VST3 and CLAP on macOS (universal) and as VST3 and CLAP on Windows (CI only). Declare the stereo → stereo, mono → stereo and mono → mono layouts, each with a mono or stereo sidechain (D10). In Logic, verify that all three layouts are offered on the right track types and that the sidechain menu works. Confirm the state of iPlug2's CLAP support; if it falls short, fall back to clap-wrapper over the VST3 build. Optionally check VST3/CLAP sidechain routing in Reaper's free evaluation on macOS (D12).
+3. **Spike B (UI):** IGraphics with NanoVG (D15): HiDPI and scaling, plus a 60 fps analyzer test at 960×560. Switch to Skia only if NanoVG can't meet that.
+4. **CI:** GitHub Actions matrix (macos-latest universal, windows-latest), running the build, unit tests, `pluginval` (VST3), `auval` (macOS) and `clap-validator`. Builds are ad-hoc signed on macOS (D11). Upload the plugin bundles as workflow artifacts.
 
-**Exit:** gain plugin loads and passes the validators in every target host, and CI is green.
+**Exit:** gain plugin loads in Logic in every layout, passes the validators on both platforms, and CI is green.
 
 ## Phase 1 — Filter core (§3.A)
 1. `SvfCell`: Simper/Zavalishin TPT SVF with outputs (LP, BP, HP) and mix weights for each shape (Peak, Low/High Shelf, LP12, HP12, Notch, BP). Use the standard Cytomic shelf/bell gain mappings ($A = 10^{\text{dB}/40}$).
@@ -99,37 +99,42 @@ presets/             factory presets (JSON source → embedded)
 * Use-case renders via `tools/render`: snare split, bass crossover, F-M loudness, vowel carving, dynamic HP, touch-wah (Peak + Vowel morph). Listen-check and save as golden files with tolerance-based regression comparison.
 
 ## Phase 5 — Parameters, state & presets (§3.E)
-1. Parameter table (single declarative list) generating iPlug2 params with IDs, ranges, skew, units and display formatters; X/Y/Z display text depends on band type.
+1. Parameter table (single declarative list, from the ranges table in ABOUT.md §3.E) generating iPlug2 params with IDs, ranges, skew, units and display formatters. X/Y/Z and DynRange are normalized host parameters, mapped to physical units per band type and per `Dyn Target` (D14); their display text and units follow the type. Tests: each mapping round-trips, and changing type keeps the normalized value.
 2. Lock-free parameter snapshot to the engine each block; type and group changes are handled without allocation.
-3. State serialization with version field and migration hooks; round-trip tests.
-4. Factory presets covering the six use cases (touch-wah ships as two presets: Peak and Vowel) plus basic EQ starting points.
+3. Engine: a mono mode for the mono → mono layout (one channel processed; `Output Mode` forced to `Stereo`; `Chan` and `Link` ignored), plus a mono sidechain copied to both detector channels. Tests: mono → mono output equals the left channel of the stereo engine fed a dual-mono signal with every `Chan` set to `Stereo`.
+4. State serialization with version field and migration hooks; round-trip tests.
+5. Factory presets covering the six use cases (touch-wah ships as two presets: Peak and Vowel) plus basic EQ starting points. User presets are saved as files in a per-user folder in the same format as state.
+6. Undo/redo model: a bounded history of parameter edits made in the plugin UI (a drag counts as one step), kept on the UI thread. Host automation changes are not recorded.
 
 ## Phase 6 — Plugin integration
-1. I/O config: stereo in, stereo sidechain in, stereo out (mono variants where hosts need them). Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in each host.
-2. Per-format checks: AU (auval, Logic), VST3 (Reaper, Cubase, Live, Bitwig), CLAP (Bitwig, Reaper).
-3. Automation smoothness under host automation of every continuous parameter.
+1. I/O config: the three layouts from D10, each with a mono or stereo sidechain. Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in Logic (including that a lookahead change takes effect after a transport restart).
+2. Per-format checks: AU with `auval` and manually in Logic; VST3 with `pluginval` and CLAP with `clap-validator`, in CI on macOS and Windows (D12).
+3. Automation smoothness under Logic automation of every continuous parameter, plus an offline test that sweeps each normalized parameter at audio rate through the wrapper's parameter path.
 
 ## Phase 7 — UI (§4)
 1. Layout skeleton at 960×560 with scaling; fixed slots; 35% opacity for inactive controls.
 2. Band ribbon (selection, type, active state) and band editor row (type-specific X/Y/Z labels and units).
 3. EQ graph: log-frequency grid, composite curve and per-band fills from `analyticResponse`, draggable nodes (drag = freq/gain, wheel = Q), plus the dynamic range shown as a ghost curve at $D_m = 1$ and a live curve at the current $D_m$.
 4. Analyzer: Pre/Post/Pre+Post, FFT on the UI thread fed by a lock-free FIFO, display tilt.
-5. Dynamics group panel: source and sidechain, detector and continuum, trigger meter with draggable threshold handle (showing Trigger vs $T_{\text{eff}}$), ballistics, Grp Out readout.
-6. Global footer: Output Mode, Scale, Δ, Bypass.
+5. Dynamics group panel: source and sidechain, detector and continuum, trigger meter with draggable threshold handle (showing Trigger vs $T_{\text{eff}}$), ballistics, `Grp Out` readout of $D_m$ in %.
+6. Band editor `NOW` readout (the band's current dynamic offset in dB, oct or morph units); output level meter with peak readout beside the graph.
+7. Graph node rules from ABOUT.md §4 (F-M pinned at 1 kHz, Vowel drags Morph/Gain, no node for K-Weight).
+8. Global footer: Output Mode, Lookahead, Scale, Δ, Bypass, preset menu (factory + user, save/rename), Undo/Redo.
+9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.
 
 ## Phase 8 — Performance, QA & release
 1. **CPU budget:** worst case (10 bands × 4 cells, 4 groups, stereo, 48 kHz, 64-sample buffers) under 2% of one Apple M1 core. Profile and optimize (SIMD across stereo channels) only if the budget is missed.
 2. Edge cases: buffer size 1 and odd sizes, sample-rate changes, silence and DC, extreme parameters, rapid type switching.
-3. Host test matrix on macOS (Logic, Reaper, Live, Bitwig, Cubase) and Windows (Reaper, Live, Bitwig, Cubase).
-4. Packaging: macOS signed and notarized pkg; Windows installer; user manual derived from ABOUT.md.
+3. Host testing: manual in Logic on macOS (all layouts, sidechain, lookahead/PDC, automation, presets, state recall across project reloads). VST3 and CLAP rely on the validators in CI; Windows has no manual testing.
+4. Packaging (D11): a tag-triggered release workflow that builds and validates, then attaches zips to a GitHub Release. macOS: universal AU/VST3/CLAP bundles, ad-hoc signed, with install instructions (copy to `~/Library/Audio/Plug-Ins/...`, clear the quarantine flag with `xattr -dr com.apple.quarantine`, and run `killall -9 AudioComponentRegistrar` if Logic doesn't see the AU). Windows: VST3/CLAP zip. User manual derived from ABOUT.md, in the repo or GitHub Pages. If a Developer ID turns up later, add signing and notarization as an optional workflow step.
 
 ## Milestones
 | Milestone | Contents | Demo |
 | :--- | :--- | :--- |
-| M0 | Phase 0 | Gain plugin with sidechain loads in all hosts; CI green |
+| M0 | Phase 0 | Gain plugin with sidechain loads in Logic in all layouts; validators and CI green |
 | M1 | Phases 1–3 | Offline renders of a static 10-band EQ with taps and output modes |
 | M2 | Phase 4 | Offline renders of all six use cases |
-| M3 | Phases 5–6 | Usable plugin with a generic UI in every host |
+| M3 | Phases 5–6 | Usable plugin with a generic UI in Logic; VST3/CLAP pass validators |
 | M4 | Phase 7 | Full custom UI |
 | M5 | Phase 8 | Release candidate |
 
@@ -138,9 +143,10 @@ presets/             factory presets (JSON source → embedded)
 * **Fletcher-Munson fit quality with only 3 cells:** if the fit error is too high, allow a 4th cell (the slot already supports 4).
 * **Narrow dynamic vowel notches can modulate audibly ("zipper" or AM sidebands) at fast attack times:** mitigate with a minimum effective attack per band type, validated by listening tests.
 * **Parameter count (~200):** check host automation-list usability; group names by band/group prefix.
+* **Unsigned macOS builds:** Gatekeeper blocks quarantined downloads, which puts off less technical users. Mitigated by clear install notes; Developer ID notarization ($99/yr) fixes it outright if wanted later.
+* **No manual testing outside Logic:** VST3/CLAP sidechain and layout behavior in other hosts is covered only by validators. Rely on user bug reports after release, and consider Reaper's free evaluation on macOS.
 
 ## Open items (not blocking M0–M2)
-* Exact parameter ranges, skews and defaults table (drafted in Phase 5).
 * Whether to expose `sigA` τ (D5) after listening tests.
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.

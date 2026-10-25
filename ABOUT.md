@@ -1,7 +1,7 @@
 # Everything EQ - Dynamic Tone & Routing EQ — Architecture & Specification
 
 ## 1. Overview & Design Philosophy
-A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting **AU** for Logic Pro, **VST3** on macOS and Windows, and **CLAP**) that unifies parametric EQ, psychoacoustic macro contours (Fletcher-Munson, broadband tilt, vowel formants), a continuous level-to-transient dynamics engine, and subtractive split routing inside a single utilitarian interface.
+A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting **AU** for Logic Pro, **VST3** on macOS and Windows, and **CLAP**) that unifies parametric EQ, psychoacoustic macro contours (Fletcher-Munson, broadband tilt, vowel formants), a continuous level-to-transient dynamics engine, and subtractive split routing inside a single utilitarian interface. Everything EQ is free and open source (Apache-2.0), distributed as unsigned builds on GitHub Releases (see D11).
 
 **Core Principles:**
 * **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free. No oversampling. The only source of latency is the optional detector **Lookahead** (0–10 ms, default 0).
@@ -98,7 +98,11 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * `DynRange`: Modulates Formant Gain ($\pm\text{dB}$) or sweeps the Vowel Morph index, per `Dyn Target`.
 
 ### D. Routing, Taps & Output Modes
-v1 has **one stereo input, one optional stereo sidechain input, and one stereo output** in every format. Logic Pro only offers multiple outputs to instrument plugins, so there are no multi-output buses; instead a Main/Aux pair can be encoded into the single stereo output.
+v1 has **one main input, one optional sidechain input, and one output** in every format, with no multi-output buses. Logic Pro only offers multiple outputs to instrument plugins, so a Main/Aux pair is instead encoded into the single stereo output.
+
+* **Supported layouts:** stereo → stereo, mono → stereo, and mono → mono. The sidechain may be mono or stereo in each layout (a mono sidechain feeds both detector channels).
+  * *Mono → stereo:* the input is copied to both channels, then everything behaves as in stereo → stereo. Per-band `Chan` = `Side` (or `L`/`R` on identical channels) is legal but has the obvious effect.
+  * *Mono → mono:* the engine runs one channel. `Output Mode` is forced to `Stereo` (Aux is summed back into Main) and the split modes are greyed; per-band `Chan` is ignored; `Link` has no effect.
 
 * **Series chain:** Bands 1→10 process in series. A band with `Tap = Aux` splits its input $x$ into a Main part, which continues down the chain, and an Aux part, which is accumulated into the Aux stream. Bands after a tap process Main only.
 * **Tap semantics by band category** ($y$ = the band's normal output for input $x$):
@@ -113,6 +117,7 @@ v1 has **one stereo input, one optional stereo sidechain input, and one stereo o
 * **Per-band `Chan`** (`Stereo`, `L`, `R`, `Mid`, `Side`): applies only in `Stereo` output mode; ignored (mono) in the split modes.
 * **Delta listen `[Δ]`:** outputs (processed − dry) so you hear only what the plugin changes.
 * **Band Solo:** auditions the band's detector filter (§3.B) applied to that band's input.
+* **Listen precedence** (highest wins): global `Bypass` (crossfaded) > group `SC Listen` (lowest-numbered group with it enabled; the conditioned sidechain, before Output Gain) > `Delta` (applied to whatever the chain outputs, including soloed bands) > band `Solo` (sum of all soloed bands). In the UI, enabling `SC Listen` clears all band Solos and vice versa, and only one group's `SC Listen` can be on at a time.
 
 ### E. Parameters & State
 * A **fixed, versioned parameter list** (required for host automation):
@@ -120,6 +125,44 @@ v1 has **one stereo input, one optional stereo sidechain input, and one stereo o
   * Per group (×4): `Input, SC Filter, SC Hz, SC Q, SC Listen, RMS Window, Alpha, Link, Threshold, Rise, Knee, Mode, Attack, Hold, Release`.
   * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
   * X/Y/Z appear with generic names in host automation lanes; the plugin UI shows type-specific names and units.
+* **X/Y/Z meaning by band type:**
+
+| Type | X | Y | Z | Option |
+| :--- | :--- | :--- | :--- | :--- |
+| Peak, Low Shelf, High Shelf | Freq (Hz) | Gain (dB) | Q | – |
+| LP12, HP12, Notch | Freq (Hz) | – | Q | – |
+| BP | Freq (Hz) | Gain (dB; `-60` = silence) | Q | – |
+| LP24_LR, HP24_LR | Freq (Hz) | – | – | – |
+| Tilt | Pivot (Hz) | Tilt (dB, high minus low) | – | – |
+| Fletcher-Munson | – | Phon Delta | – | – |
+| Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Natural / Flat |
+| K-Weight | – | – | – | – |
+
+* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Dynamic modulation is clamped to the same ranges as the static value.
+
+| Parameter | Range | Default | Skew / notes |
+| :--- | :--- | :--- | :--- |
+| Type | Off + 13 types | Off | |
+| Freq (X) | 20 Hz – 20 kHz | 1 kHz | log |
+| Gain (Y) | ±30 dB (BP: −60 … +30) | 0 dB | linear |
+| Q (Z) | 0.1 – 40 | 0.707 | log |
+| Tilt (Y) | ±24 dB | 0 dB | |
+| Phon Delta (Y) | ±40 phon | 0 | |
+| Vowel Morph (X) | 0 – 4 | 2 (AH) | |
+| Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
+| DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
+| Dyn Group | Static, G1–G4 | Static | |
+| SC Hz / SC Q | 20 Hz – 20 kHz / 0.1 – 40 | 1 kHz / 0.707 | log |
+| RMS Window | 1 – 400 ms | 15 ms | log |
+| Alpha | 0 – 1 | 0 | |
+| Link | 0 – 100% | 100% | |
+| Threshold | −70 – 0 dBFS | −20 dBFS | |
+| Rise | 0 – +30 dB | +6 dB | |
+| Knee | 0 – 30 dB | 0 dB | |
+| Attack / Hold / Release | 0.1 – 500 ms / 0 – 500 ms / 1 – 5000 ms | 5 / 0 / 100 ms | log (Hold linear) |
+| Global Scale | −100% – +200% | 100% | negative inverts every band's DynRange |
+| Output Gain | ±24 dB | 0 dB | |
+| Lookahead | 0 – 10 ms | 0 ms | not automatable |
 * Inactive parameters keep their values when a band's type changes.
 * State is saved through the host's plugin state, with a version field and migration; factory presets are included.
 
@@ -129,7 +172,7 @@ v1 has **one stereo input, one optional stereo sidechain input, and one stereo o
 
 Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitarian layout. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
 
-**Legend:** `(g)` = may be greyed (35%) depending on other settings (e.g. SC Hz/Q under K-Weight); `(M)` = read-only meter/readout; `*` = selected; `[Δ]` = delta listen; `SCALE` = Global_Scale applied to every band's DynRange; analyzer `Tilt` = display-only slope (dB/oct) for the spectrum analyzer.
+**Legend:** `(M)` beside the graph = output level meter with peak readout; `NOW` = the selected band's current dynamic offset in its target's unit; `Grp Out` = the selected group's $D_m$ as a percentage; `(g)` = may be greyed (35%) depending on other settings (e.g. SC Hz/Q under K-Weight); `(M)` = read-only meter/readout; `*` = selected; `[Δ]` = delta listen; `SCALE` = Global_Scale applied to every band's DynRange; analyzer `Tilt` = display-only slope (dB/oct) for the spectrum analyzer.
 
 ```text
 +--------------------------------------------------------------------------------------------------+
@@ -138,7 +181,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 |  TYPE: [ Vowel Formant v ]   DYN GRP: [ Grp 1 v ]   TAP: [ Main v ]   |  DYNAMICS GROUP          |
 |  X (Morph): [ AH (2.0) ]     Y (Gain): [ -3.0 dB ]  Z (Tract): [1.0x] |  [G1*] [G2] [G3] [G4]    |
 |  DYN RANGE: [ +6.5 dB  ]     CHAN:     [ Stereo v]  [BYP] [SOLO]      |--------------------------|
-|  DYN TGT:   [ Gain v   ]     OPTION:   [ Flat v  ]                    |  SOURCE & SIDECHAIN      |
+|  DYN TGT:   [ Gain v   ]     OPTION:   [ Flat v  ]  NOW: +4.0 dB (M)  |  SOURCE & SIDECHAIN      |
 +-----------------------------------------------------------------------+  Input:  [ Int. Band v ] |
 | +18 dB                                                         | +12  |  SC Flt: [ K-Weight  v ] |
 |        .       .         .        .         .         .        |      |  SC Hz:  [ 1000 Hz ] (g) |
@@ -156,14 +199,18 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 |     20Hz     50Hz     100Hz    200Hz    500Hz    1kHz    5kHz  | [0.0]|  [██]  Knee:    4.0 dB   |
 +----------------------------------------------------------------+------+  [██] <--Thresh Handle   |
 |  ANALYZER: [Pre+Post v]  Tilt: [4.5dB]  | SCALE: [100%] [Δ] [BYPASS]  |  [██]  Mode: [Above v]   |
-|  OUTPUT: [ Stereo v ]           LOOKAHEAD: [ 0.0 ms ]                  |--------------------------|
+|  OUTPUT: [Stereo v]  LOOKAHEAD: [0.0 ms]  PRESET: [Init v] [UNDO][REDO]|--------------------------|
 +-----------------------------------------------------------------------+  BALLISTICS & ROUTING    |
                                                                         |  Attack: [  3.5 ms ]     |
-                                                                        |  Hold:   [  0.0 ms ] (g) |
+                                                                        |  Hold:   [  0.0 ms ]     |
                                                                         |  Release:[ 85.0 ms ]     |
-                                                                        |  Grp Out:[ -2.4 dB ] (M) |
+                                                                        |  Grp Out:[  62 %   ] (M) |
                                                                         +--------------------------+
 ```
+
+* **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node.
+* **Presets & editing:** an in-plugin preset menu (factory presets plus user presets saved as files) alongside the host's own preset handling, and undo/redo of parameter edits made in the plugin UI. No A/B comparison or band copy/paste in v1.
+* **Graphics:** IGraphics with the NanoVG backend.
 
 ---
 
@@ -180,3 +227,9 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 | D7 | Per-band `Dyn Target` and `Option` parameters. | DynRange needs a defined unit per band (dB / octaves / morph index). |
 | D8 | DSP in a framework-free C++20 library. | Unit-testable offline; insulates the DSP from wrapper choices. |
 | D9 | Global, non-automatable detector Lookahead (0–10 ms, default 0), implemented as an audio-path delay reported to the host; Internal Band-Sum detection reads the dry input. | Lets dynamics catch transients before they arrive; one global value because a plugin reports one latency; default 0 preserves zero latency. |
+| D10 | I/O layouts: stereo → stereo, mono → stereo, mono → mono; mono or stereo sidechain. Mono → mono forces `Stereo` output mode. | Logic users often insert plugins on mono tracks; split modes need two output channels. |
+| D11 | Free and open source; unsigned builds (ad-hoc signed on macOS) on GitHub Releases, with install notes for clearing the macOS quarantine flag. Developer ID signing and notarization are optional later. | No signing certificates are available; ad-hoc signing is enough for Apple Silicon to load the plugins locally. |
+| D12 | Manual host testing in Logic Pro (AU) on macOS only. VST3 and CLAP are covered by `pluginval` and `clap-validator` in CI on macOS and Windows; Reaper's free evaluation on macOS is an optional extra check for VST3/CLAP sidechain routing. | That is the hardware and software available. |
+| D13 | Listen precedence: Bypass > SC Listen > Delta > Solo; SC Listen and Solo are mutually exclusive in the UI. | Makes simultaneous listen modes well defined. |
+| D14 | X/Y/Z and DynRange are normalized host parameters with per-type (per-target) mappings. | Keeps the parameter list fixed (~200 params) while one slot can hold any band type. |
+| D15 | UI: in-plugin presets and undo/redo; no A/B or copy/paste; NanoVG backend; `Grp Out` shows $D_m$ in %. | Scope control for v1; NanoVG is lighter and simpler to build than Skia. |
