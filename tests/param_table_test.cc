@@ -235,4 +235,17 @@ TEST_CASE("Slot display text parses back consistently", "[params]") {
           "-60.0 dB");
 }
 
+TEST_CASE("The default band layout is transparent", "[params]") {
+  const EngineParams p = BuildEngineParams(DefaultParamValues(), false);
+  const Stereo x = Noise(48000, 0.5, 3);
+  Stereo y(x.size());
+  Engine e;
+  e.SetParams(p);
+  e.Prepare(48000.0);
+  const float* in[2] = {x.l.data(), x.r.data()};
+  float* out[2] = {y.l.data(), y.r.data()};
+  e.Process(in, nullptr, out, static_cast<int>(x.size()));
+  REQUIRE(MaxAbsDiff(y, x) < 1e-6);
+}
+
 }  // namespace eeq::test
