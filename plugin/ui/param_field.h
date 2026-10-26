@@ -27,7 +27,10 @@ class ParamField final : public iplug::igraphics::IControl {
       : IControl(bounds, param_id),
         label_(std::move(label)),
         label_width_(label_width),
-        style_(style) {}
+        style_(style) {
+    // iPlug2 controls have menus and text entry disabled by default.
+    DisablePrompt(false);
+  }
 
   void SetLabel(const std::string& label) {
     if (label != label_) {
