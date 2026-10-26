@@ -1,6 +1,7 @@
 #include "plugin/ui/editor.h"
 
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <optional>
@@ -8,6 +9,7 @@
 #include "IControls.h"
 #include "model/slot_mapping.h"
 #include "plugin/ui/band_ribbon.h"
+#include "plugin/ui/choice_field.h"
 #include "plugin/ui/eq_graph.h"
 #include "plugin/ui/level_meter.h"
 #include "plugin/ui/param_field.h"
@@ -97,6 +99,7 @@ class GroupTab final : public ig::IControl {
 Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
     : graphics_(graphics), model_(model) {
   graphics_.AttachPanelBackground(theme::kBackground);
+  graphics_.EnableTooltips(true);
   const ig::IRECT b = graphics_.GetBounds().GetPadded(-kMargin);
 
   // Top band ribbon.
@@ -173,58 +176,80 @@ void Editor::BuildDynamicsPanel(const ig::IRECT& r) {
     auto* tab =
         new GroupTab(tabs.SubRectHorizontal(kNumGroups, g).GetHPadded(-2.f), g,
                      *this, model_);
+    tab->SetTooltip(
+        "Dynamics groups. Bands subscribe to a group (Dyn Grp) and move by "
+        "D x Dyn Range. The bar shows each group's output D.");
     graphics_.AttachControl(tab);
     group_tabs_.push_back(tab);
   }
 
+  // Detector scope under the tabs.
+  const ig::IRECT scope = inner.GetReducedFromTop(26.f).GetFromTop(78.f);
+  graphics_.AttachControl(
+      new DetectorScope(scope, model_, history_, selected_group_));
+
   // Fields on the left, the sidechain meter on the right.
-  ig::IRECT column = inner.GetReducedFromTop(28.f);
+  ig::IRECT column = inner.GetReducedFromTop(26.f + 78.f + 6.f);
   constexpr float kMeterWidth = 32.f;
-  sidechain_meter_ = new LevelMeter(
-      column.GetFromRight(kMeterWidth).GetReducedFromBottom(22.f), "SC", 2);
+  sidechain_meter_ = new LevelMeter(column.GetFromRight(kMeterWidth), "SC", 2);
+  sidechain_meter_->SetTooltip(
+      "Sidechain input level. Click to reset the peak readout.");
   graphics_.AttachControl(sidechain_meter_);
   column = column.GetReducedFromRight(kMeterWidth + kGap);
 
   float y = column.T;
   auto section = [&](const char* title) {
     graphics_.AttachControl(
-        new SectionLabel(ig::IRECT(column.L, y, column.R, y + 14.f), title));
-    y += 16.f;
+        new SectionLabel(ig::IRECT(column.L, y, column.R, y + 12.f), title));
+    y += 14.f;
   };
-  auto add = [&](GroupField f, const char* label,
+  auto add = [&](GroupField f, const char* label, const char* tooltip,
                  ParamField::Style style = ParamField::Style::kField) {
-    const ig::IRECT rect(column.L, y, column.R, y + 21.f);
+    const ig::IRECT rect(column.L, y, column.R, y + 19.f);
     auto* c = new ParamField(
         style == ParamField::Style::kToggle ? rect.GetFromLeft(90.f) : rect,
-        GroupParamId(0, f), label, 74.f, style);
+        GroupParamId(0, f), label, 66.f, style);
+    c->SetTooltip(tooltip);
     graphics_.AttachControl(c);
     group_fields_.push_back({f, c});
-    y += 24.f;
+    y += 21.f;
   };
   section("BALLISTICS");
-  add(GroupField::kAttack, "Attack");
-  add(GroupField::kHold, "Hold");
-  add(GroupField::kRelease, "Release");
-  section("TRIGGER & THRESHOLD");
-  add(GroupField::kThreshold, "Threshold");
-  add(GroupField::kRise, "Rise");
-  add(GroupField::kKnee, "Knee");
-  add(GroupField::kMode, "Mode");
-  section("DETECTOR & CONTINUUM");
-  add(GroupField::kAlpha, "Alpha");
-  add(GroupField::kRmsWindow, "RMS Win");
-  add(GroupField::kLink, "Link");
+  add(GroupField::kAttack, "Attack",
+      "How fast D rises toward the trigger's target.");
+  add(GroupField::kHold, "Hold",
+      "How long D holds before releasing once the trigger drops.");
+  add(GroupField::kRelease, "Release", "How fast D falls back.");
+  section("TRIGGER");
+  add(GroupField::kThreshold, "Threshold",
+      "Level (dBFS) the detector must cross at Alpha 0. Greyed at Alpha 1.");
+  add(GroupField::kRise, "Rise",
+      "dB above the recent average a transient must jump at Alpha 1. Greyed "
+      "at Alpha 0.");
+  add(GroupField::kKnee, "Knee",
+      "Width (dB) of the ramp around the threshold; 0 = hard on/off.");
+  add(GroupField::kMode, "Mode",
+      "Above: fire when the trigger is above the threshold. Below: fire when "
+      "it is below (e.g. lift lows when the mix gets quiet).");
+  section("DETECTOR");
+  add(GroupField::kAlpha, "Alpha",
+      "0 = level detection (compressor-like). 1 = transient detection: how "
+      "far the fast level jumps above the RMS average, the same for soft and "
+      "hard hits. In between blends the two.");
+  add(GroupField::kRmsWindow, "RMS Win",
+      "Time constant of the slow average used by transient detection.");
+  add(GroupField::kLink, "Link",
+      "Stereo link: 100% detects L and R together, 0% separately.");
   section("SOURCE & SIDECHAIN");
-  add(GroupField::kInput, "Input");
-  add(GroupField::kScFilter, "SC Filter");
-  add(GroupField::kScHz, "SC Hz");
-  add(GroupField::kScQ, "SC Q");
-  add(GroupField::kScListen, "SC LISTEN", ParamField::Style::kToggle);
-
-  group_out_readout_ = new ig::ITextControl(
-      ig::IRECT(column.L, inner.B - 20.f, inner.R, inner.B), "GRP OUT  0 %",
-      theme::Text(11.f, theme::kText));
-  graphics_.AttachControl(group_out_readout_);
+  add(GroupField::kInput, "Input",
+      "What the detector listens to: the dry input, only the frequency "
+      "regions of this group's bands (Band-Sum), or the external sidechain.");
+  add(GroupField::kScFilter, "SC Filter",
+      "Optional filter on the detector input.");
+  add(GroupField::kScHz, "SC Hz", "Sidechain filter frequency.");
+  add(GroupField::kScQ, "SC Q", "Sidechain filter Q (BP, LP, HP).");
+  add(GroupField::kScListen, "SC LISTEN",
+      "Listen to the filtered detector input.", ParamField::Style::kToggle);
 }
 
 void Editor::BuildFooter(const ig::IRECT& r) {
@@ -241,17 +266,30 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   field(2, GlobalField::kGlobalScale, "SCALE", 40.f);
   field(3, GlobalField::kOutputGain, "OUT GAIN", 56.f);
 
-  const ig::IRECT row2 = r.GetPadded(-4.f).GetFromBottom(18.f).GetHPadded(-3.f);
+  ig::IRECT row2 = r.GetPadded(-4.f).GetFromBottom(18.f).GetHPadded(-3.f);
+  graphics_.AttachControl(new ParamField(
+      row2.ReduceFromLeft(36.f), GlobalParamId(GlobalField::kDelta), "\xce\x94",
+      0.f, ParamField::Style::kToggle));
+  row2.ReduceFromLeft(6.f);
+  graphics_.AttachControl(new ParamField(
+      row2.ReduceFromLeft(64.f), GlobalParamId(GlobalField::kBypass), "BYPASS",
+      0.f, ParamField::Style::kToggle));
+  row2.ReduceFromLeft(12.f);
+  graphics_.AttachControl(new ChoiceField(
+      row2.ReduceFromLeft(150.f), "ANALYZER", 56.f,
+      {"Off", "Pre", "Post", "Pre+Post"}, analyzer_mode_, [this](int i) {
+        analyzer_mode_ = i;
+        pre_analyzer_.Clear();
+        post_analyzer_.Clear();
+      }));
+  row2.ReduceFromLeft(6.f);
+  static const double kTilts[] = {0.0, 3.0, 4.5, 6.0};
   graphics_.AttachControl(
-      new ParamField(row2.GetFromLeft(40.f), GlobalParamId(GlobalField::kDelta),
-                     "\xce\x94", 0.f, ParamField::Style::kToggle));
-  graphics_.AttachControl(
-      new ParamField(row2.GetReducedFromLeft(46.f).GetFromLeft(70.f),
-                     GlobalParamId(GlobalField::kBypass), "BYPASS", 0.f,
-                     ParamField::Style::kToggle));
-  status_ =
-      new ig::ITextControl(row2.GetReducedFromLeft(126.f), "",
-                           theme::Text(10.f, theme::kTextDim, ig::EAlign::Far));
+      new ChoiceField(row2.ReduceFromLeft(96.f), "TILT", 28.f,
+                      {"0 dB", "3 dB", "4.5 dB", "6 dB"}, 2,
+                      [this](int i) { tilt_db_per_octave_ = kTilts[i]; }));
+  status_ = new ig::ITextControl(
+      row2, "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));
   graphics_.AttachControl(status_);
 }
 
@@ -365,10 +403,6 @@ void Editor::UpdateDynamicsPanel(const ParamValues& v) {
     }
     if (f.control->IsDisabled() == enabled) f.control->SetDisabled(!enabled);
   }
-  char buf[48];
-  std::snprintf(buf, sizeof(buf), "GRP OUT  %d %%",
-                Int(model_.LiveControls()[g] * 100.0));
-  group_out_readout_->SetStr(buf);
 }
 
 void Editor::Idle(const EditorIdleData& data) {
@@ -387,8 +421,43 @@ void Editor::Idle(const EditorIdleData& data) {
   output_meter_->SetChannelActive(0, data.out_connected[0]);
   output_meter_->SetChannelActive(1, data.out_connected[1]);
 
+  // Detector history and analyzer input from the audio thread.
+  DetectorFrame frames[64];
+  for (int n; (n = model_.PopDetectorFrames(frames, 64)) > 0;) {
+    for (int i = 0; i < n; ++i) history_.Add(frames[i], model_.SampleRate());
+  }
+  for (int post = 0; post < 2; ++post) {
+    SpectrumAnalyzer& analyzer = post ? post_analyzer_ : pre_analyzer_;
+    for (int n; (n = model_.PopAnalyzerSamples(
+                     post == 1, samples_.data(),
+                     static_cast<int>(samples_.size()))) > 0;) {
+      analyzer.AddSamples(samples_.data(), n);
+    }
+  }
+
   const ParamValues v = model_.Values();
   graph_->Refresh();
+
+  const auto now = std::chrono::steady_clock::now();
+  const double dt =
+      std::min(0.25, std::chrono::duration<double>(now - last_idle_).count());
+  last_idle_ = now;
+  const auto mode = static_cast<EqGraph::AnalyzerMode>(analyzer_mode_);
+  spectrum_pre_.clear();
+  spectrum_post_.clear();
+  if (!graph_->freqs().empty()) {
+    if (mode == EqGraph::AnalyzerMode::kPre ||
+        mode == EqGraph::AnalyzerMode::kPreAndPost) {
+      pre_analyzer_.Compute(graph_->freqs(), model_.SampleRate(),
+                            tilt_db_per_octave_, dt, spectrum_pre_);
+    }
+    if (mode == EqGraph::AnalyzerMode::kPost ||
+        mode == EqGraph::AnalyzerMode::kPreAndPost) {
+      post_analyzer_.Compute(graph_->freqs(), model_.SampleRate(),
+                             tilt_db_per_octave_, dt, spectrum_post_);
+    }
+  }
+  graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_);
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
 

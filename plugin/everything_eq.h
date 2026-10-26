@@ -8,6 +8,7 @@
 
 #include "IControls.h"
 #include "IPlug_include_in_plug_hdr.h"
+#include "dsp/common/spsc_ring.h"
 #include "dsp/engine/engine.h"
 #include "model/lookahead_gate.h"
 #include "model/param_table.h"
@@ -30,6 +31,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   ParamValues Values() const override { return CurrentValues(); }
   double SampleRate() const override { return GetSampleRate(); }
   GroupControls LiveControls() const override;
+  int PopAnalyzerSamples(bool post, float* dest, int max_count) override;
+  int PopDetectorFrames(DetectorFrame* dest, int max_count) override;
   int SelectedBand() const override { return selected_band_; }
   void SelectBand(int band) override;
   void BeginEdit(int param_id) override;
@@ -65,7 +68,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
                       int num_frames);
 
   Engine engine_;
-  std::array<std::vector<float>, 6> scratch_;  // In L/R, SC L/R, out L/R.
+  // In L/R, SC L/R, out L/R, mono analyzer buffer.
+  std::array<std::vector<float>, 7> scratch_;
   std::atomic<bool> params_dirty_{true};
   LookaheadGate lookahead_gate_;  // Audio thread.
   bool mono_output_ = false;
@@ -79,6 +83,10 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   std::array<std::atomic<float>, kNumMeterChannels> peaks_{};
   std::array<std::atomic<float>, kNumGroups> group_controls_{};
   std::atomic<bool> transport_started_{false};
+  std::atomic<bool> editor_open_{false};
+  SpscRing<float, 32768> analyzer_pre_;
+  SpscRing<float, 32768> analyzer_post_;
+  SpscRing<DetectorFrame, 1024> detector_frames_;
   bool transport_was_running_ = false;
 
   // UI thread.

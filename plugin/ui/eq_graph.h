@@ -38,6 +38,20 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   void OnResize() override { freqs_.clear(); }
 
+  enum class AnalyzerMode { kOff, kPre, kPost, kPreAndPost };
+
+  // Display frequencies of the curves (also used for the analyzer).
+  const std::vector<double>& freqs() const { return freqs_; }
+
+  // Spectra (dBFS, tilted) at freqs(); empty vectors hide them.
+  void SetSpectrum(AnalyzerMode mode, const std::vector<float>& pre,
+                   const std::vector<float>& post) {
+    analyzer_mode_ = mode;
+    spectrum_pre_ = pre;
+    spectrum_post_ = post;
+    SetDirty(false);
+  }
+
   // Called from the plugin's idle loop.
   void Refresh() {
     const ParamValues v = model_.Values();
@@ -74,6 +88,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     namespace ig = iplug::igraphics;
     g.FillRect(theme::kBackground, mRECT);
     DrawGrid(g);
+    DrawSpectrum(g);
     if (freqs_.empty()) return;
 
     const int selected = model_.SelectedBand();
@@ -267,6 +282,46 @@ class EqGraph final : public iplug::igraphics::IControl {
     return iplug::igraphics::IVec2(FreqToX(std::clamp(hz, kMinHz, kMaxHz)), y);
   }
 
+  // The analyzer has its own scale: kSpectrumMinDb .. kSpectrumMaxDb dBFS.
+  static constexpr float kSpectrumMinDb = -84.f;
+  static constexpr float kSpectrumMaxDb = 6.f;
+
+  float SpectrumToY(float db) const {
+    const float u = std::clamp(
+        (db - kSpectrumMinDb) / (kSpectrumMaxDb - kSpectrumMinDb), 0.f, 1.f);
+    return mRECT.B - u * mRECT.H();
+  }
+
+  void DrawSpectrum(iplug::igraphics::IGraphics& g) {
+    const bool pre = analyzer_mode_ == AnalyzerMode::kPre ||
+                     analyzer_mode_ == AnalyzerMode::kPreAndPost;
+    const bool post = analyzer_mode_ == AnalyzerMode::kPost ||
+                      analyzer_mode_ == AnalyzerMode::kPreAndPost;
+    if (pre && spectrum_pre_.size() == freqs_.size()) {
+      g.PathClear();
+      g.PathMoveTo(FreqToX(freqs_.front()), mRECT.B);
+      for (size_t i = 0; i < freqs_.size(); ++i) {
+        g.PathLineTo(FreqToX(freqs_[i]), SpectrumToY(spectrum_pre_[i]));
+      }
+      g.PathLineTo(FreqToX(freqs_.back()), mRECT.B);
+      g.PathClose();
+      g.PathFill(theme::kText.WithOpacity(0.08f));
+    }
+    if (post && spectrum_post_.size() == freqs_.size()) {
+      g.PathClear();
+      for (size_t i = 0; i < freqs_.size(); ++i) {
+        const float x = FreqToX(freqs_[i]), y = SpectrumToY(spectrum_post_[i]);
+        if (i == 0) {
+          g.PathMoveTo(x, y);
+        } else {
+          g.PathLineTo(x, y);
+        }
+      }
+      g.PathStroke(
+          iplug::igraphics::IColor(255, 160, 200, 255).WithOpacity(0.45f), 1.f);
+    }
+  }
+
   void DrawGrid(iplug::igraphics::IGraphics& g) {
     namespace ig = iplug::igraphics;
     const ig::IText label = theme::Text(9.f, theme::kTextDim, ig::EAlign::Near);
@@ -320,6 +375,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   EditorModel& model_;
+  AnalyzerMode analyzer_mode_ = AnalyzerMode::kPreAndPost;
+  std::vector<float> spectrum_pre_, spectrum_post_;
   ParamValues values_{};
   GroupControls live_{};
   double sample_rate_ = 0.0;

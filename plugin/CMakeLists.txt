@@ -33,6 +33,8 @@ iplug_add_plugin(${PROJECT_NAME}
     everything_eq.cc
     everything_eq.h
     ui/band_ribbon.h
+    ui/choice_field.h
+    ui/detector_scope.h
     ui/editor.cc
     ui/editor.h
     ui/editor_model.h

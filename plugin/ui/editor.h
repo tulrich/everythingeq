@@ -2,10 +2,13 @@
 #define EVERYTHINGEQ_PLUGIN_UI_EDITOR_H_
 
 #include <array>
+#include <chrono>
 #include <string>
 #include <vector>
 
 #include "IControls.h"
+#include "model/spectrum_analyzer.h"
+#include "plugin/ui/detector_scope.h"
 #include "plugin/ui/editor_model.h"
 
 namespace eeq {
@@ -71,9 +74,18 @@ class Editor {
   std::vector<iplug::igraphics::IControl*> group_tabs_;
 
   iplug::igraphics::ITextControl* now_readout_ = nullptr;
-  iplug::igraphics::ITextControl* group_out_readout_ = nullptr;
   iplug::igraphics::ITextControl* status_ = nullptr;
   std::string status_text_;
+
+  DetectorHistory history_;
+  SpectrumAnalyzer pre_analyzer_;
+  SpectrumAnalyzer post_analyzer_;
+  int analyzer_mode_ = 3;  // EqGraph::AnalyzerMode::kPreAndPost.
+  double tilt_db_per_octave_ = 4.5;
+  std::vector<float> samples_ = std::vector<float>(4096);
+  std::vector<float> spectrum_pre_, spectrum_post_;
+  std::chrono::steady_clock::time_point last_idle_ =
+      std::chrono::steady_clock::now();
 };
 
 }  // namespace eeq

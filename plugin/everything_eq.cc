@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "IPlug_include_in_plug_src.h"
+#include "dsp/common/denormals.h"
 #include "model/presets.h"
 #include "model/state.h"
 #include "plugin/ui/editor.h"
@@ -37,6 +38,7 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
     graphics->AttachCornerResizer(ig::EUIResizerMode::Scale, false);
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
     editor_ = std::make_unique<Editor>(*graphics, *this);
+    editor_open_ = true;
     layout_changed_ = true;
   };
 #endif
@@ -50,6 +52,16 @@ GroupControls EverythingEq::LiveControls() const {
     c[g] = group_controls_[g].load(std::memory_order_relaxed);
   }
   return c;
+}
+
+int EverythingEq::PopAnalyzerSamples(bool post, float* dest, int max_count) {
+  auto& ring = post ? analyzer_post_ : analyzer_pre_;
+  return static_cast<int>(ring.Pop(dest, static_cast<size_t>(max_count)));
+}
+
+int EverythingEq::PopDetectorFrames(DetectorFrame* dest, int max_count) {
+  return static_cast<int>(
+      detector_frames_.Pop(dest, static_cast<size_t>(max_count)));
 }
 
 void EverythingEq::SelectBand(int band) {
@@ -189,6 +201,7 @@ void EverythingEq::OnIdle() {
 
 void EverythingEq::OnUIClose() {
 #if IPLUG_EDITOR
+  editor_open_ = false;
   editor_.reset();  // Its controls are owned and deleted by IGraphics.
 #endif
 }
@@ -253,6 +266,7 @@ void EverythingEq::AccumulatePeak(int meter_channel, const iplug::sample* data,
 
 void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
                                 int num_frames) {
+  ScopedNoDenormals no_denormals;  // Covers the metering as well as the engine.
   UpdateConnections();
 
   const bool running = GetTransportIsRunning();
@@ -319,11 +333,28 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   }
 
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
+
+  // Metering for the UI.
+  DetectorFrame frame;
+  frame.samples = num_frames;
   for (int g = 0; g < kNumGroups; ++g) {
-    const DynamicsGroup& group = engine_.group(g);
+    DynamicsGroup& group = engine_.mutable_group(g);
     group_controls_[g].store(
         static_cast<float>(std::max(group.control(0), group.control(1))),
         std::memory_order_relaxed);
+    const DynamicsGroup::Meter m = group.TakeMeter();
+    frame.trigger_min[g] = static_cast<float>(m.trigger_min);
+    frame.trigger_max[g] = static_cast<float>(m.trigger_max);
+    frame.control_max[g] = static_cast<float>(m.control_max);
+  }
+  if (editor_open_.load(std::memory_order_relaxed)) {
+    detector_frames_.Push(frame);
+    float* mono = scratch_[6].data();
+    for (int i = 0; i < num_frames; ++i) mono[i] = 0.5f * (in[0][i] + in[1][i]);
+    analyzer_pre_.Push(mono, num_frames);
+    for (int i = 0; i < num_frames; ++i)
+      mono[i] = 0.5f * (out[0][i] + out[1][i]);
+    analyzer_post_.Push(mono, num_frames);
   }
 
   const int num_out = NOutChansConnected();

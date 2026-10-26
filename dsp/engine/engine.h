@@ -37,6 +37,7 @@ class Engine {
 
   double sample_rate() const { return fs_; }
   const DynamicsGroup& group(int g) const { return groups_[g]; }
+  DynamicsGroup& mutable_group(int g) { return groups_[g]; }
   const BandSlot& band(int b) const { return slots_[b]; }
 
  private:
