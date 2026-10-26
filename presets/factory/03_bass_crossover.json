@@ -1,7 +1,7 @@
 {
   "format": "everythingeq-preset",
   "version": 1,
-  "name": "Bass Crossover + Articulation (L/R)",
+  "name": "Bass Crossover + Articulation",
   "params": {
     "global": {
       "outputMode": "SplitLR"

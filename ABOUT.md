@@ -121,13 +121,14 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 ### E. Parameters & State
 * A **fixed, versioned parameter list** (required for host automation):
-  * Per band (×10): `Type, X, Y, Z, Option, Dyn Group, Dyn Target, DynRange, Tap, Chan, Bypass, Solo`.
-  * Per group (×4): `Input, SC Filter, SC Hz, SC Q, SC Listen, RMS Window, Alpha, Link, Threshold, Rise, Knee, Mode, Attack, Hold, Release`.
+  * Per band (×10): `Bypass, Type, Freq (X), Gain (Y), Q (Z), Dyn Group, Dyn Target, DynRange, Vowel Weighting (Option), Tap, Chan, Solo`.
+  * Per group (×4): `Attack, Hold, Release, Threshold, Rise, Knee, Mode, Alpha, RMS Window, Input, SC Filter, SC Hz, SC Q, Link, SC Listen`.
   * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
-  * X/Y/Z appear with generic names in host automation lanes; the plugin UI shows type-specific names and units.
+  * Parameters are listed most-used first. Host names are fixed, so the X/Y/Z slots are named after their most common meaning, `Freq`, `Gain` and `Q`; for other band types the lane shows that type's value and units (e.g. a Vowel band's `Freq` lane reads "AH 2.00"; see the table below). The plugin UI shows type-specific names.
+  * A band's `Bypass` keeps its settings and crossfades it out of the audio path (it still feeds an Internal Band-Sum detector and can be soloed); `Type = Off` means the slot is empty.
 * **X/Y/Z meaning by band type:**
 
-| Type | X | Y | Z | Option |
+| Type | X (`Freq`) | Y (`Gain`) | Z (`Q`) | Option (`Vowel Weighting`) |
 | :--- | :--- | :--- | :--- | :--- |
 | Peak, Low Shelf, High Shelf | Freq (Hz) | Gain (dB) | Q | – |
 | LP12, HP12, Notch | Freq (Hz) | – | Q | – |
@@ -233,7 +234,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 | D11 | Free and open source; unsigned builds (ad-hoc signed on macOS) on GitHub Releases, with install notes for clearing the macOS quarantine flag. Developer ID signing and notarization are optional later. | No signing certificates are available; ad-hoc signing is enough for Apple Silicon to load the plugins locally. |
 | D12 | Manual host testing in Logic Pro (AU) on macOS only. VST3 and CLAP are covered by `pluginval` and `clap-validator` in CI on macOS and Windows; Reaper's free evaluation on macOS is an optional extra check for VST3/CLAP sidechain routing. | That is the hardware and software available. |
 | D13 | Listen precedence: Bypass > SC Listen > Delta > Solo; SC Listen and Solo are mutually exclusive in the UI. | Makes simultaneous listen modes well defined. |
-| D14 | X/Y/Z and DynRange are normalized host parameters with per-type (per-target) mappings. | Keeps the parameter list fixed (~200 params) while one slot can hold any band type. |
+| D14 | X/Y/Z and DynRange are normalized host parameters with per-type (per-target) mappings, named `Freq`/`Gain`/`Q` for hosts. | Keeps the parameter list fixed (186 params) while one slot can hold any band type; EQ names are the most common meaning and read better than X/Y/Z. |
 | D15 | UI: in-plugin presets and undo/redo; no A/B or copy/paste; NanoVG backend; `Grp Out` shows $D_m$ in %. | Scope control for v1; NanoVG is lighter and simpler to build than Skia. |
 | D16 | Slot mappings are piecewise with every default at normalized 0.5. | Keeps the spec's defaults consistent across band types, since the normalized value persists when the type changes. |
 | D17 | State and presets are JSON: state keyed by stable parameter names, presets in physical units. Mono → mono runs the stereo engine on dual-mono input with mono rules applied to the parameters. | Robust versioning and readable presets; the mono rules need no separate engine path (a mono engine is a Phase 8 CPU optimization if needed). |

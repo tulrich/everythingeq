@@ -14,38 +14,41 @@ namespace eeq {
 // IDs are positions in this list and must never change once released; new
 // parameters are appended.  Each band and group occupies a contiguous block.
 
+// Field order is the host order: most-used first.  The X/Y/Z slots are named
+// "Freq", "Gain" and "Q" for hosts (their meaning for other band types is in
+// ABOUT.md section 3.E).
 enum class BandField {
+  kBypass,
   kType,
   kX,
   kY,
   kZ,
-  kOption,
   kDynGroup,
   kDynTarget,
   kDynRange,
+  kOption,
   kTap,
   kChan,
-  kBypass,
   kSolo,
 };
 inline constexpr int kNumBandFields = 12;
 
 enum class GroupField {
-  kInput,
-  kScFilter,
-  kScHz,
-  kScQ,
-  kScListen,
-  kRmsWindow,
-  kAlpha,
-  kLink,
+  kAttack,
+  kHold,
+  kRelease,
   kThreshold,
   kRise,
   kKnee,
   kMode,
-  kAttack,
-  kHold,
-  kRelease,
+  kAlpha,
+  kRmsWindow,
+  kInput,
+  kScFilter,
+  kScHz,
+  kScQ,
+  kLink,
+  kScListen,
 };
 inline constexpr int kNumGroupFields = 15;
 

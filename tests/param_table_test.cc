@@ -135,6 +135,9 @@ TEST_CASE("Factory presets parse and are representable", "[params]") {
   for (const Preset& preset : presets) {
     CAPTURE(preset.name);
     REQUIRE(names.insert(preset.name).second);
+    // Hosts may treat preset names as file names (Logic drops everything up
+    // to a '/').
+    REQUIRE(preset.name.find_first_of("/\\:") == std::string::npos);
     const EngineParams round_trip =
         BuildEngineParams(ValuesFromEngineParams(preset.params), false);
     REQUIRE(NearlyEqual(preset.params, round_trip));

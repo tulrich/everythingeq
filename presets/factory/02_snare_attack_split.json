@@ -1,7 +1,7 @@
 {
   "format": "everythingeq-preset",
   "version": 1,
-  "name": "Snare Attack Split (L/R)",
+  "name": "Snare Attack Split",
   "params": {
     "global": {
       "outputMode": "SplitLR",

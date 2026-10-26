@@ -62,73 +62,91 @@ ParamSpec SlotParam(std::string key, std::string name, std::string group) {
 }
 
 std::vector<ParamSpec> MakeTable() {
-  std::vector<ParamSpec> t;
-  t.reserve(kNumParams);
+  // Each spec is placed by its field, so the host order is defined only by
+  // the BandField / GroupField / GlobalField enums.
+  std::vector<ParamSpec> t(kNumParams);
   for (int b = 0; b < kNumBands; ++b) {
     const std::string k = "band" + std::to_string(b + 1) + ".";
     const std::string n = "B" + std::to_string(b + 1) + " ";
     const std::string g = "Band " + std::to_string(b + 1);
-    t.push_back(Enum(k + "type", n + "Type", g, 0,
-                     {"Off", "Peak", "Low Shelf", "High Shelf", "LP12", "HP12",
-                      "Notch", "BP", "LP24 LR", "HP24 LR", "Tilt",
-                      "Fletcher-Munson", "Vowel", "K-Weight"}));
-    t.push_back(SlotParam(k + "x", n + "X", g));
-    t.push_back(SlotParam(k + "y", n + "Y", g));
-    t.push_back(SlotParam(k + "z", n + "Z", g));
-    t.push_back(Enum(k + "option", n + "Option", g, 0, {"Natural", "Flat"}));
-    t.push_back(Enum(k + "dyn_group", n + "Dyn Group", g, 0,
-                     {"Static", "Group 1", "Group 2", "Group 3", "Group 4"}));
-    t.push_back(Enum(k + "dyn_target", n + "Dyn Target", g, 0,
-                     {"Gain", "Freq", "Morph"}));
-    t.push_back(SlotParam(k + "dyn_range", n + "Dyn Range", g));
-    t.push_back(Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"}));
-    t.push_back(Enum(k + "chan", n + "Chan", g, 0,
-                     {"Stereo", "L", "R", "Mid", "Side"}));
-    t.push_back(Bool(k + "bypass", n + "Bypass", g, false));
-    t.push_back(Bool(k + "solo", n + "Solo", g, false));
+    auto at = [&](BandField f) -> ParamSpec& { return t[BandParamId(b, f)]; };
+    at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, false);
+    at(BandField::kType) =
+        Enum(k + "type", n + "Type", g, 0,
+             {"Off", "Peak", "Low Shelf", "High Shelf", "LP12", "HP12", "Notch",
+              "BP", "LP24 LR", "HP24 LR", "Tilt", "Fletcher-Munson", "Vowel",
+              "K-Weight"});
+    at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
+    at(BandField::kY) = SlotParam(k + "y", n + "Gain", g);
+    at(BandField::kZ) = SlotParam(k + "z", n + "Q", g);
+    at(BandField::kDynGroup) =
+        Enum(k + "dyn_group", n + "Dyn Group", g, 0,
+             {"Static", "Group 1", "Group 2", "Group 3", "Group 4"});
+    at(BandField::kDynTarget) = Enum(k + "dyn_target", n + "Dyn Target", g, 0,
+                                     {"Gain", "Freq", "Morph"});
+    at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
+    at(BandField::kOption) =
+        Enum(k + "option", n + "Vowel Weighting", g, 0, {"Natural", "Flat"});
+    at(BandField::kTap) = Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"});
+    at(BandField::kChan) =
+        Enum(k + "chan", n + "Chan", g, 0, {"Stereo", "L", "R", "Mid", "Side"});
+    at(BandField::kSolo) = Bool(k + "solo", n + "Solo", g, false);
   }
   for (int i = 0; i < kNumGroups; ++i) {
     const std::string k = "group" + std::to_string(i + 1) + ".";
     const std::string n = "G" + std::to_string(i + 1) + " ";
     const std::string g = "Group " + std::to_string(i + 1);
-    t.push_back(Enum(k + "input", n + "Input", g, 0,
-                     {"Internal Dry", "Internal Band-Sum", "External SC"}));
-    t.push_back(Enum(k + "sc_filter", n + "SC Filter", g, 0,
-                     {"Off", "BP", "LP", "HP", "Tilt", "K-Weight"}));
-    t.push_back(Continuous(k + "sc_hz", n + "SC Hz", g, 20.0, 20000.0, 1000.0,
-                           "Hz", true));
-    t.push_back(Continuous(k + "sc_q", n + "SC Q", g, 0.1, 40.0,
-                           0.70710678118654752440, "", true));
-    t.push_back(Bool(k + "sc_listen", n + "SC Listen", g, false));
-    t.push_back(Continuous(k + "rms_window_ms", n + "RMS Window", g, 1.0, 400.0,
-                           15.0, "ms", true));
-    t.push_back(Continuous(k + "alpha", n + "Alpha", g, 0.0, 1.0, 0.0, ""));
-    t.push_back(Continuous(k + "link", n + "Link", g, 0.0, 100.0, 100.0, "%"));
-    t.push_back(Continuous(k + "threshold_db", n + "Threshold", g, -70.0, 0.0,
-                           -20.0, "dB"));
-    t.push_back(Continuous(k + "rise_db", n + "Rise", g, 0.0, 30.0, 6.0, "dB"));
-    t.push_back(Continuous(k + "knee_db", n + "Knee", g, 0.0, 30.0, 0.0, "dB"));
-    t.push_back(Enum(k + "mode", n + "Mode", g, 0, {"Above", "Below"}));
-    t.push_back(Continuous(k + "attack_ms", n + "Attack", g, 0.1, 500.0, 5.0,
-                           "ms", true));
-    t.push_back(
-        Continuous(k + "hold_ms", n + "Hold", g, 0.0, 500.0, 0.0, "ms"));
-    t.push_back(Continuous(k + "release_ms", n + "Release", g, 1.0, 5000.0,
-                           100.0, "ms", true));
+    auto at = [&](GroupField f) -> ParamSpec& { return t[GroupParamId(i, f)]; };
+    at(GroupField::kAttack) = Continuous(k + "attack_ms", n + "Attack", g, 0.1,
+                                         500.0, 5.0, "ms", true, 0.1);
+    at(GroupField::kHold) = Continuous(k + "hold_ms", n + "Hold", g, 0.0, 500.0,
+                                       0.0, "ms", false, 0.1);
+    at(GroupField::kRelease) = Continuous(k + "release_ms", n + "Release", g,
+                                          1.0, 5000.0, 100.0, "ms", true, 1.0);
+    at(GroupField::kThreshold) =
+        Continuous(k + "threshold_db", n + "Threshold", g, -70.0, 0.0, -20.0,
+                   "dB", false, 0.1);
+    at(GroupField::kRise) = Continuous(k + "rise_db", n + "Rise", g, 0.0, 30.0,
+                                       6.0, "dB", false, 0.1);
+    at(GroupField::kKnee) = Continuous(k + "knee_db", n + "Knee", g, 0.0, 30.0,
+                                       0.0, "dB", false, 0.1);
+    at(GroupField::kMode) =
+        Enum(k + "mode", n + "Mode", g, 0, {"Above", "Below"});
+    at(GroupField::kAlpha) =
+        Continuous(k + "alpha", n + "Alpha", g, 0.0, 1.0, 0.0, "", false, 0.01);
+    at(GroupField::kRmsWindow) =
+        Continuous(k + "rms_window_ms", n + "RMS Window", g, 1.0, 400.0, 15.0,
+                   "ms", true, 0.1);
+    at(GroupField::kInput) =
+        Enum(k + "input", n + "Input", g, 0,
+             {"Internal Dry", "Internal Band-Sum", "External SC"});
+    at(GroupField::kScFilter) =
+        Enum(k + "sc_filter", n + "SC Filter", g, 0,
+             {"Off", "BP", "LP", "HP", "Tilt", "K-Weight"});
+    at(GroupField::kScHz) = Continuous(k + "sc_hz", n + "SC Hz", g, 20.0,
+                                       20000.0, 1000.0, "Hz", true, 1.0);
+    at(GroupField::kScQ) = Continuous(k + "sc_q", n + "SC Q", g, 0.1, 40.0,
+                                      0.70710678118654752440, "", true, 0.01);
+    at(GroupField::kLink) = Continuous(k + "link", n + "Link", g, 0.0, 100.0,
+                                       100.0, "%", false, 1.0);
+    at(GroupField::kScListen) =
+        Bool(k + "sc_listen", n + "SC Listen", g, false);
   }
   const std::string g = "Global";
-  t.push_back(Enum("global.output_mode", "Output Mode", g, 0,
-                   {"Stereo", "Split L/R", "Split M/S"}));
-  t.push_back(
-      Continuous("global.global_scale", "Scale", g, -100.0, 200.0, 100.0, "%"));
-  t.push_back(Bool("global.delta", "Delta", g, false));
-  t.push_back(Bool("global.bypass", "Bypass", g, false));
-  t.push_back(Continuous("global.output_gain_db", "Output Gain", g, -24.0, 24.0,
-                         0.0, "dB"));
-  ParamSpec lookahead = Continuous("global.lookahead_ms", "Lookahead", g, 0.0,
-                                   kMaxLookaheadMs, 0.0, "ms", false, 0.1);
-  lookahead.automatable = false;
-  t.push_back(lookahead);
+  auto at = [&](GlobalField f) -> ParamSpec& { return t[GlobalParamId(f)]; };
+  at(GlobalField::kOutputMode) = Enum("global.output_mode", "Output Mode", g, 0,
+                                      {"Stereo", "Split L/R", "Split M/S"});
+  at(GlobalField::kGlobalScale) = Continuous(
+      "global.global_scale", "Scale", g, -100.0, 200.0, 100.0, "%", false, 1.0);
+  at(GlobalField::kDelta) = Bool("global.delta", "Delta", g, false);
+  at(GlobalField::kBypass) = Bool("global.bypass", "Bypass", g, false);
+  at(GlobalField::kOutputGain) =
+      Continuous("global.output_gain_db", "Output Gain", g, -24.0, 24.0, 0.0,
+                 "dB", false, 0.1);
+  at(GlobalField::kLookahead) =
+      Continuous("global.lookahead_ms", "Lookahead", g, 0.0, kMaxLookaheadMs,
+                 0.0, "ms", false, 0.1);
+  at(GlobalField::kLookahead).automatable = false;
   return t;
 }
 

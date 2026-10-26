@@ -105,7 +105,10 @@ std::string FormatSlotValue(const SlotMapping& m, double physical) {
     }
   } else if (std::string(m.name) == "Morph") {
     static const char* const kVowels[] = {"OO", "OH", "AH", "EH", "EE"};
-    const int nearest = static_cast<int>(std::lround(physical));
+    // Name the vowel from the value as displayed (two decimals), so the text
+    // parses back to the same label.
+    const double shown = std::round(physical * 100.0) / 100.0;
+    const int nearest = static_cast<int>(std::lround(shown));
     std::snprintf(buf, sizeof(buf), "%s %.2f",
                   kVowels[std::clamp(nearest, 0, 4)], physical);
   } else if (unit == "x") {
