@@ -58,7 +58,7 @@ presets/             factory presets (JSON source → embedded)
 1. Logic finds "tulrich: EverythingEQ" under Audio Units → tulrich (if not, `killall -9 AudioComponentRegistrar` and restart Logic).
 2. It can be inserted on a mono track (mono → mono and mono → stereo variants offered) and on a stereo track, and the layout readout in the UI matches.
 3. The sidechain menu in the plugin header lists tracks/buses. With a sidechain selected, the Sidechain meters move; with "None", they stay at zero (the spike zeroes Logic's duplicate-main-input quirk).
-4. Audio passes unchanged at 0 dB Output Gain, and Output Gain automation works.
+4. Audio passes unchanged at 0 dB Output Gain, and Output Gain automation works. The In/SC/Out meters track the signal; pushing Output Gain past 0 dBFS latches the Out readout red until it's clicked or playback restarts.
 5. Save, close and reopen the project: the Output Gain value is restored.
 
 **Phase 0 findings:**
@@ -137,7 +137,7 @@ presets/             factory presets (JSON source → embedded)
 3. EQ graph: log-frequency grid, composite curve and per-band fills from `analyticResponse`, draggable nodes (drag = freq/gain, wheel = Q), plus the dynamic range shown as a ghost curve at $D_m = 1$ and a live curve at the current $D_m$.
 4. Analyzer: Pre/Post/Pre+Post, FFT on the UI thread fed by a lock-free FIFO, display tilt.
 5. Dynamics group panel: source and sidechain, detector and continuum, trigger meter with draggable threshold handle (showing Trigger vs $T_{\text{eff}}$), ballistics, `Grp Out` readout of $D_m$ in %.
-6. Band editor `NOW` readout (the band's current dynamic offset in dB, oct or morph units); output level meter with peak readout beside the graph.
+6. Band editor `NOW` readout (the band's current dynamic offset in dB, oct or morph units); input and output level meters per ABOUT.md §4, using `plugin/ui/LevelMeter.h` (built during Phase 0; the audio thread only publishes per-block peaks through atomics, and ballistics run on the UI thread).
 7. Graph node rules from ABOUT.md §4 (F-M pinned at 1 kHz, Vowel drags Morph/Gain, no node for K-Weight).
 8. Global footer: Output Mode, Lookahead, Scale, Δ, Bypass, preset menu (factory + user, save/rename), Undo/Redo.
 9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.

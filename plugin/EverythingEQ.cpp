@@ -1,7 +1,10 @@
 #include "EverythingEQ.h"
 #include "IPlug_include_in_plug_src.h"
 
+#include "ui/LevelMeter.h"
+
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 EverythingEQ::EverythingEQ(const InstanceInfo& info)
@@ -25,38 +28,62 @@ EverythingEQ::EverythingEQ(const InstanceInfo& info)
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
     pGraphics->AttachPanelBackground(COLOR_DARK_GRAY);
     pGraphics->LoadFont("Roboto-Regular", ROBOTO_FN);
-    const IRECT b = pGraphics->GetBounds().GetPadded(-20.f);
-    IRECT header = b.GetFromTop(40.f);
-    IRECT body = b.GetReducedFromTop(50.f);
-    IRECT knob = body.ReduceFromRight(140.f);
+    IRECT b = pGraphics->GetBounds().GetPadded(-20.f);
 
+    // Input (and sidechain) meters on the left, output meter on the right.
+    constexpr float kMeterW = 64.f;
+    mInputMeter = new LevelMeter(b.ReduceFromLeft(kMeterW), "In", {"L", "R"});
+    b.ReduceFromLeft(8.f);
+    mSidechainMeter = new LevelMeter(b.ReduceFromLeft(kMeterW), "SC", {"L", "R"});
+    mOutputMeter = new LevelMeter(b.ReduceFromRight(kMeterW), "Out", {"L", "R"});
+    pGraphics->AttachControl(mInputMeter);
+    pGraphics->AttachControl(mSidechainMeter);
+    pGraphics->AttachControl(mOutputMeter);
+
+    b.Pad(-20.f);
+    const IRECT header = b.ReduceFromTop(40.f);
+    const IRECT footer = b.ReduceFromBottom(30.f);
     const IVStyle style = DEFAULT_STYLE.WithColor(kFG, COLOR_WHITE.WithOpacity(0.3f));
     pGraphics->AttachControl(new ITextControl(header, "Everything EQ " PLUG_VERSION_STR " (spike build)",
                                               IText(24.f, COLOR_WHITE, "Roboto-Regular", EAlign::Near)));
-    pGraphics->AttachControl(new ITextControl(body.GetFromBottom(30.f), "",
-                                              IText(16.f, COLOR_LIGHT_GRAY, "Roboto-Regular", EAlign::Near)),
+    pGraphics->AttachControl(new ITextControl(footer, "", IText(14.f, COLOR_LIGHT_GRAY, "Roboto-Regular", EAlign::Near)),
                              kCtrlTagLayout);
-    body.ReduceFromBottom(40.f);
-    IRECT meters = body;
-    pGraphics->AttachControl(new IVPeakAvgMeterControl<kMaxIn>(meters.FracRectVertical(0.5f, true).GetPadded(-5.f), "Inputs", style,
-                                                               EDirection::Horizontal, {"Main L", "Main R", "Sidechain L", "Sidechain R"}),
-                             kCtrlTagInputMeter);
-    pGraphics->AttachControl(new IVPeakAvgMeterControl<kMaxOut>(meters.FracRectVertical(0.5f, false).GetPadded(-5.f), "Outputs", style,
-                                                                EDirection::Horizontal, {"Out L", "Out R"}),
-                             kCtrlTagOutputMeter);
-    pGraphics->AttachControl(new IVKnobControl(knob.GetCentredInside(120.f, 160.f), kGain, "Output Gain", style));
+    pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(120.f, 160.f), kGain, "Output Gain", style));
+    mLayoutChanged = true;
   };
 #endif
 }
 
 void EverythingEQ::OnIdle()
 {
-  mInputPeakSender.TransmitData(*this);
-  mOutputPeakSender.TransmitData(*this);
-
 #if IPLUG_EDITOR
-  if (mLayoutChanged && GetUI())
+  IGraphics* pGraphics = GetUI();
+  if (!pGraphics || !mInputMeter)
+    return;
+
+  float peaks[kNumMeterChannels];
+  for (int i = 0; i < kNumMeterChannels; ++i)
+    peaks[i] = mPeaks[i].exchange(0.f, std::memory_order_relaxed);
+  mInputMeter->AddPeaks(peaks);
+  mSidechainMeter->AddPeaks(peaks + 2);
+  mOutputMeter->AddPeaks(peaks + 4);
+
+  if (mTransportStarted.exchange(false))
   {
+    mInputMeter->ResetClip();
+    mSidechainMeter->ResetClip();
+    mOutputMeter->ResetClip();
+  }
+
+  if (mLayoutChanged.exchange(false))
+  {
+    mInputMeter->SetChannelActive(0, mInConnected[0]);
+    mInputMeter->SetChannelActive(1, mInConnected[1]);
+    mSidechainMeter->SetChannelActive(0, mInConnected[2]);
+    mSidechainMeter->SetChannelActive(1, mInConnected[3]);
+    mOutputMeter->SetChannelActive(0, mOutConnected[0]);
+    mOutputMeter->SetChannelActive(1, mOutConnected[1]);
+
     const int nIn = (mInConnected[0] ? 1 : 0) + (mInConnected[1] ? 1 : 0);
     const int nSc = (mInConnected[2] ? 1 : 0) + (mInConnected[3] ? 1 : 0);
     const int nOut = (mOutConnected[0] ? 1 : 0) + (mOutConnected[1] ? 1 : 0);
@@ -64,11 +91,16 @@ void EverythingEQ::OnIdle()
     GetHostStr(host);
     str.SetFormatted(256, "Layout: %d in, %d sidechain, %d out   |   host: %s   |   latency: %d samples",
                      nIn, nSc, nOut, host.Get(), GetLatency());
-    if (auto* pText = GetUI()->GetControlWithTag(kCtrlTagLayout)->As<ITextControl>())
+    if (auto* pText = pGraphics->GetControlWithTag(kCtrlTagLayout)->As<ITextControl>())
       pText->SetStr(str.Get());
-    GetUI()->SetAllControlsDirty();
-    mLayoutChanged = false;
   }
+#endif
+}
+
+void EverythingEQ::OnUIClose()
+{
+#if IPLUG_EDITOR
+  mInputMeter = mSidechainMeter = mOutputMeter = nullptr;  // owned and deleted by IGraphics
 #endif
 }
 
@@ -81,8 +113,6 @@ void EverythingEQ::OnReset()
   mEngine.prepare(GetSampleRate());
   if (mEngine.latencySamples() != GetLatency())
     SetLatency(mEngine.latencySamples());
-  mInputPeakSender.Reset(GetSampleRate());
-  mOutputPeakSender.Reset(GetSampleRate());
   mLayoutChanged = true;
 }
 
@@ -113,9 +143,23 @@ void EverythingEQ::UpdateConnections()
   }
 }
 
+void EverythingEQ::AccumulatePeak(int meterCh, const sample* pData, int nFrames)
+{
+  float peak = 0.f;
+  for (int s = 0; s < nFrames; ++s)
+    peak = std::max(peak, static_cast<float>(std::fabs(pData[s])));
+  float prev = mPeaks[meterCh].load(std::memory_order_relaxed);
+  while (peak > prev && !mPeaks[meterCh].compare_exchange_weak(prev, peak, std::memory_order_relaxed)) {}
+}
+
 void EverythingEQ::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 {
   UpdateConnections();
+
+  const bool running = GetTransportIsRunning();
+  if (running && !mTransportWasRunning)
+    mTransportStarted = true;
+  mTransportWasRunning = running;
 
   // Logic and GarageBand pass the main input on the sidechain bus when no
   // sidechain is selected; treat an identical sidechain as silence.
@@ -152,15 +196,20 @@ void EverythingEQ::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
     sc[1][s] = scR ? static_cast<float>(inputs[3][s]) : sc[0][s];
   }
 
+  if (mInConnected[0]) AccumulatePeak(0, inputs[0], nFrames);
+  if (mainR) AccumulatePeak(1, inputs[1], nFrames);
+  if (scL) AccumulatePeak(2, inputs[2], nFrames);
+  if (scR) AccumulatePeak(3, inputs[3], nFrames);
+
   mEngine.process(in, (scL || scR) ? sc : nullptr, out, nFrames);
 
   const double gain = GetParam(kGain)->DBToAmp();
   const int nOut = NOutChansConnected();
   for (int c = 0; c < nOut; ++c)
+  {
     for (int s = 0; s < nFrames; ++s)
       outputs[c][s] = out[c][s] * gain;
-
-  mInputPeakSender.ProcessBlock(inputs, nFrames, kCtrlTagInputMeter, kMaxIn, 0);
-  mOutputPeakSender.ProcessBlock(outputs, nFrames, kCtrlTagOutputMeter, kMaxOut, 0);
+    AccumulatePeak(4 + c, outputs[c], nFrames);
+  }
 }
 #endif  // IPLUG_DSP

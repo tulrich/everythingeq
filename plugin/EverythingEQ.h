@@ -2,11 +2,11 @@
 
 #include "IPlug_include_in_plug_hdr.h"
 #include "IControls.h"
-#include "ISender.h"
 
 #include "engine/Engine.h"
 
 #include <array>
+#include <atomic>
 #include <vector>
 
 const int kNumPresets = 1;
@@ -19,14 +19,14 @@ enum EParams
 
 enum ECtrlTags
 {
-  kCtrlTagInputMeter = 0,
-  kCtrlTagOutputMeter,
-  kCtrlTagLayout,
+  kCtrlTagLayout = 0,
   kNumCtrlTags
 };
 
 using namespace iplug;
 using namespace igraphics;
+
+class LevelMeter;
 
 // Phase 0 spike: a gain plugin with a sidechain input that runs audio through
 // eeq::Engine at its default (pass-through) settings.  It exists to prove out
@@ -38,6 +38,7 @@ public:
   EverythingEQ(const InstanceInfo& info);
 
   void OnIdle() override;
+  void OnUIClose() override;
 #if IPLUG_DSP
   void ProcessBlock(sample** inputs, sample** outputs, int nFrames) override;
   void OnReset() override;
@@ -48,16 +49,27 @@ public:
 private:
   static constexpr int kMaxIn = 4;   // main L/R + sidechain L/R
   static constexpr int kMaxOut = 2;
+  // Meter channels: main in L/R, sidechain L/R, out L/R.
+  static constexpr int kNumMeterChannels = kMaxIn + kMaxOut;
 
   void UpdateConnections();
+  void AccumulatePeak(int meterCh, const sample* pData, int nFrames);
 
   eeq::Engine mEngine;
   std::array<std::vector<float>, 6> mScratch;  // in L/R, sc L/R, out L/R
 
   std::array<bool, kMaxIn> mInConnected{};
   std::array<bool, kMaxOut> mOutConnected{};
-  bool mLayoutChanged = true;
+  std::atomic<bool> mLayoutChanged{true};
 
-  IPeakAvgSender<kMaxIn> mInputPeakSender;
-  IPeakAvgSender<kMaxOut> mOutputPeakSender;
+  // Audio thread -> UI: max |sample| per channel since the UI last read it.
+  std::array<std::atomic<float>, kNumMeterChannels> mPeaks{};
+  std::atomic<bool> mTransportStarted{false};
+  bool mTransportWasRunning = false;
+
+#if IPLUG_EDITOR
+  LevelMeter* mInputMeter = nullptr;
+  LevelMeter* mSidechainMeter = nullptr;
+  LevelMeter* mOutputMeter = nullptr;
+#endif
 };
