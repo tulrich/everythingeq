@@ -64,9 +64,14 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
                              ig::IText(14.f, ig::COLOR_LIGHT_GRAY,
                                        "Roboto-Regular", ig::EAlign::Near)),
         kControlTagLayout);
+    const ig::IRECT knobs = bounds.GetCentredInside(280.f, 160.f);
     graphics->AttachControl(new ig::IVKnobControl(
-        bounds.GetCentredInside(120.f, 160.f),
+        knobs.GetGridCell(0, 1, 2).GetPadded(-10.f),
         GlobalParamId(GlobalField::kOutputGain), "Output Gain", style));
+    // Not automatable, so hosts don't show it in automation menus.
+    graphics->AttachControl(new ig::IVKnobControl(
+        knobs.GetGridCell(1, 1, 2).GetPadded(-10.f),
+        GlobalParamId(GlobalField::kLookahead), "Lookahead", style));
     layout_changed_ = true;
   };
 #endif
