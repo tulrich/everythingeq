@@ -42,17 +42,15 @@ ParamValues BaseValues() {
   SetBand(v, 4, BandType::kLowShelf, 0.4, 0.6, 0.5);
   SetBand(v, 5, BandType::kHp12, 0.2, 0.5, 0.5);
   SetBand(v, 6, BandType::kBp, 0.5, 0.5, 0.5);
-  SetBand(v, 7, BandType::kHighShelf, 0.7, 0.4, 0.5);
-  SetBand(v, 8, BandType::kNotch, 0.8, 0.5, 0.4);
-  SetBand(v, 9, BandType::kLp24Lr, 0.9, 0.5, 0.5);
+  SetBand(v, 7, BandType::kLp24Lr, 0.9, 0.5, 0.5);
   // Dynamic bands on two groups.
-  v[BandParamId(0, BandField::kDynGroup)] = 1;
+  v[BandParamId(0, BandField::kDynGroup)] = 0;
   v[BandParamId(0, BandField::kDynRange)] = 0.55;
-  v[BandParamId(1, BandField::kDynGroup)] = 2;
+  v[BandParamId(1, BandField::kDynGroup)] = 1;
   v[BandParamId(1, BandField::kDynTarget)] =
       static_cast<int>(DynTarget::kMorph);
   v[BandParamId(1, BandField::kDynRange)] = 0.6;
-  v[BandParamId(5, BandField::kDynGroup)] = 1;
+  v[BandParamId(5, BandField::kDynGroup)] = 0;
   v[BandParamId(5, BandField::kDynTarget)] = static_cast<int>(DynTarget::kFreq);
   v[BandParamId(5, BandField::kDynRange)] = 0.55;
   for (int g = 0; g < 2; ++g) {

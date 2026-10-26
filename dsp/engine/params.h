@@ -5,7 +5,7 @@
 
 namespace eeq {
 
-inline constexpr int kNumBands = 10;
+inline constexpr int kNumBands = 8;
 inline constexpr int kNumGroups = 4;
 inline constexpr int kNumChannels = 2;
 inline constexpr int kControlBlock = 16;  // samples per control sub-block

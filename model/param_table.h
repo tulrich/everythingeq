@@ -77,6 +77,11 @@ constexpr int GlobalParamId(GlobalField field) {
   return kFirstGlobalParam + static_cast<int>(field);
 }
 
+// A band's default Dyn Group: bands 1-2 use Group 1, 3-4 Group 2, and so on.
+constexpr int DefaultDynGroup(int band) {
+  return band * kNumGroups / kNumBands;
+}
+
 enum class ParamKind {
   kContinuous,  // Plain value in [min, max].
   kEnum,        // Integer index into enum_labels.

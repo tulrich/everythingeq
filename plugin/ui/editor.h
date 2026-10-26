@@ -53,6 +53,7 @@ class Editor {
   EditorModel& model_;
   int selected_group_ = 0;
   int bound_band_ = -1;
+  int shown_band_group_ = -1;
   int bound_group_ = -1;
 
   BandRibbon* ribbon_ = nullptr;

@@ -9,6 +9,7 @@
 
 #include "IControl.h"
 #include "plugin/ui/editor_model.h"
+#include "plugin/ui/eq_graph.h"
 #include "plugin/ui/theme.h"
 
 namespace eeq {
@@ -69,14 +70,20 @@ class DetectorHistory {
 class DetectorScope final : public iplug::igraphics::IControl {
  public:
   DetectorScope(const iplug::igraphics::IRECT& bounds, EditorModel& model,
-                const DetectorHistory& history, const int& group)
-      : IControl(bounds), model_(model), history_(history), group_(group) {
+                const DetectorHistory& history, const EqGraph& graph,
+                const int& group)
+      : IControl(bounds),
+        model_(model),
+        history_(history),
+        graph_(graph),
+        group_(group) {
     SetTooltip(
         "Detector: the white trace is what the detector sees (level at "
         "Alpha 0, rise above the recent average at Alpha 1). The group fires "
         "when it crosses the blue threshold line, ramping across the shaded "
-        "knee. The strip below is the group output D (0-100%). Drag up/down "
-        "to move the threshold.");
+        "knee. The strip below is the group output D (0-100%), grey when no "
+        "band uses this group, with the gain its bands apply now. Drag "
+        "up/down to move the threshold.");
   }
 
   bool IsDirty() override { return true; }  // Scrolls continuously.
@@ -91,9 +98,10 @@ class DetectorScope final : public iplug::igraphics::IControl {
 
     // Active region (above or below the threshold), knee band, threshold.
     const float ty = DbToY(s.teff, s, trig);
-    const ig::IRECT active = s.below ? ig::IRECT(trig.L, ty, trig.R, trig.B)
-                                     : ig::IRECT(trig.L, trig.T, trig.R, ty);
-    g.FillRect(theme::kAccent.WithOpacity(0.06f), active);
+    const ig::IRECT active_rect = s.below
+                                      ? ig::IRECT(trig.L, ty, trig.R, trig.B)
+                                      : ig::IRECT(trig.L, trig.T, trig.R, ty);
+    g.FillRect(theme::kAccent.WithOpacity(0.06f), active_rect);
     if (s.knee > 0.0) {
       const float k0 = DbToY(s.teff + s.knee / 2, s, trig);
       const float k1 = DbToY(s.teff - s.knee / 2, s, trig);
@@ -124,14 +132,16 @@ class DetectorScope final : public iplug::igraphics::IControl {
     g.DrawLine(theme::kAccent, trig.L, ty, trig.R, ty, nullptr, 1.5f);
 
     // D strip.
+    const bool active = graph_.group_active(group_);
+    const ig::IColor d_color = active ? theme::kAccent.WithOpacity(0.75f)
+                                      : theme::kTextDim.WithOpacity(0.35f);
     g.FillRect(theme::kPanel, dstrip);
     for (int i = 0; i < DetectorHistory::kColumns; ++i) {
       const DetectorHistory::Column& c = history_.at(group_, i);
       if (!c.valid || c.control <= 0.001f) continue;
       const float x = dstrip.L + i * col_w;
-      g.FillRect(theme::kAccent.WithOpacity(0.75f),
-                 ig::IRECT(x, dstrip.B - c.control * dstrip.H(),
-                           x + col_w + 0.5f, dstrip.B));
+      g.FillRect(d_color, ig::IRECT(x, dstrip.B - c.control * dstrip.H(),
+                                    x + col_w + 0.5f, dstrip.B));
     }
 
     // Labels.
@@ -152,6 +162,17 @@ class DetectorScope final : public iplug::igraphics::IControl {
         static_cast<int>(std::lround(model_.LiveControls()[group_] * 100)));
     g.DrawText(theme::Text(9.f, theme::kText, ig::EAlign::Far), buf,
                dstrip.GetHPadded(-3.f));
+    if (active) {
+      std::snprintf(
+          buf, sizeof(buf), "%+.1f dB",
+          std::round(graph_.group_gain_db(group_) * 10.f) / 10.f + 0.f);
+      g.DrawText(theme::Text(9.f, theme::kGain, ig::EAlign::Far), buf,
+                 dstrip.GetHPadded(-3.f).GetReducedFromRight(36.f));
+    } else {
+      g.DrawText(theme::Text(9.f, theme::kTextDim, ig::EAlign::Far),
+                 "no bands: set a band's Dyn Range",
+                 dstrip.GetHPadded(-3.f).GetReducedFromRight(36.f));
+    }
     g.DrawRoundRect(theme::kBorder, mRECT, 3.f);
   }
 
@@ -219,6 +240,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
 
   EditorModel& model_;
   const DetectorHistory& history_;
+  const EqGraph& graph_;
   const int& group_;
   int drag_id_ = -1;
   double drag_weight_ = 1.0;

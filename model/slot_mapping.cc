@@ -94,6 +94,16 @@ double SlotFromPhysical(const SlotMapping& m, double physical) {
   return 0.5 + 0.5 * InvLerp(m.mid, m.max, v, m.log);
 }
 
+namespace {
+
+// Rounds to `decimals` places, without a negative zero ("-0.0").
+double RoundForDisplay(double v, int decimals) {
+  const double scale = std::pow(10.0, decimals);
+  return std::round(v * scale) / scale + 0.0;
+}
+
+}  // namespace
+
 std::string FormatSlotValue(const SlotMapping& m, double physical) {
   char buf[48];
   const std::string unit = m.unit;
@@ -114,11 +124,12 @@ std::string FormatSlotValue(const SlotMapping& m, double physical) {
   } else if (unit == "x") {
     std::snprintf(buf, sizeof(buf), "%.2fx", physical);
   } else if (unit.empty()) {
-    std::snprintf(buf, sizeof(buf), "%.2f", physical);
+    std::snprintf(buf, sizeof(buf), "%.2f", RoundForDisplay(physical, 2));
   } else if (m.min_is_silence && physical <= m.min) {
     std::snprintf(buf, sizeof(buf), "-inf dB");  // BP silence floor.
   } else {
-    std::snprintf(buf, sizeof(buf), "%+.1f %s", physical, m.unit);
+    std::snprintf(buf, sizeof(buf), "%+.1f %s", RoundForDisplay(physical, 1),
+                  m.unit);
   }
   return buf;
 }

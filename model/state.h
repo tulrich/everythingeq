@@ -16,7 +16,7 @@ namespace eeq {
 // are ignored, missing keys get defaults, values are sanitized, and older
 // versions are migrated.  The output is deterministic.
 
-inline constexpr int kStateVersion = 1;
+inline constexpr int kStateVersion = 2;
 
 std::string SerializeState(const ParamValues& values);
 

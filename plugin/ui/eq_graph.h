@@ -40,6 +40,12 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   enum class AnalyzerMode { kOff, kPre, kPost, kPreAndPost };
 
+  // Whether any active band moves with group g, and the gain change (dB)
+  // its bands apply right now: the largest deviation of their combined
+  // response from the static one, negative for a cut.  As of Refresh().
+  bool group_active(int g) const { return group_active_[g]; }
+  float group_gain_db(int g) const { return group_gain_db_[g]; }
+
   // Display frequencies of the curves (also used for the analyzer).
   const std::vector<double>& freqs() const { return freqs_; }
 
@@ -71,15 +77,20 @@ class EqGraph final : public iplug::igraphics::IControl {
     ComputeChainResponse(params_, GroupControls{}, sample_rate_, freqs_,
                          static_);
     any_dynamic_ = false;
+    group_active_.fill(false);
+    group_gain_db_.fill(0.f);
     for (const BandParams& bp : params_.bands) {
-      any_dynamic_ = any_dynamic_ || (bp.type != BandType::kOff && !bp.bypass &&
-                                      bp.dyn_group >= 0 && bp.dyn_range != 0.0);
+      // BuildEngineParams leaves a band without a Dyn Range unsubscribed.
+      if (bp.type == BandType::kOff || bp.bypass || bp.dyn_group < 0) continue;
+      any_dynamic_ = true;
+      group_active_[bp.dyn_group] = true;
     }
     if (any_dynamic_) {
       GroupControls full;
       full.fill(1.0);
       ComputeChainResponse(params_, full, sample_rate_, freqs_, ghost_);
       ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_);
+      ComputeGroupGains();
     }
     SetDirty(false);
   }
@@ -210,6 +221,35 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
  private:
+  void ComputeGroupGains() {
+    // Silence (e.g. a BP band at its floor) counts as -60 dB, so opening it
+    // reads +60 dB rather than an arbitrary huge number.
+    constexpr float kFloorDb = -60.f;
+    std::vector<float> delta(freqs_.size());
+    for (int g = 0; g < kNumGroups; ++g) {
+      if (!group_active_[g]) continue;
+      std::fill(delta.begin(), delta.end(), 0.f);
+      for (int b = 0; b < kNumBands; ++b) {
+        const BandParams& bp = params_.bands[b];
+        if (bp.dyn_group != g || bp.bypass) continue;
+        const std::vector<float>& live = live_curves_.band_db[b];
+        const std::vector<float>& still = static_.band_db[b];
+        if (live.size() != delta.size() || still.size() != delta.size()) {
+          continue;
+        }
+        for (size_t i = 0; i < delta.size(); ++i) {
+          delta[i] +=
+              std::max(live[i], kFloorDb) - std::max(still[i], kFloorDb);
+        }
+      }
+      float extreme = 0.f;
+      for (float d : delta) {
+        if (std::abs(d) > std::abs(extreme)) extreme = d;
+      }
+      group_gain_db_[g] = extreme;
+    }
+  }
+
   float FreqToX(double hz) const {
     const double u = std::log(hz / kMinHz) / std::log(kMaxHz / kMinHz);
     return mRECT.L + static_cast<float>(u) * mRECT.W();
@@ -383,6 +423,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   EngineParams params_{};
   std::vector<double> freqs_;
   ChainResponse static_, ghost_, live_curves_;
+  std::array<bool, kNumGroups> group_active_{};
+  std::array<float, kNumGroups> group_gain_db_{};
   bool any_dynamic_ = false;
   int drag_band_ = -1;
   float drag_x_ = 0.f, drag_y_ = 0.f;

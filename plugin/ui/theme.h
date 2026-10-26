@@ -21,8 +21,9 @@ inline const ig::IColor kGridStrong(255, 76, 82, 92);
 inline const ig::IColor kText(255, 220, 222, 227);
 inline const ig::IColor kTextDim(255, 140, 146, 156);
 inline const ig::IColor kAccent(255, 92, 170, 255);
-inline const ig::IColor kOn(255, 240, 180, 60);   // Toggle "on" (Solo, etc.).
-inline const ig::IColor kWarn(255, 225, 75, 60);  // Bypass.
+inline const ig::IColor kOn(255, 240, 180, 60);    // Toggle "on" (Solo, etc.).
+inline const ig::IColor kWarn(255, 225, 75, 60);   // Bypass.
+inline const ig::IColor kGain(255, 250, 215, 60);  // Applied gain meters.
 
 // One hue per band slot.
 inline ig::IColor BandColor(int band) {

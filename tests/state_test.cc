@@ -68,8 +68,37 @@ TEST_CASE("State tolerates missing, unknown and out-of-range keys", "[state]") {
   expected[BandParamId(1, BandField::kType)] = 7;
   expected[BandParamId(1, BandField::kX)] = 1.0;
   expected[GlobalParamId(GlobalField::kOutputGain)] = -24.0;
-  expected[BandParamId(0, BandField::kDynGroup)] = 2;
+  expected[BandParamId(0, BandField::kDynGroup)] = 1;  // Migrated from v1.
   REQUIRE(*v == expected);
+}
+
+TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 1,
+      "params": {"band4.dyn_group": 0, "band4.dyn_range": 0.8,
+                 "band5.dyn_group": 4, "band5.dyn_range": 0.8}})");
+  REQUIRE(v.has_value());
+  ParamValues expected = DefaultParamValues();
+  expected[BandParamId(3, BandField::kDynGroup)] = 1;  // Bands 3-4: Group 2.
+  expected[BandParamId(4, BandField::kDynGroup)] = 3;
+  expected[BandParamId(4, BandField::kDynRange)] = 0.8;
+  REQUIRE(*v == expected);
+}
+
+TEST_CASE("Dyn Range 0 means a band is static", "[state]") {
+  ParamValues v = DefaultParamValues();
+  for (int b = 0; b < kNumBands; ++b) {
+    REQUIRE(v[BandParamId(b, BandField::kDynGroup)] == b / 2);
+  }
+  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == -1);
+  v[BandParamId(2, BandField::kDynRange)] = 0.6;
+  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == 1);
+  // And back: a static engine band gets its default group and no range.
+  EngineParams p;
+  p.bands[6].dyn_range = 12.0;
+  const ParamValues back = ValuesFromEngineParams(p);
+  REQUIRE(back[BandParamId(6, BandField::kDynGroup)] == 3);
+  REQUIRE(back[BandParamId(6, BandField::kDynRange)] == 0.5);
 }
 
 TEST_CASE("Preset files save, load and list", "[presets]") {

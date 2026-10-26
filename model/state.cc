@@ -1,17 +1,34 @@
 #include "model/state.h"
 
+#include <cmath>
 #include <nlohmann/json.hpp>
+#include <string>
+
+#include "model/slot_mapping.h"
 
 namespace eeq {
 namespace {
 
 constexpr const char* kStateFormat = "everythingeq-state";
 
-// Upgrades `params` in place from `version` to kStateVersion.  Version 1 is
-// the first format, so there is nothing to migrate yet.
+// Upgrades `params` in place from `version` to kStateVersion.
 void MigrateState(int version, nlohmann::json& params) {
-  (void)version;
-  (void)params;
+  if (version < 2) {
+    // Version 1 had a "Static" Dyn Group at index 0.  Static bands become
+    // their default group with no Dyn Range (D19).
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::string k = "band" + std::to_string(b + 1) + ".";
+      const auto it = params.find(k + "dyn_group");
+      if (it == params.end() || !it->is_number()) continue;
+      const int old_group = static_cast<int>(std::lround(it->get<double>()));
+      if (old_group <= 0) {
+        *it = DefaultDynGroup(b);
+        params[k + "dyn_range"] = kSlotDefault;
+      } else {
+        *it = old_group - 1;
+      }
+    }
+  }
 }
 
 }  // namespace

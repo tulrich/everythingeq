@@ -5,7 +5,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 
 **Core Principles:**
 * **Zero-Latency Minimum Phase:** Uses Topology-Preserving Transform / Zero-Delay Feedback State Variable Filters (TPT/ZDF SVF) throughout. Avoids linear-phase FIR pre-ringing and latency while keeping audio-rate parameter modulation click-free. No oversampling. The only source of latency is the optional detector **Lookahead** (0–10 ms, default 0).
-* **Decoupled Group Dynamics:** Up to 10 polymorphic filter bands can operate statically or subscribe to 4 shared Dynamics Groups, each with independent per-band range scaling ($\pm\text{dB}$, $\pm\text{octaves}$, or $\pm$ vowel-morph index).
+* **Decoupled Group Dynamics:** Up to 8 polymorphic filter bands can operate statically or move with one of 4 shared Dynamics Groups, each with independent per-band range scaling ($\pm\text{dB}$, $\pm\text{octaves}$, or $\pm$ vowel-morph index).
 * **Unified Level/Transient Continuum:** A single parameter $\alpha \in [0, 1]$ morphs any detector from standard RMS/Peak level compression ($\alpha = 0$) to log-derivative transient/sustain detection ($\alpha = 1$).
 * **Phase-Accurate Subtractive Split:** Any band can be tapped out of the main chain into a single **Aux** stream, using Linkwitz-Riley complements or algebraic subtraction (`x - y`), so that the outputs always recombine exactly (see §3.D for the precise identities).
 * **Portable DSP Core:** All DSP lives in a framework-free C++20 library; iPlug2 is only the plugin/UI wrapper.
@@ -57,7 +57,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * Flush denormals (FTZ/DAZ) on the audio thread. Supported sample rates: 44.1–192 kHz.
 
 ### B. Dynamics & Detector Architecture
-* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping: the raw dry input, the external sidechain, or a unit-gain sum of the subscribed bands' detector filters applied to the **dry plugin input** (not the mid-chain signal). This prevents runaway positive feedback latching when bands are set to expand/boost, and lets the detectors run ahead of the audio when Lookahead is enabled.
+* **Feed-Forward Signal Flow:** Strictly feed-forward detector tapping: the raw dry input, the external sidechain, or a unit-gain sum of the subscribed bands' (those with a nonzero DynRange) detector filters applied to the **dry plugin input** (not the mid-chain signal). This prevents runaway positive feedback latching when bands are set to expand/boost, and lets the detectors run ahead of the audio when Lookahead is enabled.
 * **Lookahead (global, 0–10 ms):** The audio path (dry input feeding the band chain, Main, Aux, Delta and Bypass paths) is delayed by `Lookahead` samples, while all detectors read the undelayed input and sidechain. The plugin reports this delay to the host as latency, so hosts with plugin delay compensation keep tracks (and the external sidechain) aligned. It is a single global value, because a plugin reports one latency. It is not automatable; latency changes take effect when the host re-queries (in some hosts, e.g. Logic, on transport restart). The new latency is reported at once, but in hosts that defer re-reading it (Logic and GarageBand) the audio path keeps the previous delay while the transport runs and switches on the next transport start, so the track never plays misaligned. At 0 ms there is no delay line and zero reported latency.
 * **Detector filter per band type** (used for `Internal Band-Sum` and band Solo):
   * Peak, Notch, BP, Vowel: unit-gain bandpass at the band's center frequency and Q (for Vowel, the sum of its three formant bandpasses).
@@ -121,7 +121,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 ### E. Parameters & State
 * A **fixed, versioned parameter list** (required for host automation):
-  * Per band (×10): `Bypass, Type, Freq (X), Gain (Y), Q (Z), Dyn Group, Dyn Target, DynRange, Vowel Weighting (Option), Tap, Chan, Solo`.
+  * Per band (×8): `Bypass, Type, Freq (X), Gain (Y), Q (Z), Dyn Group, Dyn Target, DynRange, Vowel Weighting (Option), Tap, Chan, Solo`.
   * Per group (×4): `Attack, Hold, Release, Threshold, Rise, Knee, Mode, Alpha, RMS Window, Input, SC Filter, SC Hz, SC Q, Link, SC Listen`.
   * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
   * Parameters are listed most-used first. Host names are fixed, so the X/Y/Z slots are named after their most common meaning, `Freq`, `Gain` and `Q`; for other band types the lane shows that type's value and units (e.g. a Vowel band's `Freq` lane reads "AH 2.00"; see the table below). The plugin UI shows type-specific names.
@@ -152,7 +152,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Vowel Morph (X) | 0 – 4 | 2 (AH) | linear |
 | Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
 | DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
-| Dyn Group | Static, G1–G4 | Static | |
+| Dyn Group | G1–G4 | Bands 1–2: G1, 3–4: G2, 5–6: G3, 7–8: G4 | a band moves with its group only when DynRange ≠ 0 |
 | SC Hz / SC Q | 20 Hz – 20 kHz / 0.1 – 40 | 1 kHz / 0.707 | log |
 | RMS Window | 1 – 400 ms | 15 ms | log |
 | Alpha | 0 – 1 | 0 | |
@@ -178,7 +178,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 
 ```text
 +--------------------------------------------------------------------------------------------------+
-| [B1: HP] [B2: Peak*] [B3: Tilt] [B4: F-M] [B5: Vowel] [B6: --] [B7: --] [B8: --] [B9: --] [B10]  | <- TOP BAND RIBBON
+| [B1: HP] [B2: Peak*] [B3: Tilt] [B4: F-M] [B5: Vowel] [B6: --] [B7: --] [B8: --]                | <- TOP BAND RIBBON
 +-----------------------------------------------------------------------+--------------------------+
 |  TYPE: [ Vowel Formant v ]   DYN GRP: [ Grp 1 v ]   TAP: [ Main v ]   |  DYNAMICS GROUP          |
 |  X (Morph): [ AH (2.0) ]     Y (Gain): [ -3.0 dB ]  Z (Tract): [1.0x] |  [G1*] [G2] [G3] [G4]    |
@@ -211,6 +211,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 ```
 
 * **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node.
+* **Group meters:** each group tab has a strip along its bottom: the group's live $D_m$ in blue (grey, with a dimmed label, while no active band has the group and a nonzero DynRange), and below it, in yellow, the gain the group's bands apply right now, growing from the center (left for a cut, right for a boost; full width = 24 dB). The applied gain is the largest deviation of those bands' combined response from their static response (a silent band counts as −60 dB). The detector scope repeats it as a number beside D.
 * **Level meters:** a vertical input meter at the left edge of the EQ graph and the output meter at its right (the `(M)` column), one bar per channel. Scale −60 to +6 dBFS (float signals can exceed full scale), segmented: green below −12 dBFS, yellow from −12 to 0, red above 0, with a peak-hold tick. Above each meter, a numeric readout of the recent peak (the meter's name sits below it); once a peak exceeds 0 dBFS the readout latches in red, showing the highest peak, until it is clicked or the host transport starts. Inactive channels (e.g. R on a mono track) are drawn empty.
 * **Presets & editing:** an in-plugin preset menu (factory presets plus user presets saved as files) alongside the host's own preset handling, and undo/redo of parameter edits made in the plugin UI. No A/B comparison or band copy/paste in v1.
 * **Graphics:** IGraphics with the NanoVG backend.
@@ -239,3 +240,4 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 | D16 | Slot mappings are piecewise with every default at normalized 0.5. | Keeps the spec's defaults consistent across band types, since the normalized value persists when the type changes. |
 | D17 | State and presets are JSON: state keyed by stable parameter names, presets in physical units. Mono → mono runs the stereo engine on dual-mono input with mono rules applied to the parameters. | Robust versioning and readable presets; the mono rules need no separate engine path (a mono engine is a Phase 8 CPU optimization if needed). |
 | D18 | In Logic/GarageBand, a Lookahead change reaches the audio path on the next transport start; elsewhere at once. | Those hosts re-read AU latency only on transport start; holding the old delay until then keeps compensation correct throughout. |
+| D19 | 8 bands. Dyn Group has no "Static" choice: every band has a group (default pairs: bands 1–2 → G1 … 7–8 → G4) and subscribes to it only when DynRange ≠ 0. State version 2 migrates v1 Static bands to their default group with DynRange 0. | Turning on dynamics is one control (DynRange) instead of three; 8 bands fit the ribbon and cover the use cases, and a second instance covers more. |

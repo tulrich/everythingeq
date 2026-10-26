@@ -65,33 +65,57 @@ class SectionLabel final : public ig::IControl {
   const char* text_;
 };
 
-// One dynamics-group tab, with a bar showing the group's live D.
+// One dynamics-group tab.  The strip along its bottom shows the group's live
+// D (blue, grey while no active band uses the group) and the gain its bands
+// apply (yellow, from the center: leftward for a cut, rightward for a boost).
 class GroupTab final : public ig::IControl {
  public:
+  static constexpr float kFullScaleDb = 24.f;
+
   GroupTab(const ig::IRECT& bounds, int group, Editor& editor,
-           EditorModel& model)
-      : IControl(bounds), group_(group), editor_(editor), model_(model) {}
+           EditorModel& model, const EqGraph& graph)
+      : IControl(bounds),
+        group_(group),
+        editor_(editor),
+        model_(model),
+        graph_(graph) {}
   void Draw(ig::IGraphics& g) override {
     const bool selected = editor_.selected_group() == group_;
+    const bool active = graph_.group_active(group_);
     g.FillRoundRect(selected ? theme::kPanelRaised : theme::kPanel, mRECT, 3.f);
     g.DrawRoundRect(selected ? theme::kAccent : theme::kBorder, mRECT, 3.f);
+
+    const ig::IRECT strip = mRECT.GetFromBottom(6.f).GetHPadded(-3.f);
+    const ig::IRECT d_bar = strip.GetFromTop(3.f);
     const double d = model_.LiveControls()[group_];
-    g.FillRect(theme::kAccent.WithOpacity(0.6f),
-               mRECT.GetFromBottom(3.f).GetHPadded(-3.f).GetFromLeft(
-                   static_cast<float>(d) * (mRECT.W() - 6.f)));
+    g.FillRect(active ? theme::kAccent.WithOpacity(0.6f)
+                      : theme::kTextDim.WithOpacity(0.3f),
+               d_bar.GetFromLeft(static_cast<float>(d) * d_bar.W()));
+    if (active) {
+      const ig::IRECT gain_bar = strip.GetFromBottom(2.f);
+      const float u =
+          std::clamp(graph_.group_gain_db(group_) / kFullScaleDb, -1.f, 1.f);
+      const float mid = gain_bar.MW();
+      const float x = mid + u * 0.5f * gain_bar.W();
+      g.FillRect(theme::kGain, ig::IRECT(std::min(mid, x), gain_bar.T,
+                                         std::max(mid, x), gain_bar.B));
+      g.DrawLine(theme::kGain.WithOpacity(0.4f), mid, strip.T, mid, strip.B);
+    }
     const std::string label = "G" + std::to_string(group_ + 1);
-    g.DrawText(theme::Text(11.f, theme::kText, ig::EAlign::Center),
-               label.c_str(), mRECT);
+    g.DrawText(theme::Text(11.f, active ? theme::kText : theme::kTextDim,
+                           ig::EAlign::Center),
+               label.c_str(), mRECT.GetReducedFromBottom(3.f));
   }
   void OnMouseDown(float x, float y, const ig::IMouseMod& mod) override {
     editor_.SelectGroup(group_);
   }
-  bool IsDirty() override { return true; }  // Live D bar.
+  bool IsDirty() override { return true; }  // Live meters.
 
  private:
   int group_;
   Editor& editor_;
   EditorModel& model_;
+  const EqGraph& graph_;
 };
 
 }  // namespace
@@ -151,10 +175,10 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
   add(BandField::kX, cell(0, 1), "FREQ");
   add(BandField::kY, cell(0, 2), "GAIN");
   add(BandField::kZ, cell(0, 3), "Q");
-  add(BandField::kDynGroup, cell(1, 0), "DYN GRP");
-  add(BandField::kDynTarget, cell(1, 1), "DYN TGT");
-  add(BandField::kDynRange, cell(1, 2), "DYN RANGE", ParamField::Style::kField,
+  add(BandField::kDynRange, cell(1, 0), "DYN RANGE", ParamField::Style::kField,
       64.f);
+  add(BandField::kDynGroup, cell(1, 1), "DYN GRP");
+  add(BandField::kDynTarget, cell(1, 2), "DYN TGT");
   now_readout_ = new ig::ITextControl(cell(1, 3), "NOW  --",
                                       theme::Text(11.f, theme::kTextDim));
   graphics_.AttachControl(now_readout_);
@@ -175,10 +199,12 @@ void Editor::BuildDynamicsPanel(const ig::IRECT& r) {
   for (int g = 0; g < kNumGroups; ++g) {
     auto* tab =
         new GroupTab(tabs.SubRectHorizontal(kNumGroups, g).GetHPadded(-2.f), g,
-                     *this, model_);
+                     *this, model_, *graph_);
     tab->SetTooltip(
-        "Dynamics groups. Bands subscribe to a group (Dyn Grp) and move by "
-        "D x Dyn Range. The bar shows each group's output D.");
+        "Dynamics groups. A band with a Dyn Range moves with its group (Dyn "
+        "Grp) by D x Dyn Range. Blue: the group's output D (grey when no band "
+        "uses the group). Yellow: the gain its bands apply right now, from "
+        "the center (left = cut, right = boost, full width = 24 dB).");
     graphics_.AttachControl(tab);
     group_tabs_.push_back(tab);
   }
@@ -186,7 +212,7 @@ void Editor::BuildDynamicsPanel(const ig::IRECT& r) {
   // Detector scope under the tabs.
   const ig::IRECT scope = inner.GetReducedFromTop(26.f).GetFromTop(78.f);
   graphics_.AttachControl(
-      new DetectorScope(scope, model_, history_, selected_group_));
+      new DetectorScope(scope, model_, history_, *graph_, selected_group_));
 
   // Fields on the left, the sidechain meter on the right.
   ig::IRECT column = inner.GetReducedFromTop(26.f + 78.f + 6.f);
@@ -301,8 +327,7 @@ void Editor::SelectGroup(int group) {
 void Editor::OnBandSelected(int band) {
   if (band < 0) return;
   const ParamValues v = model_.Values();
-  const int group = Int(v[BandParamId(band, BandField::kDynGroup)]) - 1;
-  if (group >= 0) SelectGroup(group);
+  SelectGroup(Int(v[BandParamId(band, BandField::kDynGroup)]));
   UpdateBandEditor(v);
 }
 
@@ -317,7 +342,17 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   const auto type =
       static_cast<BandType>(Int(v[BandParamId(band, BandField::kType)]));
   const bool off = type == BandType::kOff;
-  const bool dynamic = Int(v[BandParamId(band, BandField::kDynGroup)]) > 0;
+  const int group = Int(v[BandParamId(band, BandField::kDynGroup)]);
+  const auto target =
+      static_cast<DynTarget>(Int(v[BandParamId(band, BandField::kDynTarget)]));
+  const SlotMapping range_mapping = DynRangeMapping(target);
+  const double range =
+      SlotToPhysical(range_mapping, v[BandParamId(band, BandField::kDynRange)]);
+  // Follow the selected band's group when it is reassigned.
+  if (group != shown_band_group_) {
+    shown_band_group_ = group;
+    SelectGroup(group);
+  }
   for (const BandFieldControl& f : band_fields_) {
     bool enabled = !off || f.field == BandField::kType;
     std::optional<SlotMapping> m;
@@ -330,10 +365,6 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
         break;
       case BandField::kZ:
         m = SlotMappingFor(type, Slot::kZ);
-        break;
-      case BandField::kDynTarget:
-      case BandField::kDynRange:
-        enabled = enabled && dynamic;
         break;
       case BandField::kOption:
         enabled = type == BandType::kVowel;
@@ -356,16 +387,10 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
 
   // NOW: the band's current dynamic offset in its target's unit.
   std::string now = "NOW  --";
-  if (dynamic && !off) {
-    const auto target = static_cast<DynTarget>(
-        Int(v[BandParamId(band, BandField::kDynTarget)]));
-    const SlotMapping m = DynRangeMapping(target);
-    const double range =
-        SlotToPhysical(m, v[BandParamId(band, BandField::kDynRange)]);
+  if (range != 0.0 && !off) {
     const double scale = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
-    const int group = Int(v[BandParamId(band, BandField::kDynGroup)]) - 1;
     const double offset = model_.LiveControls()[group] * range * scale;
-    now = "NOW  " + FormatSlotValue(m, offset);
+    now = "NOW  " + FormatSlotValue(range_mapping, offset);
   }
   now_readout_->SetStr(now.c_str());
 }
