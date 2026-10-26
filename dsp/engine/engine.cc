@@ -10,36 +10,9 @@ namespace eeq {
 
 namespace {
 
-bool HasGain(BandType t) {
-  switch (t) {
-    case BandType::kPeak:
-    case BandType::kLowShelf:
-    case BandType::kHighShelf:
-    case BandType::kBp:
-    case BandType::kTilt:
-    case BandType::kFletcherMunson:
-    case BandType::kVowel:
-      return true;
-    default:
-      return false;
-  }
-}
-
 // A bypassed band is treated as Off so that toggling bypass crossfades.
 BandType EffectiveType(const BandParams& bp) {
   return bp.bypass ? BandType::kOff : bp.type;
-}
-
-bool HasFreq(BandType t) {
-  switch (t) {
-    case BandType::kOff:
-    case BandType::kFletcherMunson:
-    case BandType::kVowel:
-    case BandType::kKWeight:
-      return false;
-    default:
-      return true;
-  }
 }
 
 }  // namespace
@@ -110,24 +83,7 @@ void Engine::ControlUpdate(bool snap_now) {
     }
     std::array<ResolvedBand, kNumChannels> r{};
     for (int ch = 0; ch < kNumChannels; ++ch) {
-      ResolvedBand& rb = r[ch];
-      rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
-      const double mod = dyn[ch] * bp.dyn_range * scale;
-      if (mod == 0.0) continue;
-      switch (bp.dyn_target) {
-        case DynTarget::kGain:
-          if (HasGain(bp.type)) rb.y += mod;
-          break;
-        case DynTarget::kFreq:
-          if (HasFreq(bp.type))
-            rb.x *= std::exp2(mod);
-          else if (bp.type == BandType::kVowel)
-            rb.z *= std::exp2(mod);
-          break;
-        case DynTarget::kMorph:
-          if (bp.type == BandType::kVowel) rb.x += mod;
-          break;
-      }
+      r[ch] = ResolveBand(bp, dyn[ch], scale);
     }
     slots_[b].Update(EffectiveType(bp), r, snap_now);
   }

@@ -60,6 +60,13 @@ struct ResolvedBand {
   int option = 0;
 };
 
+// Applies a dynamics control value (D in [0, 1]) to a band's static
+// parameters per its Dyn Target (ABOUT.md section 3.B, step 5):
+// x/y/z + D * DynRange * global_scale.  Shared by the engine and the UI's
+// response curves.
+ResolvedBand ResolveBand(const BandParams& bp, double control,
+                         double global_scale);
+
 // A stereo band slot.  Handles dirty-checking, coefficient ramps, and
 // crossfading when the band type changes.
 class BandSlot {

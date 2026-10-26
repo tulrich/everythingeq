@@ -3,6 +3,60 @@
 #include <cmath>
 
 namespace eeq {
+namespace {
+
+bool HasGain(BandType t) {
+  switch (t) {
+    case BandType::kPeak:
+    case BandType::kLowShelf:
+    case BandType::kHighShelf:
+    case BandType::kBp:
+    case BandType::kTilt:
+    case BandType::kFletcherMunson:
+    case BandType::kVowel:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool HasFreq(BandType t) {
+  switch (t) {
+    case BandType::kOff:
+    case BandType::kFletcherMunson:
+    case BandType::kVowel:
+    case BandType::kKWeight:
+      return false;
+    default:
+      return true;
+  }
+}
+
+}  // namespace
+
+ResolvedBand ResolveBand(const BandParams& bp, double control,
+                         double global_scale) {
+  ResolvedBand rb;
+  rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
+  const double mod = control * bp.dyn_range * global_scale;
+  if (mod == 0.0) return rb;
+  switch (bp.dyn_target) {
+    case DynTarget::kGain:
+      if (HasGain(bp.type)) rb.y += mod;
+      break;
+    case DynTarget::kFreq:
+      if (HasFreq(bp.type)) {
+        rb.x *= std::exp2(mod);
+      } else if (bp.type == BandType::kVowel) {
+        rb.z *= std::exp2(mod);
+      }
+      break;
+    case DynTarget::kMorph:
+      if (bp.type == BandType::kVowel) rb.x += mod;
+      break;
+  }
+  return rb;
+}
 
 void BandProcessor::Reset() {
   for (SvfCell& c : cells_) c.Reset();

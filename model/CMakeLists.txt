@@ -15,6 +15,7 @@ add_library(eeq_model STATIC
   engine_params_json.cc
   param_table.cc
   presets.cc
+  response_curves.cc
   slot_mapping.cc
   state.cc
   undo_history.cc
