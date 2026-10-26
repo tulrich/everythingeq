@@ -5,7 +5,7 @@ This plan implements the spec in [ABOUT.md](ABOUT.md). Section and decision refe
 ## Status (2026-10-25)
 * **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows; the golden renders pass on Windows as well as macOS/arm64.
 * **Spec revised (2026-10-25):** FOSS distribution, mono layouts, parameter ranges, listen precedence and UI scope (ABOUT.md D10–D15).
-* **Phase 0 (in progress):** iPlug2 submodule with pinned SDKs (`scripts/setup-deps.sh`) and local CLAP fixes (`scripts/patches/`), plus `plugin/`, a spike that passes audio through `eeq::Engine` as AU/VST3/CLAP/app. All three layouts and the mono/stereo sidechain are declared. `auval -strict`, `pluginval` (strictness 10, AU and VST3) and `clap-validator` pass locally, and CI builds and validates the plugin on macOS and Windows. **Remaining:** the manual Logic checklist below, and reading the Spike B numbers.
+* **Phase 0 (in progress):** iPlug2 submodule with pinned SDKs (`scripts/setup-deps.sh`) and local CLAP fixes (`scripts/patches/`), plus `plugin/`, a spike that passes audio through `eeq::Engine` as AU/VST3/CLAP/app. All three layouts and the mono/stereo sidechain are declared. `auval -strict`, `pluginval` (strictness 10, AU and VST3) and `clap-validator` pass locally, and CI builds and validates the plugin on macOS and Windows. **Remaining:** the manual Logic checklist below. Spike B (UI performance) moves to the start of Phase 7, measured on the real analyzer and EQ graph rather than a test pattern.
 * **Not done yet:**
   * Phase 1's biquad comparison in the click test (only SVF boundedness is asserted).
 * **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Optimization is deferred to Phase 8, except that the per-sample `log10` in the detectors gets replaced whenever that code is next touched. Other candidates: per-sample `a1` division and coefficient redesign during dynamic ramps.
@@ -54,13 +54,12 @@ presets/             factory presets (JSON source → embedded)
 
 **Exit:** gain plugin loads in Logic in every layout, passes the validators on both platforms, and CI is green.
 
-**Manual Logic checklist (Spike A/B):**
+**Manual Logic checklist (Spike A):**
 1. Logic finds "tulrich: EverythingEQ" under Audio Units → tulrich (if not, `killall -9 AudioComponentRegistrar` and restart Logic).
 2. It can be inserted on a mono track (mono → mono and mono → stereo variants offered) and on a stereo track, and the layout readout in the UI matches.
 3. The sidechain menu in the plugin header lists tracks/buses. With a sidechain selected, the Sidechain meters move; with "None", they stay at zero (the spike zeroes Logic's duplicate-main-input quirk).
 4. Audio passes unchanged at 0 dB Output Gain, and Output Gain automation works.
-5. Spike B: the readout in the animated panel shows the draw time and fps at 100% and when the window is resized via the corner (scaling). Target: 60 fps with draw time well under 16 ms on Retina.
-6. Save, close and reopen the project: the Output Gain value is restored.
+5. Save, close and reopen the project: the Output Gain value is restored.
 
 **Phase 0 findings:**
 * iPlug2 now ships CMake support, CLAP and a sidechain example; the CMake build is used (no Xcode/VS project files).
@@ -133,7 +132,7 @@ presets/             factory presets (JSON source → embedded)
 3. Automation smoothness under Logic automation of every continuous parameter, plus an offline test that sweeps each normalized parameter at audio rate through the wrapper's parameter path.
 
 ## Phase 7 — UI (§4)
-1. Layout skeleton at 960×560 with scaling; fixed slots; 35% opacity for inactive controls.
+1. Layout skeleton at 960×560 with scaling (Spike B: confirm 60 fps for the analyzer and EQ graph at Retina scale with a debug-only frame timer); fixed slots; 35% opacity for inactive controls.
 2. Band ribbon (selection, type, active state) and band editor row (type-specific X/Y/Z labels and units).
 3. EQ graph: log-frequency grid, composite curve and per-band fills from `analyticResponse`, draggable nodes (drag = freq/gain, wheel = Q), plus the dynamic range shown as a ghost curve at $D_m = 1$ and a live curve at the current $D_m$.
 4. Analyzer: Pre/Post/Pre+Post, FFT on the UI thread fed by a lock-free FIFO, display tilt.

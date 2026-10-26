@@ -1,10 +1,6 @@
 #include "EverythingEQ.h"
 #include "IPlug_include_in_plug_src.h"
 
-#if IPLUG_EDITOR
-#include "SpikeStressControl.h"
-#endif
-
 #include <algorithm>
 #include <cstring>
 
@@ -41,14 +37,13 @@ EverythingEQ::EverythingEQ(const InstanceInfo& info)
                                               IText(16.f, COLOR_LIGHT_GRAY, "Roboto-Regular", EAlign::Near)),
                              kCtrlTagLayout);
     body.ReduceFromBottom(40.f);
-    IRECT meters = body.ReduceFromTop(body.H() * 0.45f);
+    IRECT meters = body;
     pGraphics->AttachControl(new IVPeakAvgMeterControl<kMaxIn>(meters.FracRectVertical(0.5f, true).GetPadded(-5.f), "Inputs", style,
                                                                EDirection::Horizontal, {"Main L", "Main R", "Sidechain L", "Sidechain R"}),
                              kCtrlTagInputMeter);
     pGraphics->AttachControl(new IVPeakAvgMeterControl<kMaxOut>(meters.FracRectVertical(0.5f, false).GetPadded(-5.f), "Outputs", style,
                                                                 EDirection::Horizontal, {"Out L", "Out R"}),
                              kCtrlTagOutputMeter);
-    pGraphics->AttachControl(new SpikeStressControl(body.GetPadded(-5.f)));
     pGraphics->AttachControl(new IVKnobControl(knob.GetCentredInside(120.f, 160.f), kGain, "Output Gain", style));
   };
 #endif
