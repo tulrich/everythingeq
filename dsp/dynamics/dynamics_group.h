@@ -26,6 +26,20 @@ class DynamicsGroup {
   // Feed one stereo detector-input sample (before the group SC filter).
   void Process(double in0, double in1);
 
+  // Extremes since the last TakeMeter() call, over both channels: for
+  // detector displays that must not miss short transients.
+  struct Meter {
+    double trigger_min = 0.0;
+    double trigger_max = 0.0;
+    double control_max = 0.0;
+    bool valid = false;  // False if no samples were processed.
+  };
+  Meter TakeMeter() {
+    Meter m = meter_;
+    meter_ = Meter{1e9, -1e9, 0.0, false};
+    return m;
+  }
+
   double control(int ch) const { return control_[ch]; }
   double trigger(int ch) const { return trigger_[ch]; }
   double filtered(int ch) const { return filtered_[ch]; }  // SC listen signal
@@ -50,6 +64,7 @@ class DynamicsGroup {
   std::array<double, kNumChannels> sig_a_{}, sig_b_{}, control_{}, trigger_{},
       filtered_{};
   std::array<int, kNumChannels> hold_{};
+  Meter meter_{1e9, -1e9, 0.0, false};
 };
 
 }  // namespace eeq

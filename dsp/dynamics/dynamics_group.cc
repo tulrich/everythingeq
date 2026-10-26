@@ -102,7 +102,11 @@ void DynamicsGroup::Process(double in0, double in1) {
     } else {
       d += coeff_release_ * (target - d);
     }
+    meter_.trigger_min = std::min(meter_.trigger_min, trigger_[ch]);
+    meter_.trigger_max = std::max(meter_.trigger_max, trigger_[ch]);
+    meter_.control_max = std::max(meter_.control_max, d);
   }
+  meter_.valid = true;
 }
 
 }  // namespace eeq

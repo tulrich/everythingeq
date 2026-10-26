@@ -17,6 +17,7 @@ add_library(eeq_model STATIC
   presets.cc
   response_curves.cc
   slot_mapping.cc
+  spectrum_analyzer.cc
   state.cc
   undo_history.cc
   ${EEQ_PRESET_DATA}

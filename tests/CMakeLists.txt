@@ -9,6 +9,7 @@ add_executable(eeq_tests
   realtime_test.cc
   automation_test.cc
   response_curves_test.cc
+  analyzer_test.cc
 )
 target_link_libraries(eeq_tests PRIVATE eeq_model Catch2::Catch2WithMain)
 target_compile_definitions(eeq_tests PRIVATE EEQ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
