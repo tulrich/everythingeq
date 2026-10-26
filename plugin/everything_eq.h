@@ -8,6 +8,7 @@
 #include "IControls.h"
 #include "IPlug_include_in_plug_hdr.h"
 #include "dsp/engine/engine.h"
+#include "model/lookahead_gate.h"
 #include "model/param_table.h"
 
 namespace eeq {
@@ -55,6 +56,7 @@ class EverythingEq final : public iplug::Plugin {
   Engine engine_;
   std::array<std::vector<float>, 6> scratch_;  // In L/R, SC L/R, out L/R.
   std::atomic<bool> params_dirty_{true};
+  LookaheadGate lookahead_gate_;  // Audio thread.
   bool mono_output_ = false;
 
   std::array<bool, kMaxIn> in_connected_{};

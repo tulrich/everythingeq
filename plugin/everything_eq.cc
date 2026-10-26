@@ -236,6 +236,13 @@ void EverythingEq::OnReset() {
   engine_.Prepare(GetSampleRate());
   params_dirty_ = true;
   UpdateLatency();
+  // Logic and GarageBand only re-read AU latency when the transport starts.
+#if defined AU_API
+  lookahead_gate_.set_host_defers_latency(GetHost() == iplug::kHostLogic ||
+                                          GetHost() == iplug::kHostGarageBand);
+#endif
+  lookahead_gate_.Reset(
+      GetParam(GlobalParamId(GlobalField::kLookahead))->Value());
   layout_changed_ = true;
 }
 
@@ -285,7 +292,8 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   UpdateConnections();
 
   const bool running = GetTransportIsRunning();
-  if (running && !transport_was_running_) transport_started_ = true;
+  const bool started = running && !transport_was_running_;
+  if (started) transport_started_ = true;
   transport_was_running_ = running;
 
   // Logic and GarageBand pass the main input on the sidechain bus when no
@@ -335,8 +343,15 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
     mono_output_ = mono_output;
     params_dirty_ = true;
   }
+  const double applied_lookahead = lookahead_gate_.applied_ms();
+  const double lookahead = lookahead_gate_.Update(
+      GetParam(GlobalParamId(GlobalField::kLookahead))->Value(), running,
+      started);
+  if (lookahead != applied_lookahead) params_dirty_ = true;
   if (params_dirty_.exchange(false)) {
-    engine_.SetParams(BuildEngineParams(CurrentValues(), mono_output_));
+    EngineParams params = BuildEngineParams(CurrentValues(), mono_output_);
+    params.global.lookahead_ms = lookahead;
+    engine_.SetParams(params);
   }
 
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
