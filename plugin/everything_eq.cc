@@ -20,6 +20,9 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
                                   static_cast<int>(FactoryPresets().size()))) {
   InitParams();
   MakeFactoryPresets();
+  // Host bypass (AU, VST3) crossfades in the engine instead of switching
+  // abruptly to iPlug2's pass-through.
+  SetProcessWhileBypassed(true);
 
 #if IPLUG_DSP
   SetChannelLabel(iplug::ERoute::kInput, 0, "Main L");
@@ -211,6 +214,7 @@ void EverythingEq::OnReset() {
   const int max_block = std::max(GetBlockSize(), 1);
   for (auto& buffer : scratch_) buffer.assign(max_block, 0.f);
   engine_.Prepare(GetSampleRate());
+  engine_.FadeInFromDry();  // The filters restart from silence.
   params_dirty_ = true;
   UpdateLatency();
   // Logic and GarageBand only re-read AU latency when the transport starts.
@@ -326,9 +330,14 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
       GetParam(GlobalParamId(GlobalField::kLookahead))->Value(), running,
       started);
   if (lookahead != applied_lookahead) params_dirty_ = true;
+  if (GetBypassed() != host_bypassed_) {
+    host_bypassed_ = GetBypassed();
+    params_dirty_ = true;
+  }
   if (params_dirty_.exchange(false)) {
     EngineParams params = BuildEngineParams(CurrentValues(), mono_output_);
     params.global.lookahead_ms = lookahead;
+    params.global.bypass = params.global.bypass || host_bypassed_;
     engine_.SetParams(params);
   }
 

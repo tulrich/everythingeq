@@ -73,6 +73,7 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   std::atomic<bool> params_dirty_{true};
   LookaheadGate lookahead_gate_;  // Audio thread.
   bool mono_output_ = false;
+  bool host_bypassed_ = false;  // The host's bypass (audio thread).
 
   std::array<bool, kMaxIn> in_connected_{};
   std::array<bool, kMaxOut> out_connected_{};

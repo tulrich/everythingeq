@@ -17,11 +17,16 @@ namespace eeq {
 // allocate, lock or block.
 class Engine {
  public:
-  static constexpr int kBypassFadeSamples = 64;
+  // Crossfade time for global bypass and FadeInFromDry().
+  static constexpr double kBypassFadeMs = 10.0;
 
   // Allocates.  Must be called before Process() and on sample-rate change.
   void Prepare(double sample_rate);
   void Reset();
+  // Starts from the (delayed) dry signal and crossfades to the current
+  // output, e.g. after a host reset, so filters warming up from silence
+  // don't click.
+  void FadeInFromDry();
 
   // Takes effect at the next control sub-block.
   void SetParams(const EngineParams& p);
@@ -43,6 +48,7 @@ class Engine {
  private:
   using Frame = std::array<double, kNumChannels>;
 
+  int BypassFadeSamples() const;
   void ControlUpdate(bool snap_now);
   void ApplyStaticDesigns(bool snap_now);
   Frame DetectorInputFrame(int g, const Frame& dry, const Frame& sc);

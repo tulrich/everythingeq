@@ -43,6 +43,16 @@ void Engine::Reset() {
   ControlUpdate(true);
 }
 
+int Engine::BypassFadeSamples() const {
+  return std::max(1,
+                  static_cast<int>(std::lround(kBypassFadeMs * fs_ / 1000.0)));
+}
+
+void Engine::FadeInFromDry() {
+  bypass_mix_.Snap(1.0);
+  bypass_mix_.SetTarget(bypass_state_ ? 1.0 : 0.0, BypassFadeSamples());
+}
+
 void Engine::SetParams(const EngineParams& p) {
   params_ = p;
   params_dirty_ = true;
@@ -64,7 +74,7 @@ void Engine::ApplyStaticDesigns(bool snap_now) {
   if (params_.global.bypass != bypass_state_) {
     bypass_state_ = params_.global.bypass;
     bypass_mix_.SetTarget(bypass_state_ ? 1.0 : 0.0,
-                          snap_now ? 1 : kBypassFadeSamples);
+                          snap_now ? 1 : BypassFadeSamples());
   }
   params_dirty_ = false;
 }

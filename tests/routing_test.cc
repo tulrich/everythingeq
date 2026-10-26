@@ -204,6 +204,34 @@ TEST_CASE("Global bypass passes the input through", "[routing]") {
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
 }
 
+TEST_CASE("FadeInFromDry starts dry and crossfades to wet", "[routing]") {
+  const Stereo x = Noise(kLen, 0.5, 12);
+  EngineParams p;
+  p.bands[0] = {BandType::kPeak, 500.0, 12.0, 2.0};
+  const Stereo wet = Render(p, x);
+  Engine e;
+  e.SetParams(p);
+  e.Prepare(kFs);
+  e.FadeInFromDry();
+  Stereo y(x.size());
+  const float* in[2] = {x.l.data(), x.r.data()};
+  float* out[2] = {y.l.data(), y.r.data()};
+  e.Process(in, nullptr, out, static_cast<int>(kLen));
+  // Starts (one ramp step from) dry, is fully wet after the fade, and has no
+  // step on the way.
+  const size_t fade = static_cast<size_t>(Engine::kBypassFadeMs * kFs / 1000);
+  REQUIRE(std::abs(double(y.l[0]) - x.l[0]) <=
+          std::abs(double(wet.l[0]) - x.l[0]) * 2.0 / fade + 1e-7);
+  for (size_t i = fade; i < kLen; ++i) REQUIRE(y.l[i] == wet.l[i]);
+  double max_step = 0.0, max_input_step = 0.0;
+  for (size_t i = 1; i < fade; ++i) {
+    max_step = std::max(max_step, std::abs(double(y.l[i]) - y.l[i - 1]));
+    max_input_step =
+        std::max(max_input_step, std::abs(double(wet.l[i]) - wet.l[i - 1]));
+  }
+  REQUIRE(max_step <= max_input_step * 1.01);
+}
+
 TEST_CASE("Solo auditions the band's detector filter", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 11);
   EngineParams p;

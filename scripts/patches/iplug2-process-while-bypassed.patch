@@ -1,0 +1,63 @@
+diff -ru a/IPlug/AUv2/IPlugAU.cpp b/IPlug/AUv2/IPlugAU.cpp
+--- a/IPlug/AUv2/IPlugAU.cpp	2026-10-26 17:02:15
++++ b/IPlug/AUv2/IPlugAU.cpp	2026-10-26 17:02:15
+@@ -1232,9 +1232,12 @@
+       const bool bypassed = *((UInt32*) pData) != 0;
+       SetBypassed(bypassed);
+       
+-      // TODO: should the following be called here?
+-      OnActivate(!bypassed);
+-      OnReset();
++      if (!GetProcessWhileBypassed())
++      {
++        // TODO: should the following be called here?
++        OnActivate(!bypassed);
++        OnReset();
++      }
+       return noErr;
+     }
+     NO_OP(kAudioUnitProperty_LastRenderError);           // 22,
+@@ -1737,7 +1740,7 @@
+       _this->SetChannelConnections(ERoute::kOutput, nConnected, totalNumChans - nConnected, false); // this will disconnect the channels that are on the unconnected buses
+     }
+ 
+-    if (_this->GetBypassed())
++    if (_this->GetBypassed() && !_this->GetProcessWhileBypassed())
+     {
+       _this->PassThroughBuffers((AudioSampleType) 0, nFrames);
+     }
+diff -ru a/IPlug/IPlugProcessor.h b/IPlug/IPlugProcessor.h
+--- a/IPlug/IPlugProcessor.h	2026-10-26 17:02:15
++++ b/IPlug/IPlugProcessor.h	2026-10-26 17:02:15
+@@ -123,6 +123,10 @@
+   /** @return \c true if the plugin is currently bypassed */
+   bool GetBypassed() const { return mBypassed; }
+ 
++  /** If enabled, ProcessBlock() keeps being called while the host bypasses the plug-in (AU, VST3), so the plug-in can crossfade to its own bypass using GetBypassed(), and an AU bypass change doesn't reset it. */
++  void SetProcessWhileBypassed(bool enable) { mProcessWhileBypassed = enable; }
++  bool GetProcessWhileBypassed() const { return mProcessWhileBypassed; }
++
+   /** @return \c true if the plugin is currently rendering off-line */
+   bool GetRenderingOffline() const { return mRenderingOffline; };
+ 
+@@ -305,6 +309,8 @@
+   int mTailSize = 0;
+   /** \c true if the plug-in is bypassed */
+   bool mBypassed = false;
++  /** \c true if ProcessBlock() handles host bypass itself */
++  bool mProcessWhileBypassed = false;
+   /** \c true if the plug-in is rendering off-line*/
+   bool mRenderingOffline = false;
+   /** A list of IOConfig structures populated by ParseChannelIOStr in the IPlugProcessor constructor */
+diff -ru a/IPlug/VST3/IPlugVST3_ProcessorBase.cpp b/IPlug/VST3/IPlugVST3_ProcessorBase.cpp
+--- a/IPlug/VST3/IPlugVST3_ProcessorBase.cpp	2026-10-26 17:02:15
++++ b/IPlug/VST3/IPlugVST3_ProcessorBase.cpp	2026-10-26 17:02:15
+@@ -396,7 +396,7 @@
+       chanOffset += busChannels;
+     }
+     
+-    if (GetBypassed())
++    if (GetBypassed() && !GetProcessWhileBypassed())
+     {
+       if (sampleSize == kSample32)
+         PassThroughBuffers(0.f, data.numSamples); // single precision
