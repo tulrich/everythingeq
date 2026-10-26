@@ -1,13 +1,15 @@
 {
   "description": "Use case 6 variation: tempo-synced auto-wah driven by a sidechained pulse track (8th notes at 120 BPM, 2 kHz carrier).",
-  "sampleRate": 48000, "seconds": 4,
-  "input": {"generate": "pluck", "bpm": 120, "seed": 6},
-  "sidechain": {"generate": "pulses", "bpm": 120},
-  "params": {
-    "groups": [{"input": "ExternalSC", "alpha": 0.0, "thresholdDb": -24, "kneeDb": 24,
-                "attackMs": 2, "releaseMs": 60}],
-    "bands": [
-      {"type": "Peak", "x": 400, "y": 12, "z": 6, "dynGroup": 0, "dynTarget": "Freq", "dynRange": 2.0}
-    ]
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/09_sidechain_auto_wah.json",
+  "input": {
+    "generate": "pluck",
+    "bpm": 120,
+    "seed": 6
+  },
+  "sidechain": {
+    "generate": "pulses",
+    "bpm": 120
   }
 }

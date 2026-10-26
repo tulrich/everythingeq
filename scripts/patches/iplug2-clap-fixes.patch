@@ -1,5 +1,5 @@
 diff --git a/IPlug/CLAP/IPlugCLAP.cpp b/IPlug/CLAP/IPlugCLAP.cpp
-index aee3e57a1..19db0971c 100644
+index aee3e57a1..d5ce5cbe9 100644
 --- a/IPlug/CLAP/IPlugCLAP.cpp
 +++ b/IPlug/CLAP/IPlugCLAP.cpp
 @@ -116,16 +116,12 @@ void IPlugCLAP::SetLatency(int samples)
@@ -49,7 +49,27 @@ index aee3e57a1..19db0971c 100644
  
    // TODO - should we clear mTailUpdate here or elsewhere?
  }
-@@ -435,7 +431,12 @@ bool IPlugCLAP::stateLoad(const clap_istream* pStream) noexcept
+@@ -415,7 +411,18 @@ bool IPlugCLAP::stateSave(const clap_ostream* pStream) noexcept
+   if (!SerializeState(chunk))
+     return false;
+   
+-  return pStream->write(pStream, chunk.GetData(), chunk.Size()) == chunk.Size();
++  // Streams may accept fewer bytes than requested per call.
++  const uint8_t* pData = chunk.GetData();
++  int64_t remaining = chunk.Size();
++  while (remaining > 0)
++  {
++    const int64_t written = pStream->write(pStream, pData, static_cast<uint64_t>(remaining));
++    if (written <= 0)
++      return false;
++    pData += written;
++    remaining -= written;
++  }
++  return true;
+ }
+ 
+ bool IPlugCLAP::stateLoad(const clap_istream* pStream) noexcept
+@@ -435,7 +442,12 @@ bool IPlugCLAP::stateLoad(const clap_istream* pStream) noexcept
    bool restoredOK = UnserializeState(chunk, 0) >= 0;
    
    if (restoredOK)
@@ -62,7 +82,18 @@ index aee3e57a1..19db0971c 100644
    
    return restoredOK;
  }
-@@ -798,12 +799,12 @@ bool IPlugCLAP::audioPortsGetConfig(uint32_t index, clap_audio_ports_config* pCo
+@@ -486,6 +498,10 @@ bool IPlugCLAP::paramsValueToText(clap_id paramIdx, double value, char* display,
+ 
+   WDL_String str;
+   
++  // Stepped (non-double) parameters only take integer values.
++  if (!isDoubleType)
++    value = std::round(value);
++  
+   pParam->GetDisplay(value, isDoubleType, str);
+   
+   // Add Label
+@@ -798,12 +814,12 @@ bool IPlugCLAP::audioPortsGetConfig(uint32_t index, clap_audio_ports_config* pCo
    pConfig->input_port_count = static_cast<uint32_t>(NBuses(kInput, index));
    pConfig->output_port_count = static_cast<uint32_t>(NBuses(kOutput, index));
  

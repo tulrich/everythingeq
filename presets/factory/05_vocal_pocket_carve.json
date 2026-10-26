@@ -1,0 +1,28 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Vocal Pocket Carve (Sidechain)",
+  "params": {
+    "groups": [
+      {
+        "input": "ExternalSC",
+        "alpha": 0.0,
+        "thresholdDb": -30,
+        "kneeDb": 10,
+        "attackMs": 10,
+        "releaseMs": 120
+      }
+    ],
+    "bands": [
+      {
+        "type": "Vowel",
+        "x": 2.5,
+        "y": 0,
+        "z": 1.0,
+        "weighting": "Flat",
+        "dynGroup": 0,
+        "dynRange": -4
+      }
+    ]
+  }
+}

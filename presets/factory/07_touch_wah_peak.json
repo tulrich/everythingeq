@@ -1,0 +1,29 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Touch-Wah (Peak)",
+  "params": {
+    "groups": [
+      {
+        "input": "InternalDry",
+        "alpha": 0.3,
+        "thresholdDb": -22,
+        "riseDb": 6,
+        "kneeDb": 20,
+        "attackMs": 5,
+        "releaseMs": 150
+      }
+    ],
+    "bands": [
+      {
+        "type": "Peak",
+        "x": 400,
+        "y": 12,
+        "z": 6,
+        "dynGroup": 0,
+        "dynTarget": "Freq",
+        "dynRange": 2.5
+      }
+    ]
+  }
+}

@@ -1,12 +1,10 @@
 {
   "description": "Use case 3: Fletcher-Munson compensation rises in quiet sections (K-weighted, 300 ms RMS, trigger below threshold).",
-  "sampleRate": 48000, "seconds": 6,
-  "input": {"generate": "levelSteps", "seed": 3},
-  "params": {
-    "groups": [{"input": "InternalDry", "scFilter": "KWeight", "rmsWindowMs": 300, "alpha": 0.0,
-                "thresholdDb": -30, "kneeDb": 12, "mode": "Below", "attackMs": 200, "releaseMs": 500}],
-    "bands": [
-      {"type": "FletcherMunson", "y": 0, "dynGroup": 0, "dynRange": 20}
-    ]
+  "sampleRate": 48000,
+  "seconds": 6,
+  "preset": "../../../presets/factory/04_dynamic_loudness.json",
+  "input": {
+    "generate": "levelSteps",
+    "seed": 3
   }
 }

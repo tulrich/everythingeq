@@ -1,14 +1,11 @@
 {
   "description": "Use case 1: snare attack split to Aux (right), residual body on Main (left). Transient mode, 2 ms lookahead.",
-  "sampleRate": 48000, "seconds": 4,
-  "input": {"generate": "snare", "seed": 1, "bpm": 100},
-  "params": {
-    "global": {"outputMode": "SplitLR", "lookaheadMs": 2.0},
-    "groups": [{"input": "InternalDry", "scFilter": "HP", "scHz": 2000, "alpha": 1.0, "rmsWindowMs": 50,
-                "riseDb": 10, "kneeDb": 12, "attackMs": 0.5, "releaseMs": 30}],
-    "bands": [
-      {"type": "BP", "x": 4000, "y": -60, "z": 0.5, "dynGroup": 0, "dynRange": 60, "tap": "Aux"},
-      {"type": "Peak", "x": 190, "y": -4, "z": 4}
-    ]
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/02_snare_attack_split.json",
+  "input": {
+    "generate": "snare",
+    "seed": 1,
+    "bpm": 100
   }
 }

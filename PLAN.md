@@ -6,6 +6,7 @@ This plan implements the spec in [ABOUT.md](ABOUT.md). Section and decision refe
 * **Done, Phases 1–4 (milestones M1 and M2, DSP only):** `dsp/` engine, 38 unit tests plus 8 golden use-case renders (`ctest`), `tools/render` and `tools/fmfit`. CI runs the DSP build and tests on macOS (universal) and Windows; the golden renders pass on Windows as well as macOS/arm64.
 * **Spec revised (2026-10-25):** FOSS distribution, mono layouts, parameter ranges, listen precedence and UI scope (ABOUT.md D10–D15).
 * **Phase 0 (done, milestone M0):** iPlug2 submodule with pinned SDKs (`scripts/setup-deps.sh`) and local CLAP fixes (`scripts/patches/`), plus `plugin/`, a spike that passes audio through `eeq::Engine` as AU/VST3/CLAP/app. All three layouts and the mono/stereo sidechain are declared. `auval -strict`, `pluginval` (strictness 10, AU and VST3) and `clap-validator` pass locally, and CI builds and validates the plugin on macOS and Windows. **Logic checklist (2026-10-25):** all items confirmed: sidechain selection, mono/stereo/mono→stereo layouts, Output Gain automation, meter clip latch/reset, and project save/restore. Spike B (UI performance) moves to the start of Phase 7, measured on the real analyzer and EQ graph rather than a test pattern.
+* **Phase 5 (done):** `model/` library (parameter table and slot mappings, host ↔ engine conversion, versioned JSON state, presets, undo history) with 15 new tests; 10 factory presets in `presets/factory/` shared with the use-case renders (which stay byte-identical); the plugin now exposes all 186 parameters, saves/restores state, lists the factory presets in the host and applies the mono → mono rules. All validators pass (clap-validator now with no warnings). Two more iPlug2 fixes are patched locally (see Phase 0 findings).
 * **Not done yet:**
   * Phase 1's biquad comparison in the click test (only SVF boundedness is asserted).
 * **Measured:** the worst case (10 heavy bands, 4 band-sum groups with K-weighted sidechains, 5 ms lookahead, 64-sample blocks, 48 kHz) costs **2.8% of one Apple M3 core**, over the Phase 8 target of 2% on an M1. Optimization is deferred to Phase 8, except that the per-sample `log10` in the detectors gets replaced whenever that code is next touched. Other candidates: per-sample `a1` division and coefficient redesign during dynamic ramps.
@@ -46,13 +47,17 @@ dsp/                 framework-free engine (C++20)
   bands/             band types, polymorphic band slot, tap logic
   dynamics/          sidechain conditioning, detector, gain computer, ballistics
   engine/            chain, groups, routing/output modes, parameter snapshot
+model/               framework-free plugin model: parameter table, slot mappings,
+                     state, presets, undo history (depends on dsp/, nlohmann_json)
 tests/               unit + property tests (Catch2), golden renders
 tools/
   render/            CLI: wav in + param JSON → wav out (+ CSV of D_m, trigger)
   plot/              scripts to plot magnitude responses / envelopes (Python, dev only)
-plugin/              iPlug2 project: params, I/O config, state, presets
+plugin/              iPlug2 project: maps model/ onto iPlug2 params, I/O, state
   ui/                IGraphics controls and layout
-presets/             factory presets (JSON source → embedded)
+presets/factory/     factory presets (JSON, embedded at build time; also used by
+                     the use-case renders)
+scripts/             dependency setup, plugin validation, iPlug2 patches
 .github/workflows/   CI
 ```
 
@@ -73,7 +78,7 @@ presets/             factory presets (JSON source → embedded)
 
 **Phase 0 findings:**
 * iPlug2 now ships CMake support, CLAP and a sidechain example; the CMake build is used (no Xcode/VS project files).
-* Three iPlug2 CLAP bugs are patched locally (`scripts/patches/iplug2-clap-fixes.patch`): wrong main-port flags in `audio-ports-config`, no parameter-value rescan after state load, and `latency_changed` called outside `activate()`. The latency fix matters for Lookahead in Phase 6. Candidates for upstream PRs.
+* Three iPlug2 CLAP bugs are patched locally (`scripts/patches/iplug2-clap-fixes.patch`): wrong main-port flags in `audio-ports-config`, no parameter-value rescan after state load, and `latency_changed` called outside `activate()`. The latency fix matters for Lookahead in Phase 6. Phase 5 added two CLAP fixes (state saved through streams that accept partial writes; stepped-parameter text rounds the value) and `scripts/patches/iplug2-param-parse-func.patch`, which adds `IParam::SetParseFunc` so slot parameters can parse their own display text. Candidates for upstream PRs.
 * CLAP SDK and clap-helpers are pinned to `main` commits, because current clap-helpers needs draft extensions newer than CLAP 1.2.x.
 * `pluginval` on the AU warns that disabling the sidechain bus fails; harmless for Logic.
 * `clap-validator` warns that random bytes load as state; Phase 5's versioned state fixes this. `auval` warns that the preset name isn't retained in class data; also Phase 5 (state chunks).
@@ -131,10 +136,10 @@ presets/             factory presets (JSON source → embedded)
 ## Phase 5 — Parameters, state & presets (§3.E)
 1. Parameter table (single declarative list, from the ranges table in ABOUT.md §3.E) generating iPlug2 params with IDs, ranges, skew, units and display formatters. X/Y/Z and DynRange are normalized host parameters, mapped to physical units per band type and per `Dyn Target` (D14); their display text and units follow the type. Tests: each mapping round-trips, and changing type keeps the normalized value.
 2. Lock-free parameter snapshot to the engine each block; type and group changes are handled without allocation.
-3. Engine: a mono mode for the mono → mono layout (one channel processed; `Output Mode` forced to `Stereo`; `Chan` and `Link` ignored), plus a mono sidechain copied to both detector channels. Tests: mono → mono output equals the left channel of the stereo engine fed a dual-mono signal with every `Chan` set to `Stereo`.
+3. Engine: a mono mode for the mono → mono layout (`Output Mode` forced to `Stereo`; `Chan` and `Link` ignored), plus a mono sidechain copied to both detector channels. Implemented as parameter rules over the stereo engine fed dual-mono (D17); processing only one channel is a Phase 8 optimization. Tests: mono → mono output equals the left channel of the stereo engine fed a dual-mono signal with every `Chan` set to `Stereo`.
 4. State serialization with version field and migration hooks; round-trip tests.
-5. Factory presets covering the six use cases (touch-wah ships as two presets: Peak and Vowel) plus basic EQ starting points. User presets are saved as files in a per-user folder in the same format as state.
-6. Undo/redo model: a bounded history of parameter edits made in the plugin UI (a drag counts as one step), kept on the UI thread. Host automation changes are not recorded.
+5. Factory presets covering the six use cases (touch-wah ships as two presets: Peak and Vowel) plus basic EQ starting points. User presets are saved as files in a per-user folder (preset JSON format; the in-plugin menu comes in Phase 7).
+6. Undo/redo model: a bounded history of parameter edits made in the plugin UI (a drag counts as one step), kept on the UI thread. Host automation changes are not recorded. (Model done; wired to the UI in Phase 7.)
 
 ## Phase 6 — Plugin integration
 1. I/O config: the three layouts from D10, each with a mono or stereo sidechain. Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in Logic (including that a lookahead change takes effect after a transport restart).

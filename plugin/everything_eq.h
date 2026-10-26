@@ -8,21 +8,16 @@
 #include "IControls.h"
 #include "IPlug_include_in_plug_hdr.h"
 #include "dsp/engine/engine.h"
+#include "model/param_table.h"
 
 namespace eeq {
 
 class LevelMeter;
 
-inline constexpr int kNumPresets = 1;
-
-enum ParamId { kParamGain = 0, kNumParams };
-
 enum ControlTag { kControlTagLayout = 0, kNumControlTags };
 
-// Phase 0 spike: a gain plugin with a sidechain input that runs audio through
-// eeq::Engine at its default (pass-through) settings.  It exists to prove out
-// the formats, channel layouts and host integration before the real
-// parameter set and UI arrive.
+// The Everything EQ plugin: host parameters, state and presets from model/,
+// audio through eeq::Engine.  The UI is still the Phase 0 placeholder.
 //
 // Overrides keep iPlug2's method names.
 class EverythingEq final : public iplug::Plugin {
@@ -31,6 +26,9 @@ class EverythingEq final : public iplug::Plugin {
 
   void OnIdle() override;
   void OnUIClose() override;
+  void OnParamChange(int param_index) override;
+  bool SerializeState(iplug::IByteChunk& chunk) const override;
+  int UnserializeState(const iplug::IByteChunk& chunk, int start_pos) override;
 #if IPLUG_DSP
   void ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
                     int num_frames) override;
@@ -46,12 +44,18 @@ class EverythingEq final : public iplug::Plugin {
   // Meter channels: main in L/R, sidechain L/R, out L/R.
   static constexpr int kNumMeterChannels = kMaxIn + kMaxOut;
 
+  void InitParams();
+  void MakeFactoryPresets();
+  ParamValues CurrentValues() const;
+  void UpdateLatency();
   void UpdateConnections();
   void AccumulatePeak(int meter_channel, const iplug::sample* data,
                       int num_frames);
 
   Engine engine_;
   std::array<std::vector<float>, 6> scratch_;  // In L/R, SC L/R, out L/R.
+  std::atomic<bool> params_dirty_{true};
+  bool mono_output_ = false;
 
   std::array<bool, kMaxIn> in_connected_{};
   std::array<bool, kMaxOut> out_connected_{};

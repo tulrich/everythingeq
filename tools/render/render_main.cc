@@ -7,13 +7,13 @@
 //
 // The JSON config:
 //   { "sampleRate": 48000, "seconds": 4,
+//     "preset": "path/to/preset.json",  (optional, relative to the config)
 //     "input": {"generate": "snare", "seed": 1, "bpm": 100}
 //              | {"file": "in.wav"},
 //     "sidechain": {...same as input...},  (optional)
 //     "params": {"global": {...}, "groups": [{...}], "bands": [{...}]}}
-// Keys are the camelCase forms of the eeq::BandParams / GroupParams /
-// GlobalParams fields (e.g. "dynRange" for dyn_range); enums are given by
-// name (e.g. "type": "Peak", "tap": "Aux").
+// "params" (optional) overrides the preset; its schema is described in
+// model/engine_params_json.h.
 
 #include <cmath>
 #include <cstdio>
@@ -24,6 +24,8 @@
 #include <string>
 
 #include "dsp/engine/engine.h"
+#include "model/engine_params_json.h"
+#include "model/presets.h"
 #include "tools/render/signals.h"
 #include "tools/render/wav.h"
 
@@ -32,119 +34,6 @@ namespace eeq {
 using nlohmann::json;
 
 namespace {
-
-template <typename E, size_t N>
-E ParseEnum(const json& j, const char* key, E def,
-            const std::pair<const char*, E> (&names)[N]) {
-  if (!j.contains(key)) return def;
-  const std::string s = j.at(key).get<std::string>();
-  for (const auto& [name, value] : names)
-    if (s == name) return value;
-  throw std::runtime_error(std::string("bad value for ") + key + ": " + s);
-}
-
-template <typename T>
-void Opt(const json& j, const char* key, T& out) {
-  if (j.contains(key)) out = j.at(key).get<T>();
-}
-
-const std::pair<const char*, BandType> kBandTypes[] = {
-    {"Off", BandType::kOff},
-    {"Peak", BandType::kPeak},
-    {"LowShelf", BandType::kLowShelf},
-    {"HighShelf", BandType::kHighShelf},
-    {"LP12", BandType::kLp12},
-    {"HP12", BandType::kHp12},
-    {"Notch", BandType::kNotch},
-    {"BP", BandType::kBp},
-    {"LP24_LR", BandType::kLp24Lr},
-    {"HP24_LR", BandType::kHp24Lr},
-    {"Tilt", BandType::kTilt},
-    {"FletcherMunson", BandType::kFletcherMunson},
-    {"Vowel", BandType::kVowel},
-    {"KWeight", BandType::kKWeight}};
-const std::pair<const char*, DynTarget> kDynTargets[] = {
-    {"Gain", DynTarget::kGain},
-    {"Freq", DynTarget::kFreq},
-    {"Morph", DynTarget::kMorph}};
-const std::pair<const char*, Tap> kTaps[] = {{"Main", Tap::kMain},
-                                             {"Aux", Tap::kAux}};
-const std::pair<const char*, Chan> kChans[] = {{"Stereo", Chan::kStereo},
-                                               {"Left", Chan::kLeft},
-                                               {"Right", Chan::kRight},
-                                               {"Mid", Chan::kMid},
-                                               {"Side", Chan::kSide}};
-const std::pair<const char*, VowelWeighting> kWeightings[] = {
-    {"Natural", VowelWeighting::kNatural}, {"Flat", VowelWeighting::kFlat}};
-const std::pair<const char*, DetectorInput> kInputs[] = {
-    {"InternalDry", DetectorInput::kInternalDry},
-    {"InternalBandSum", DetectorInput::kInternalBandSum},
-    {"ExternalSC", DetectorInput::kExternalSc}};
-const std::pair<const char*, ScFilter> kScFilters[] = {
-    {"Off", ScFilter::kOff},   {"BP", ScFilter::kBp},
-    {"LP", ScFilter::kLp},     {"HP", ScFilter::kHp},
-    {"Tilt", ScFilter::kTilt}, {"KWeight", ScFilter::kKWeight}};
-const std::pair<const char*, TriggerMode> kModes[] = {
-    {"Above", TriggerMode::kAbove}, {"Below", TriggerMode::kBelow}};
-const std::pair<const char*, OutputMode> kOutputModes[] = {
-    {"Stereo", OutputMode::kStereo},
-    {"SplitLR", OutputMode::kSplitLr},
-    {"SplitMS", OutputMode::kSplitMs}};
-
-EngineParams ParseParams(const json& j) {
-  EngineParams p;
-  if (j.contains("global")) {
-    const json& g = j["global"];
-    GlobalParams& gp = p.global;
-    gp.output_mode = ParseEnum(g, "outputMode", gp.output_mode, kOutputModes);
-    Opt(g, "globalScale", gp.global_scale);
-    Opt(g, "delta", gp.delta);
-    Opt(g, "bypass", gp.bypass);
-    Opt(g, "outputGainDb", gp.output_gain_db);
-    Opt(g, "lookaheadMs", gp.lookahead_ms);
-  }
-  if (j.contains("groups")) {
-    for (size_t i = 0; i < j["groups"].size() && i < kNumGroups; ++i) {
-      const json& g = j["groups"][i];
-      GroupParams& gp = p.groups[i];
-      gp.input = ParseEnum(g, "input", gp.input, kInputs);
-      gp.sc_filter = ParseEnum(g, "scFilter", gp.sc_filter, kScFilters);
-      gp.mode = ParseEnum(g, "mode", gp.mode, kModes);
-      Opt(g, "scHz", gp.sc_hz);
-      Opt(g, "scQ", gp.sc_q);
-      Opt(g, "scListen", gp.sc_listen);
-      Opt(g, "rmsWindowMs", gp.rms_window_ms);
-      Opt(g, "alpha", gp.alpha);
-      Opt(g, "link", gp.link);
-      Opt(g, "thresholdDb", gp.threshold_db);
-      Opt(g, "riseDb", gp.rise_db);
-      Opt(g, "kneeDb", gp.knee_db);
-      Opt(g, "attackMs", gp.attack_ms);
-      Opt(g, "holdMs", gp.hold_ms);
-      Opt(g, "releaseMs", gp.release_ms);
-    }
-  }
-  if (j.contains("bands")) {
-    for (size_t i = 0; i < j["bands"].size() && i < kNumBands; ++i) {
-      const json& b = j["bands"][i];
-      BandParams& bp = p.bands[i];
-      bp.type = ParseEnum(b, "type", bp.type, kBandTypes);
-      bp.dyn_target = ParseEnum(b, "dynTarget", bp.dyn_target, kDynTargets);
-      bp.tap = ParseEnum(b, "tap", bp.tap, kTaps);
-      bp.chan = ParseEnum(b, "chan", bp.chan, kChans);
-      bp.option = static_cast<int>(ParseEnum(
-          b, "weighting", static_cast<VowelWeighting>(bp.option), kWeightings));
-      Opt(b, "x", bp.x);
-      Opt(b, "y", bp.y);
-      Opt(b, "z", bp.z);
-      Opt(b, "dynGroup", bp.dyn_group);
-      Opt(b, "dynRange", bp.dyn_range);
-      Opt(b, "bypass", bp.bypass);
-      Opt(b, "solo", bp.solo);
-    }
-  }
-  return p;
-}
 
 wav::Audio LoadSource(const json& j, double fs, double seconds,
                       const std::string& base_dir) {
@@ -251,7 +140,17 @@ int RenderMain(int argc, char** argv) {
   if (has_sc) sc = LoadSource(j["sidechain"], fs, seconds, base_dir);
 
   Engine engine;
-  engine.SetParams(ParseParams(j.value("params", json::object())));
+  // Parameters: an optional preset file, then optional overrides.
+  EngineParams params;
+  if (j.contains("preset")) {
+    const std::string path = base_dir + j["preset"].get<std::string>();
+    std::string error;
+    const std::optional<Preset> preset = LoadPresetFile(path, &error);
+    if (!preset) throw std::runtime_error(path + ": " + error);
+    params = preset->params;
+  }
+  ApplyEngineParamsJson(j.value("params", json::object()), params);
+  engine.SetParams(params);
   engine.Prepare(fs);
 
   wav::Audio out;

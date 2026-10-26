@@ -5,6 +5,8 @@
 #include <cstring>
 
 #include "IPlug_include_in_plug_src.h"
+#include "model/presets.h"
+#include "model/state.h"
 #include "plugin/ui/level_meter.h"
 
 namespace eeq {
@@ -12,8 +14,11 @@ namespace eeq {
 namespace ig = iplug::igraphics;
 
 EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
-    : iplug::Plugin(info, iplug::MakeConfig(kNumParams, kNumPresets)) {
-  GetParam(kParamGain)->InitGain("Output Gain", 0., -24., 24.);
+    : iplug::Plugin(
+          info, iplug::MakeConfig(kNumParams,
+                                  static_cast<int>(FactoryPresets().size()))) {
+  InitParams();
+  MakeFactoryPresets();
 
 #if IPLUG_DSP
   SetChannelLabel(iplug::ERoute::kInput, 0, "Main L");
@@ -59,12 +64,110 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
                              ig::IText(14.f, ig::COLOR_LIGHT_GRAY,
                                        "Roboto-Regular", ig::EAlign::Near)),
         kControlTagLayout);
-    graphics->AttachControl(
-        new ig::IVKnobControl(bounds.GetCentredInside(120.f, 160.f), kParamGain,
-                              "Output Gain", style));
+    graphics->AttachControl(new ig::IVKnobControl(
+        bounds.GetCentredInside(120.f, 160.f),
+        GlobalParamId(GlobalField::kOutputGain), "Output Gain", style));
     layout_changed_ = true;
   };
 #endif
+}
+
+void EverythingEq::InitParams() {
+  const std::vector<ParamSpec>& table = ParamTable();
+  for (int id = 0; id < kNumParams; ++id) {
+    const ParamSpec& s = table[id];
+    iplug::IParam* param = GetParam(id);
+    const int flags = s.automatable ? 0 : iplug::IParam::kFlagCannotAutomate;
+    switch (s.kind) {
+      case ParamKind::kEnum:
+        param->InitEnum(s.name.c_str(), static_cast<int>(s.default_value),
+                        static_cast<int>(s.enum_labels.size()), "", flags,
+                        s.group.c_str());
+        for (size_t i = 0; i < s.enum_labels.size(); ++i) {
+          param->SetDisplayText(static_cast<double>(i),
+                                s.enum_labels[i].c_str());
+        }
+        break;
+      case ParamKind::kBool:
+        param->InitBool(s.name.c_str(), s.default_value >= 0.5, "", flags,
+                        s.group.c_str(), "Off", "On");
+        break;
+      case ParamKind::kContinuous:
+        if (s.log) {
+          param->InitDouble(s.name.c_str(), s.default_value, s.min, s.max,
+                            s.step > 0.0 ? s.step : 0.001, s.unit.c_str(),
+                            flags, s.group.c_str(), iplug::IParam::ShapeExp());
+        } else {
+          param->InitDouble(s.name.c_str(), s.default_value, s.min, s.max,
+                            s.step > 0.0 ? s.step : 0.001, s.unit.c_str(),
+                            flags, s.group.c_str());
+        }
+        break;
+      case ParamKind::kSlot:
+        // Normalized; the display text follows the band type (D14).
+        param->InitDouble(
+            s.name.c_str(), s.default_value, 0.0, 1.0, 1e-6, "", flags,
+            s.group.c_str(), iplug::IParam::ShapeLinear(),
+            iplug::IParam::kUnitCustom,
+            [this, id](double value, WDL_String& text) {
+              text.Set(FormatParamValue(CurrentValues(), id, value).c_str());
+            });
+        param->SetParseFunc([this, id](const char* text, double& value) {
+          const std::optional<double> v =
+              ParseSlotText(CurrentValues(), id, text);
+          if (v) value = *v;
+          return v.has_value();
+        });
+        break;
+    }
+  }
+}
+
+void EverythingEq::MakeFactoryPresets() {
+  for (const Preset& preset : FactoryPresets()) {
+    iplug::IByteChunk chunk;
+    chunk.PutStr(
+        eeq::SerializeState(ValuesFromEngineParams(preset.params)).c_str());
+    MakePresetFromChunk(preset.name.c_str(), chunk);
+  }
+}
+
+ParamValues EverythingEq::CurrentValues() const {
+  ParamValues values{};
+  for (int id = 0; id < kNumParams; ++id) values[id] = GetParam(id)->Value();
+  return values;
+}
+
+void EverythingEq::OnParamChange(int param_index) {
+  params_dirty_ = true;
+  if (param_index == GlobalParamId(GlobalField::kLookahead)) UpdateLatency();
+}
+
+void EverythingEq::UpdateLatency() {
+  // Must match Engine::ApplyStaticDesigns().
+  const double ms = GetParam(GlobalParamId(GlobalField::kLookahead))->Value();
+  const int samples = static_cast<int>(std::lround(
+      std::clamp(ms, 0.0, kMaxLookaheadMs) * GetSampleRate() / 1000.0));
+  if (samples != GetLatency()) SetLatency(samples);
+}
+
+bool EverythingEq::SerializeState(iplug::IByteChunk& chunk) const {
+  chunk.PutStr(eeq::SerializeState(CurrentValues()).c_str());
+  return true;
+}
+
+int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
+                                   int start_pos) {
+  WDL_String text;
+  const int end_pos = chunk.GetStr(text, start_pos);
+  if (end_pos < 0) return -1;
+  const std::optional<ParamValues> values = DeserializeState(text.Get());
+  if (!values) return -1;
+  ENTER_PARAMS_MUTEX
+  for (int id = 0; id < kNumParams; ++id) GetParam(id)->Set((*values)[id]);
+  OnParamReset(iplug::kPresetRecall);
+  LEAVE_PARAMS_MUTEX
+  return end_pos;
 }
 
 void EverythingEq::OnIdle() {
@@ -123,9 +226,8 @@ void EverythingEq::OnReset() {
   const int max_block = std::max(GetBlockSize(), 1);
   for (auto& buffer : scratch_) buffer.assign(max_block, 0.f);
   engine_.Prepare(GetSampleRate());
-  if (engine_.latency_samples() != GetLatency()) {
-    SetLatency(engine_.latency_samples());
-  }
+  params_dirty_ = true;
+  UpdateLatency();
   layout_changed_ = true;
 }
 
@@ -219,12 +321,21 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   if (sc_l) AccumulatePeak(2, inputs[2], num_frames);
   if (sc_r) AccumulatePeak(3, inputs[3], num_frames);
 
+  // Rebuild the engine parameters only when something changed.
+  const bool mono_output = !out_connected_[1];
+  if (mono_output != mono_output_) {
+    mono_output_ = mono_output;
+    params_dirty_ = true;
+  }
+  if (params_dirty_.exchange(false)) {
+    engine_.SetParams(BuildEngineParams(CurrentValues(), mono_output_));
+  }
+
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
 
-  const double gain = GetParam(kParamGain)->DBToAmp();
   const int num_out = NOutChansConnected();
   for (int c = 0; c < num_out; ++c) {
-    for (int i = 0; i < num_frames; ++i) outputs[c][i] = out[c][i] * gain;
+    for (int i = 0; i < num_frames; ++i) outputs[c][i] = out[c][i];
     AccumulatePeak(4 + c, outputs[c], num_frames);
   }
 }

@@ -1,0 +1,33 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Basic 4-Band EQ",
+  "params": {
+    "bands": [
+      {
+        "type": "LowShelf",
+        "x": 100,
+        "y": 0,
+        "z": 0.7071
+      },
+      {
+        "type": "Peak",
+        "x": 400,
+        "y": 0,
+        "z": 1.0
+      },
+      {
+        "type": "Peak",
+        "x": 2500,
+        "y": 0,
+        "z": 1.0
+      },
+      {
+        "type": "HighShelf",
+        "x": 8000,
+        "y": 0,
+        "z": 0.7071
+      }
+    ]
+  }
+}

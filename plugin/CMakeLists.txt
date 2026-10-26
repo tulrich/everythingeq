@@ -19,7 +19,14 @@ option(EEQ_INSTALL_PLUGINS "Copy built plugins into the per-user plug-in folders
 include(${IPLUG2_DIR}/iPlug2.cmake)
 find_package(iPlug2 REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(nlohmann_json
+  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_subdirectory(../dsp ${CMAKE_BINARY_DIR}/dsp)
+add_subdirectory(../model ${CMAKE_BINARY_DIR}/model)
 
 iplug_add_plugin(${PROJECT_NAME}
   SOURCES
@@ -30,7 +37,7 @@ iplug_add_plugin(${PROJECT_NAME}
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
   FORMATS APP VST3 CLAP AU
-  LINK eeq_dsp
+  LINK eeq_model
 )
 
 # macOS: ad-hoc sign each bundle (ABOUT.md D11), then optionally install it.

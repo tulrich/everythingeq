@@ -1,0 +1,41 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Snare Attack Split (L/R)",
+  "params": {
+    "global": {
+      "outputMode": "SplitLR",
+      "lookaheadMs": 2.0
+    },
+    "groups": [
+      {
+        "input": "InternalDry",
+        "scFilter": "HP",
+        "scHz": 2000,
+        "alpha": 1.0,
+        "rmsWindowMs": 50,
+        "riseDb": 10,
+        "kneeDb": 12,
+        "attackMs": 0.5,
+        "releaseMs": 30
+      }
+    ],
+    "bands": [
+      {
+        "type": "BP",
+        "x": 4000,
+        "y": -60,
+        "z": 0.5,
+        "dynGroup": 0,
+        "dynRange": 60,
+        "tap": "Aux"
+      },
+      {
+        "type": "Peak",
+        "x": 190,
+        "y": -4,
+        "z": 4
+      }
+    ]
+  }
+}

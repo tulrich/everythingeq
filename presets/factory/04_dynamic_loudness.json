@@ -1,0 +1,28 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Dynamic Loudness (Fletcher-Munson)",
+  "params": {
+    "groups": [
+      {
+        "input": "InternalDry",
+        "scFilter": "KWeight",
+        "rmsWindowMs": 300,
+        "alpha": 0.0,
+        "thresholdDb": -30,
+        "kneeDb": 12,
+        "mode": "Below",
+        "attackMs": 200,
+        "releaseMs": 500
+      }
+    ],
+    "bands": [
+      {
+        "type": "FletcherMunson",
+        "y": 0,
+        "dynGroup": 0,
+        "dynRange": 20
+      }
+    ]
+  }
+}

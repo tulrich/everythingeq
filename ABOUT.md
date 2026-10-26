@@ -138,7 +138,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Natural / Flat |
 | K-Weight | – | – | – | – |
 
-* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Dynamic modulation is clamped to the same ranges as the static value.
+* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Morph 2 (AH), Tract 1.0×, DynRange 0. Dynamic modulation is clamped to the same ranges as the static value.
 
 | Parameter | Range | Default | Skew / notes |
 | :--- | :--- | :--- | :--- |
@@ -148,7 +148,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Q (Z) | 0.1 – 40 | 0.707 | log |
 | Tilt (Y) | ±24 dB | 0 dB | |
 | Phon Delta (Y) | ±40 phon | 0 | |
-| Vowel Morph (X) | 0 – 4 | 2 (AH) | |
+| Vowel Morph (X) | 0 – 4 | 2 (AH) | linear |
 | Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
 | DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
 | Dyn Group | Static, G1–G4 | Static | |
@@ -164,7 +164,8 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Output Gain | ±24 dB | 0 dB | |
 | Lookahead | 0 – 10 ms | 0 ms | not automatable |
 * Inactive parameters keep their values when a band's type changes.
-* State is saved through the host's plugin state, with a version field and migration; factory presets are included.
+* State is saved through the host's plugin state as versioned JSON keyed by stable parameter names (`band3.x`, `group1.attack_ms`, …), with migration for older versions; unknown keys are ignored and missing ones get defaults.
+* Presets are JSON files (`.eeqpreset`) holding a name and the parameters in physical units (Hz, dB, ms), so they read and diff well. Factory presets ship inside the plugin (one per use case in §2, with touch-wah as Peak, Vowel and sidechain variants, plus Init and a basic 4-band EQ) and appear in the host's preset menu. User presets are saved to `~/Library/Application Support/Everything EQ/Presets` (macOS) or `%APPDATA%\Everything EQ\Presets` (Windows).
 
 ---
 
@@ -234,3 +235,5 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 | D13 | Listen precedence: Bypass > SC Listen > Delta > Solo; SC Listen and Solo are mutually exclusive in the UI. | Makes simultaneous listen modes well defined. |
 | D14 | X/Y/Z and DynRange are normalized host parameters with per-type (per-target) mappings. | Keeps the parameter list fixed (~200 params) while one slot can hold any band type. |
 | D15 | UI: in-plugin presets and undo/redo; no A/B or copy/paste; NanoVG backend; `Grp Out` shows $D_m$ in %. | Scope control for v1; NanoVG is lighter and simpler to build than Skia. |
+| D16 | Slot mappings are piecewise with every default at normalized 0.5. | Keeps the spec's defaults consistent across band types, since the normalized value persists when the type changes. |
+| D17 | State and presets are JSON: state keyed by stable parameter names, presets in physical units. Mono → mono runs the stereo engine on dual-mono input with mono rules applied to the parameters. | Robust versioning and readable presets; the mono rules need no separate engine path (a mono engine is a Phase 8 CPU optimization if needed). |
