@@ -146,12 +146,12 @@ class DetectorScope final : public iplug::igraphics::IControl {
 
     // Labels.
     char buf[64];
-    const ig::IText small = theme::Text(9.f, theme::kTextDim);
+    const ig::IText dim_text = theme::Text(9.f, theme::kTextDim);
     std::snprintf(buf, sizeof(buf), "%+.0f", s.hi);
-    g.DrawText(small, buf,
+    g.DrawText(dim_text, buf,
                ig::IRECT(trig.L + 2, trig.T, trig.L + 40, trig.T + 11));
     std::snprintf(buf, sizeof(buf), "%+.0f", s.lo);
-    g.DrawText(small, buf,
+    g.DrawText(dim_text, buf,
                ig::IRECT(trig.L + 2, trig.B - 11, trig.L + 40, trig.B));
     std::snprintf(buf, sizeof(buf), "%s %.1f dB",
                   s.alpha >= 0.5 ? "Rise" : "Thresh", s.teff);

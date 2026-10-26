@@ -23,6 +23,7 @@ namespace ig = iplug::igraphics;
 constexpr float kMargin = 8.f;
 constexpr float kRow = 24.f;
 constexpr float kGap = 4.f;
+constexpr float kBandLabelWidth = 58.f;
 
 int Int(double v) { return static_cast<int>(std::lround(v)); }
 
@@ -155,7 +156,6 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
 }
 
 void Editor::BuildBandEditor(const ig::IRECT& r) {
-  constexpr float kLabel = 58.f;
   auto cell = [&](int row, int col) {
     return ig::IRECT(r.L + col * r.W() / 4.f, r.T + row * (kRow + kGap),
                      r.L + (col + 1) * r.W() / 4.f,
@@ -164,7 +164,7 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
   };
   auto add = [&](BandField f, const ig::IRECT& rect, const char* label,
                  ParamField::Style style = ParamField::Style::kField,
-                 float label_width = kLabel) {
+                 float label_width = kBandLabelWidth) {
     auto* c =
         new ParamField(rect, BandParamId(0, f), label, label_width, style);
     graphics_.AttachControl(c);
