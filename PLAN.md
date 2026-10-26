@@ -182,6 +182,8 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 * **No manual testing outside Logic:** VST3/CLAP sidechain and layout behavior in other hosts is covered only by validators. Rely on user bug reports after release, and consider Reaper's free evaluation on macOS.
 
 ## Open items (not blocking M0–M2)
+* Band count: 10 (current) vs 8. Decide before Phase 7 lays out the band ribbon, and certainly before release, since it changes parameter IDs (`kNumBands` and `tests/golden/param_keys.txt`).
+* Parameter names may be revisited. Logic sorts its automation menu alphabetically, so ID order only shows in its generic Controls view and in other hosts; numbered names were considered and rejected.
 * Whether to expose `sigA` τ (D5) after listening tests.
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.
