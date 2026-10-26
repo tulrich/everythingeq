@@ -1,15 +1,16 @@
 add_library(eeq_dsp STATIC
-  svf/Svf.cpp
-  bands/BandDesign.cpp
-  bands/BandProcessor.cpp
-  bands/FletcherMunson.cpp
-  bands/Iso226.cpp
-  bands/Vowel.cpp
-  dynamics/DynamicsGroup.cpp
-  engine/Engine.cpp
+  svf/svf.cc
+  bands/band_design.cc
+  bands/band_processor.cc
+  bands/fletcher_munson.cc
+  bands/iso226.cc
+  bands/vowel.cc
+  dynamics/dynamics_group.cc
+  engine/engine.cc
 )
 
-target_include_directories(eeq_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Includes are written relative to the repository root, e.g. "dsp/svf/svf.h".
+target_include_directories(eeq_dsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 if(MSVC)
   target_compile_options(eeq_dsp PRIVATE /W4 /fp:fast-)

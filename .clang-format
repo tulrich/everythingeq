@@ -1,0 +1,5 @@
+# Google C++ style (see PLAN.md, "Style").
+BasedOnStyle: Google
+ColumnLimit: 80
+DerivePointerAlignment: false
+PointerAlignment: Left

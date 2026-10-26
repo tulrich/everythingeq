@@ -29,6 +29,16 @@ scripts/validate-plugins.sh            # auval, pluginval, clap-validator
 * **One source of truth for curves.** The UI's EQ curve is computed from the same coefficient code as the audio (analytic magnitude response), never re-derived separately.
 * **Thread model.** Audio thread: process only. UI thread: drawing, FFT analysis, response curves. Communication: atomics for parameters, lock-free SPSC FIFOs for meter, analyzer and trigger data.
 
+## Style
+
+Use Google C++ style guide (two space indents, Google naming conventions, 80-column
+line limit, etc.)
+
+* Formatting: `.clang-format` at the repo root (`BasedOnStyle: Google`); run `clang-format -i` on changed files (Xcode ships one at `$(xcrun -f clang-format)`).
+* Files: `lowercase_with_underscores.h` / `.cc`, tests as `*_test.cc`, `#define` include guards (`EVERYTHINGEQ_<PATH>_H_`), includes written from the repo root (`"dsp/svf/svf.h"`).
+* Names: `PascalCase` types and functions, `snake_case` variables and struct fields, `trailing_underscore_` class members, `kConstant` constants and enumerators; cheap accessors are named like variables (`latency_samples()`). No `using namespace`.
+* Exceptions: overrides of iPlug2 virtuals keep iPlug2's names (`ProcessBlock`, `OnIdle`, `Draw`, …), iPlug2-defined members keep theirs (`mLayoutFunc`, `mRECT`), and `plugin/config.h` and `plugin/resources/` follow iPlug2's conventions. Use-case JSON keys stay camelCase (data format).
+
 ## Repository layout
 ```
 dsp/                 framework-free engine (C++20)
@@ -137,7 +147,7 @@ presets/             factory presets (JSON source → embedded)
 3. EQ graph: log-frequency grid, composite curve and per-band fills from `analyticResponse`, draggable nodes (drag = freq/gain, wheel = Q), plus the dynamic range shown as a ghost curve at $D_m = 1$ and a live curve at the current $D_m$.
 4. Analyzer: Pre/Post/Pre+Post, FFT on the UI thread fed by a lock-free FIFO, display tilt.
 5. Dynamics group panel: source and sidechain, detector and continuum, trigger meter with draggable threshold handle (showing Trigger vs $T_{\text{eff}}$), ballistics, `Grp Out` readout of $D_m$ in %.
-6. Band editor `NOW` readout (the band's current dynamic offset in dB, oct or morph units); input and output level meters per ABOUT.md §4, using `plugin/ui/LevelMeter.h` (built during Phase 0; the audio thread only publishes per-block peaks through atomics, and ballistics run on the UI thread).
+6. Band editor `NOW` readout (the band's current dynamic offset in dB, oct or morph units); input and output level meters per ABOUT.md §4, using `plugin/ui/level_meter.h` (built during Phase 0; the audio thread only publishes per-block peaks through atomics, and ballistics run on the UI thread).
 7. Graph node rules from ABOUT.md §4 (F-M pinned at 1 kHz, Vowel drags Morph/Gain, no node for K-Weight).
 8. Global footer: Output Mode, Lookahead, Scale, Δ, Bypass, preset menu (factory + user, save/rename), Undo/Redo.
 9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.

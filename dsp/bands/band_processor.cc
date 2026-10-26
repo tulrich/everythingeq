@@ -1,0 +1,125 @@
+#include "dsp/bands/band_processor.h"
+
+#include <cmath>
+
+namespace eeq {
+
+void BandProcessor::Reset() {
+  for (SvfCell& c : cells_) c.Reset();
+}
+
+void BandProcessor::Apply(const BandDesign& d, int ramp_samples) {
+  const bool structural = d.topology != topology_ ||
+                          d.num_cells != num_cells_ ||
+                          d.crossover_high != crossover_high_;
+  if (structural) {
+    topology_ = d.topology;
+    num_cells_ = d.num_cells;
+    crossover_high_ = d.crossover_high;
+    Reset();
+    for (int i = 0; i < num_cells_; ++i) cells_[i].Snap(d.cells[i]);
+    post_.Snap(d.post_gain);
+    return;
+  }
+  for (int i = 0; i < num_cells_; ++i)
+    cells_[i].SetTarget(d.cells[i], ramp_samples);
+  post_.SetTarget(d.post_gain, ramp_samples);
+}
+
+BandOutput BandProcessor::Process(double x) {
+  switch (topology_) {
+    case BandTopology::kPassthrough:
+      return {x, 0.0};
+    case BandTopology::kSerial: {
+      double v = x;
+      for (int i = 0; i < num_cells_; ++i) v = cells_[i].Process(v);
+      return {v * post_.Next(), 0.0};
+    }
+    case BandTopology::kCrossover: {
+      const SvfCell::Outputs s = cells_[0].Tick(x);
+      const double low = cells_[1].Tick(s.low).low;
+      const double high = cells_[2].Tick(s.high).high;
+      return crossover_high_ ? BandOutput{high, low} : BandOutput{low, high};
+    }
+  }
+  return {x, 0.0};
+}
+
+void BandSlot::Prepare(double sample_rate) {
+  fs_ = sample_rate;
+  initialized_ = false;
+  Reset();
+}
+
+void BandSlot::Reset() {
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    cur_[ch].Reset();
+    prev_[ch].Reset();
+  }
+  fade_ = 0;
+}
+
+bool BandSlot::Changed(const ResolvedBand& a, const ResolvedBand& b) {
+  auto rel = [](double u, double v) {
+    return std::abs(u - v) > 1e-4 * std::max(std::abs(u), 1e-3);
+  };
+  return rel(a.x, b.x) || std::abs(a.y - b.y) > 0.005 || rel(a.z, b.z) ||
+         a.option != b.option;
+}
+
+void BandSlot::Update(BandType type,
+                      const std::array<ResolvedBand, kNumChannels>& p,
+                      bool snap_now) {
+  const bool type_changed = initialized_ && type != type_;
+  if (type_changed) {
+    prev_ = cur_;
+    fade_ = kFadeSamples;
+  }
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    if (initialized_ && !type_changed && !Changed(p[ch], last_[ch])) continue;
+    last_[ch] = p[ch];
+    design_[ch] =
+        DesignBand(type, p[ch].x, p[ch].y, p[ch].z, p[ch].option, fs_);
+    if (type_changed) cur_[ch] = BandProcessor{};
+    cur_[ch].Apply(design_[ch], snap_now ? 1 : kControlBlock);
+  }
+  type_ = type;
+  initialized_ = true;
+}
+
+BandOutput BandSlot::Process(int ch, double x) {
+  const BandOutput a = cur_[ch].Process(x);
+  if (fade_ == 0) return a;
+  const BandOutput b = prev_[ch].Process(x);
+  const double t = 1.0 - static_cast<double>(fade_) / kFadeSamples;
+  return {t * a.y + (1.0 - t) * b.y, t * a.comp + (1.0 - t) * b.comp};
+}
+
+void DetectorFilter::Reset() {
+  for (auto& ch_cells : cells_)
+    for (SvfCell& c : ch_cells) c.Reset();
+}
+
+void DetectorFilter::Apply(const DetectorDesign& d, int ramp_samples) {
+  const bool structural = d.num_cells != num_cells_;
+  num_cells_ = d.num_cells;
+  for (auto& ch_cells : cells_) {
+    for (int i = 0; i < num_cells_; ++i) {
+      if (structural) {
+        ch_cells[i].Reset();
+        ch_cells[i].Snap(d.cells[i]);
+      } else {
+        ch_cells[i].SetTarget(d.cells[i], ramp_samples);
+      }
+    }
+  }
+}
+
+double DetectorFilter::Process(int ch, double x) {
+  if (num_cells_ == 0) return x;
+  double sum = 0.0;
+  for (int i = 0; i < num_cells_; ++i) sum += cells_[ch][i].Process(x);
+  return sum;
+}
+
+}  // namespace eeq

@@ -1,9 +1,9 @@
 add_executable(eeq_tests
-  test_svf.cpp
-  test_bands.cpp
-  test_routing.cpp
-  test_dynamics.cpp
-  test_lookahead.cpp
+  svf_test.cc
+  bands_test.cc
+  routing_test.cc
+  dynamics_test.cc
+  lookahead_test.cc
 )
 target_link_libraries(eeq_tests PRIVATE eeq_dsp Catch2::Catch2WithMain)
 

@@ -23,9 +23,9 @@ add_subdirectory(../dsp ${CMAKE_BINARY_DIR}/dsp)
 
 iplug_add_plugin(${PROJECT_NAME}
   SOURCES
-    EverythingEQ.cpp
-    EverythingEQ.h
-    ui/LevelMeter.h
+    everything_eq.cc
+    everything_eq.h
+    ui/level_meter.h
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf

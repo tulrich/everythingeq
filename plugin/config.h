@@ -7,7 +7,7 @@
 #define PLUG_URL_STR "https://github.com/tulrich/everythingeq"
 #define PLUG_EMAIL_STR ""
 #define PLUG_COPYRIGHT_STR "Copyright 2026 Thatcher Ulrich"
-#define PLUG_CLASS_NAME EverythingEQ
+#define PLUG_CLASS_NAME eeq::EverythingEq
 
 #define BUNDLE_NAME "EverythingEQ"
 #define BUNDLE_MFR "tulrich"
