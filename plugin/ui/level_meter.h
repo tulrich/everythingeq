@@ -12,10 +12,10 @@
 namespace eeq {
 
 // Vertical segmented peak meter (ABOUT.md §4): green below -12 dBFS, yellow
-// up to 0 dBFS, red above.  The scale runs to +6 dBFS because float signals
-// can exceed full scale.  A numeric readout shows the recent peak; once any
-// peak exceeds 0 dBFS it latches (red) until clicked or ResetClip() is called
-// (e.g. on transport start).
+// up to 0 dBFS, red above, with the name underneath.  The scale runs to +6 dBFS
+// because float signals can exceed full scale.  A numeric readout on top shows
+// the recent peak; once any peak exceeds 0 dBFS it latches (red) until clicked
+// or ResetClip() is called (e.g. on transport start).
 //
 // UI thread only.  Feed it per-channel linear peaks gathered since the last
 // call with AddPeaks(); ballistics are computed from wall-clock time.
@@ -93,10 +93,11 @@ class LevelMeter final : public iplug::igraphics::IControl {
                                ig::EAlign::Far, ig::EVAlign::Middle);
 
     ig::IRECT r = mRECT;
-    const ig::IRECT label_rect = r.ReduceFromTop(16.f);
-    const ig::IRECT readout_rect = r.ReduceFromBottom(18.f).GetPadded(-1.f);
+    // Peak readout on top, name underneath the bars.
+    const ig::IRECT readout_rect = r.ReduceFromTop(18.f).GetPadded(-1.f);
+    const ig::IRECT label_rect = r.ReduceFromBottom(16.f);
+    r.ReduceFromTop(8.f);  // Room for the +6 label.
     r.ReduceFromBottom(4.f);
-    r.ReduceFromTop(5.f);  // Room for the +6 label.
     const ig::IRECT scale_rect = r.ReduceFromLeft(13.f);
     bars_rect_ = r;
 
