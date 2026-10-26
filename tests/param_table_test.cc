@@ -110,9 +110,20 @@ TEST_CASE("Slot mappings round-trip and center on their defaults", "[params]") {
   REQUIRE(SlotToPhysical(DynRangeMapping(DynTarget::kFreq), 0.75) == 4.0);
 }
 
-TEST_CASE("Default host values give default engine params", "[params]") {
+TEST_CASE("Default host values give the default band layout", "[params]") {
   const EngineParams p = BuildEngineParams(DefaultParamValues(), false);
-  REQUIRE(EngineParamsToJson(p).empty());
+  const nlohmann::json j = EngineParamsToJson(p);
+  // Only the bands differ from the engine's defaults.
+  REQUIRE(j.size() == 1);
+  REQUIRE(j["bands"].size() == kNumBands);
+  REQUIRE(p.bands[0].type == BandType::kHp12);
+  REQUIRE(p.bands[0].bypass);
+  REQUIRE(std::abs(p.bands[0].x - 30.0) < 1e-6);
+  REQUIRE(p.bands[3].type == BandType::kPeak);
+  REQUIRE(std::abs(p.bands[3].x - 500.0) < 1e-6);
+  REQUIRE(p.bands[7].type == BandType::kLp12);
+  REQUIRE(p.bands[7].bypass);
+  for (int b = 1; b < kNumBands - 1; ++b) REQUIRE_FALSE(p.bands[b].bypass);
 }
 
 TEST_CASE("Host values survive engine params and back", "[params]") {
@@ -130,7 +141,8 @@ TEST_CASE("Factory presets parse and are representable", "[params]") {
   const std::vector<Preset>& presets = FactoryPresets();
   REQUIRE(presets.size() == 10);
   REQUIRE(presets[0].name == "Init");
-  REQUIRE(EngineParamsToJson(presets[0].params).empty());
+  REQUIRE(NearlyEqual(presets[0].params,
+                      BuildEngineParams(DefaultParamValues(), false)));
   std::set<std::string> names;
   for (const Preset& preset : presets) {
     CAPTURE(preset.name);

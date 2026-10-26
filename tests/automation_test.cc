@@ -30,6 +30,7 @@ void SetBand(ParamValues& v, int band, BandType type, double x, double y,
   v[BandParamId(band, BandField::kX)] = x;
   v[BandParamId(band, BandField::kY)] = y;
   v[BandParamId(band, BandField::kZ)] = z;
+  v[BandParamId(band, BandField::kBypass)] = 0;
 }
 
 // A busy chain that gives every band and group parameter something to do.

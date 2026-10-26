@@ -2,5 +2,42 @@
   "format": "everythingeq-preset",
   "version": 1,
   "name": "Init",
-  "params": {}
+  "params": {
+    "bands": [
+      {
+        "type": "HP12",
+        "x": 30,
+        "bypass": true
+      },
+      {
+        "type": "LowShelf",
+        "x": 100
+      },
+      {
+        "type": "Peak",
+        "x": 150
+      },
+      {
+        "type": "Peak",
+        "x": 500
+      },
+      {
+        "type": "Peak",
+        "x": 1000
+      },
+      {
+        "type": "Peak",
+        "x": 2000
+      },
+      {
+        "type": "HighShelf",
+        "x": 4000
+      },
+      {
+        "type": "LP12",
+        "x": 8000,
+        "bypass": true
+      }
+    ]
+  }
 }

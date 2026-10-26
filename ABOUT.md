@@ -152,6 +152,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Vowel Morph (X) | 0 – 4 | 2 (AH) | linear |
 | Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
 | DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
+| Band layout | Type and Freq per band | B1 HP12 30 Hz (bypassed), B2 Low Shelf 100 Hz, B3–B6 Peak 150 Hz / 500 Hz / 1 kHz / 2 kHz, B7 High Shelf 4 kHz, B8 LP12 8 kHz (bypassed) | flat (0 dB, Q 0.707) and transparent until edited; the Init preset matches |
 | Dyn Group | G1–G4 | Bands 1–2: G1, 3–4: G2, 5–6: G3, 7–8: G4 | a band moves with its group only when DynRange ≠ 0 |
 | SC Hz / SC Q | 20 Hz – 20 kHz / 0.1 – 40 | 1 kHz / 0.707 | log |
 | RMS Window | 1 – 400 ms | 15 ms | log |
@@ -210,7 +211,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
                                                                         +--------------------------+
 ```
 
-* **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node.
+* **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. LP12 and HP12 nodes sit on the curve at the cutoff (Q in dB) and drag Q vertically, as in Logic's Channel EQ. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node.
 * **Group meters:** each group tab has a strip along its bottom: the group's live $D_m$ in blue (grey, with a dimmed label, while no active band has the group and a nonzero DynRange), and below it, in yellow, the gain the group's bands apply right now, growing from the center (left for a cut, right for a boost; full width = 24 dB). The applied gain is the largest deviation of those bands' combined response from their static response (a silent band counts as −60 dB). The detector scope repeats it as a number beside D.
 * **Level meters:** a vertical input meter at the left edge of the EQ graph and the output meter at its right (the `(M)` column), one bar per channel. Scale −60 to +6 dBFS (float signals can exceed full scale), segmented: green below −12 dBFS, yellow from −12 to 0, red above 0, with a peak-hold tick. Above each meter, a numeric readout of the recent peak (the meter's name sits below it); once a peak exceeds 0 dBFS the readout latches in red, showing the highest peak, until it is clicked or the host transport starts. Inactive channels (e.g. R on a mono track) are drawn empty.
 * **Presets & editing:** an in-plugin preset menu (factory presets plus user presets saved as files) alongside the host's own preset handling, and undo/redo of parameter edits made in the plugin UI. No A/B comparison or band copy/paste in v1.

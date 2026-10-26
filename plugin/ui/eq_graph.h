@@ -168,7 +168,12 @@ class EqGraph final : public iplug::igraphics::IControl {
             x_id, std::clamp(values_[x_id] + dx * gear / mRECT.W(), 0.0, 1.0));
       }
     }
-    if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
+    if (DragsQ(bp.type)) {
+      const SlotMapping q = *SlotMappingFor(bp.type, Slot::kZ);
+      model_.SetEdit(
+          BandParamId(drag_band_, BandField::kZ),
+          SlotFromPhysical(q, std::pow(10.0, YToDb(drag_y_) / 20.0)));
+    } else if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
       if (std::string(m->unit) == "dB") {
         model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_)));
       } else {  // Phon: full height = full range.
@@ -266,8 +271,17 @@ class EqGraph final : public iplug::igraphics::IControl {
     return (mRECT.MH() - y) / (0.5 * mRECT.H()) * kRangeDb;
   }
 
+  // LP12 and HP12 nodes drag Q vertically (as in Logic's Channel EQ): the
+  // node sits at the curve's level at the cutoff, which is Q in dB.
+  static bool DragsQ(BandType type) {
+    return type == BandType::kLp12 || type == BandType::kHp12;
+  }
+
   std::vector<int> DragParams(int band) const {
-    return {BandParamId(band, BandField::kX), BandParamId(band, BandField::kY)};
+    return {
+        BandParamId(band, BandField::kX),
+        BandParamId(band, DragsQ(params_.bands[band].type) ? BandField::kZ
+                                                           : BandField::kY)};
   }
 
   int HitNode(float x, float y) const {
@@ -310,6 +324,8 @@ class EqGraph final : public iplug::igraphics::IControl {
       } else {
         y = mRECT.B - static_cast<float>(values_[y_id]) * mRECT.H();
       }
+    } else if (DragsQ(bp.type)) {
+      y = DbToY(20.0 * std::log10(bp.z));
     } else {
       // Filters: sit on the band's own curve at the cutoff.
       const std::vector<float>& c = static_.band_db[band];

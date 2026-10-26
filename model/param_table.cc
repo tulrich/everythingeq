@@ -61,6 +61,20 @@ ParamSpec SlotParam(std::string key, std::string name, std::string group) {
   return s;
 }
 
+// The default band layout: a conventional 8-band EQ.  The HP and LP bands
+// start bypassed so that a fresh instance is transparent.
+struct DefaultBand {
+  BandType type;
+  double hz;
+  bool bypass;
+};
+constexpr DefaultBand kDefaultBands[kNumBands] = {
+    {BandType::kHp12, 30.0, true},         {BandType::kLowShelf, 100.0, false},
+    {BandType::kPeak, 150.0, false},       {BandType::kPeak, 500.0, false},
+    {BandType::kPeak, 1000.0, false},      {BandType::kPeak, 2000.0, false},
+    {BandType::kHighShelf, 4000.0, false}, {BandType::kLp12, 8000.0, true},
+};
+
 std::vector<ParamSpec> MakeTable() {
   // Each spec is placed by its field, so the host order is defined only by
   // the BandField / GroupField / GlobalField enums.
@@ -70,13 +84,16 @@ std::vector<ParamSpec> MakeTable() {
     const std::string n = "B" + std::to_string(b + 1) + " ";
     const std::string g = "Band " + std::to_string(b + 1);
     auto at = [&](BandField f) -> ParamSpec& { return t[BandParamId(b, f)]; };
-    at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, false);
+    const DefaultBand& d = kDefaultBands[b];
+    at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, d.bypass);
     at(BandField::kType) =
-        Enum(k + "type", n + "Type", g, 0,
+        Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
              {"Off", "Peak", "Low Shelf", "High Shelf", "LP12", "HP12", "Notch",
               "BP", "LP24 LR", "HP24 LR", "Tilt", "Fletcher-Munson", "Vowel",
               "K-Weight"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
+    at(BandField::kX).default_value =
+        SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
     at(BandField::kY) = SlotParam(k + "y", n + "Gain", g);
     at(BandField::kZ) = SlotParam(k + "z", n + "Q", g);
     at(BandField::kDynGroup) =
