@@ -142,7 +142,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 6. Undo/redo model: a bounded history of parameter edits made in the plugin UI (a drag counts as one step), kept on the UI thread. Host automation changes are not recorded. (Model done; wired to the UI in Phase 7.)
 
 ## Phase 6 — Plugin integration
-1. I/O config: the three layouts from D10, each with a mono or stereo sidechain. Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in Logic (including that a lookahead change takes effect after a transport restart).
+1. I/O config: the three layouts from D10, each with a mono or stereo sidechain. Report latency from `latencySamples()` (0 by default), and update it when Lookahead or the sample rate changes; verify plugin delay compensation in Logic (including that a lookahead change takes effect after a transport restart). **Verified 2026-10-26:** a null test against an unprocessed copy breaks when Lookahead changes during playback and nulls again after stop/restart, so Logic picks up the new latency on transport restart.
 2. Per-format checks: AU with `auval` and manually in Logic; VST3 with `pluginval` and CLAP with `clap-validator`, in CI on macOS and Windows (D12).
 3. Automation smoothness under Logic automation of every continuous parameter, plus an offline test that sweeps each normalized parameter at audio rate through the wrapper's parameter path.
 
