@@ -65,6 +65,7 @@ class EverythingEq final : public iplug::Plugin {
   std::array<std::atomic<float>, kNumMeterChannels> peaks_{};
   std::atomic<bool> transport_started_{false};
   bool transport_was_running_ = false;
+  int shown_latency_ = -1;  // Latency in the UI readout (UI thread).
 
 #if IPLUG_EDITOR
   LevelMeter* input_meter_ = nullptr;

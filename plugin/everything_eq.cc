@@ -194,7 +194,10 @@ void EverythingEq::OnIdle() {
     output_meter_->ResetClip();
   }
 
-  if (layout_changed_.exchange(false)) {
+  // Refresh the readout when the layout or the reported latency changes.
+  const bool latency_changed = GetLatency() != shown_latency_;
+  if (layout_changed_.exchange(false) || latency_changed) {
+    shown_latency_ = GetLatency();
     input_meter_->SetChannelActive(0, in_connected_[0]);
     input_meter_->SetChannelActive(1, in_connected_[1]);
     sidechain_meter_->SetChannelActive(0, in_connected_[2]);
