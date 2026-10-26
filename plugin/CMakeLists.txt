@@ -32,7 +32,14 @@ iplug_add_plugin(${PROJECT_NAME}
   SOURCES
     everything_eq.cc
     everything_eq.h
+    ui/band_ribbon.h
+    ui/editor.cc
+    ui/editor.h
+    ui/editor_model.h
+    ui/eq_graph.h
     ui/level_meter.h
+    ui/param_field.h
+    ui/theme.h
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf

@@ -1,0 +1,336 @@
+#ifndef EVERYTHINGEQ_PLUGIN_UI_EQ_GRAPH_H_
+#define EVERYTHINGEQ_PLUGIN_UI_EQ_GRAPH_H_
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <optional>
+#include <vector>
+
+#include "IControl.h"
+#include "dsp/bands/vowel.h"
+#include "model/response_curves.h"
+#include "model/slot_mapping.h"
+#include "plugin/ui/editor_model.h"
+#include "plugin/ui/theme.h"
+
+namespace eeq {
+
+// The EQ graph (ABOUT.md section 4): log-frequency grid, per-band curves, the
+// composite curve, and draggable band nodes.  Dynamic bands also show a
+// ghost composite at full dynamics (D = 1) and a live composite at the
+// current group control values.
+//
+// Nodes: frequency bands drag frequency (horizontal, in Hz) and gain
+// (vertical, in dB); filters sit on their curve at the cutoff; Vowel drags
+// Morph and Formant Gain; Fletcher-Munson is pinned at 1 kHz and drags Phon;
+// K-Weight has no node.  The wheel adjusts Q (Tract Scale for Vowel).
+// Double-clicking empty space adds a Peak band in the first free slot.
+class EqGraph final : public iplug::igraphics::IControl {
+ public:
+  static constexpr double kMinHz = 20.0;
+  static constexpr double kMaxHz = 20000.0;
+  static constexpr double kRangeDb = 18.0;
+  static constexpr float kNodeRadius = 6.f;
+
+  EqGraph(const iplug::igraphics::IRECT& bounds, EditorModel& model)
+      : IControl(bounds), model_(model) {}
+
+  void OnResize() override { freqs_.clear(); }
+
+  // Called from the plugin's idle loop.
+  void Refresh() {
+    const ParamValues v = model_.Values();
+    const GroupControls live = model_.LiveControls();
+    const int points = std::max(32, static_cast<int>(mRECT.W() / 2.f));
+    const bool changed = v != values_ || live != live_ ||
+                         freqs_.size() != static_cast<size_t>(points) ||
+                         model_.SampleRate() != sample_rate_;
+    if (!changed) return;
+    values_ = v;
+    live_ = live;
+    sample_rate_ = model_.SampleRate();
+    if (freqs_.size() != static_cast<size_t>(points)) {
+      freqs_ = DisplayFrequencies(points, kMinHz, kMaxHz);
+    }
+    params_ = BuildEngineParams(values_, false);
+    ComputeChainResponse(params_, GroupControls{}, sample_rate_, freqs_,
+                         static_);
+    any_dynamic_ = false;
+    for (const BandParams& bp : params_.bands) {
+      any_dynamic_ = any_dynamic_ || (bp.type != BandType::kOff && !bp.bypass &&
+                                      bp.dyn_group >= 0 && bp.dyn_range != 0.0);
+    }
+    if (any_dynamic_) {
+      GroupControls full;
+      full.fill(1.0);
+      ComputeChainResponse(params_, full, sample_rate_, freqs_, ghost_);
+      ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_);
+    }
+    SetDirty(false);
+  }
+
+  void Draw(iplug::igraphics::IGraphics& g) override {
+    namespace ig = iplug::igraphics;
+    g.FillRect(theme::kBackground, mRECT);
+    DrawGrid(g);
+    if (freqs_.empty()) return;
+
+    const int selected = model_.SelectedBand();
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::vector<float>& c = static_.band_db[b];
+      if (c.empty()) continue;
+      const bool bypassed = params_.bands[b].bypass;
+      const ig::IColor color = theme::BandColor(b);
+      if (b == selected && !bypassed) FillCurve(g, c, color.WithOpacity(0.18f));
+      StrokeCurve(g, c, color.WithOpacity(bypassed ? 0.2f : 0.55f),
+                  b == selected ? 1.5f : 1.f);
+    }
+    if (any_dynamic_) {
+      StrokeCurve(g, ghost_.total_db, theme::kText.WithOpacity(0.25f), 1.f);
+      StrokeCurve(g, static_.total_db, theme::kText.WithOpacity(0.5f), 1.f);
+      StrokeCurve(g, live_curves_.total_db, theme::kAccent, 2.f);
+    } else {
+      StrokeCurve(g, static_.total_db, theme::kText, 2.f);
+    }
+
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::optional<ig::IVec2> p = NodePosition(b);
+      if (!p) continue;
+      const ig::IColor color = theme::BandColor(b);
+      const bool bypassed = params_.bands[b].bypass;
+      g.FillCircle(color.WithOpacity(bypassed ? 0.35f : 1.f), p->x, p->y,
+                   kNodeRadius);
+      if (b == selected) {
+        g.DrawCircle(theme::kText, p->x, p->y, kNodeRadius + 2.5f, nullptr,
+                     1.5f);
+      }
+      const std::string label = std::to_string(b + 1);
+      g.DrawText(theme::Text(9.f, theme::kBackground, ig::EAlign::Center),
+                 label.c_str(),
+                 ig::IRECT(p->x - 8, p->y - 6, p->x + 8, p->y + 6));
+    }
+  }
+
+  void OnMouseDown(float x, float y,
+                   const iplug::igraphics::IMouseMod& mod) override {
+    drag_band_ = HitNode(x, y);
+    if (drag_band_ < 0) return;
+    model_.SelectBand(drag_band_);
+    // Drag relative to the node's own position, so it doesn't jump.
+    const auto p = NodePosition(drag_band_);
+    drag_x_ = p ? p->x : x;
+    drag_y_ = p ? p->y : y;
+    for (int id : DragParams(drag_band_)) model_.BeginEdit(id);
+    SetDirty(false);
+  }
+
+  void OnMouseDrag(float x, float y, float dx, float dy,
+                   const iplug::igraphics::IMouseMod& mod) override {
+    if (drag_band_ < 0) return;
+    const float gear = mod.S ? 0.1f : 1.f;
+    drag_x_ += dx * gear;
+    drag_y_ += dy * gear;
+    const BandParams& bp = params_.bands[drag_band_];
+    const int x_id = BandParamId(drag_band_, BandField::kX);
+    const int y_id = BandParamId(drag_band_, BandField::kY);
+    if (const auto m = SlotMappingFor(bp.type, Slot::kX)) {
+      if (std::string(m->unit) == "Hz") {
+        model_.SetEdit(x_id, SlotFromPhysical(*m, XToFreq(drag_x_)));
+      } else {  // Vowel morph: full width = full range.
+        model_.SetEdit(
+            x_id, std::clamp(values_[x_id] + dx * gear / mRECT.W(), 0.0, 1.0));
+      }
+    }
+    if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
+      if (std::string(m->unit) == "dB") {
+        model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_)));
+      } else {  // Phon: full height = full range.
+        model_.SetEdit(
+            y_id, std::clamp(values_[y_id] - dy * gear / mRECT.H(), 0.0, 1.0));
+      }
+    }
+    Refresh();
+  }
+
+  void OnMouseUp(float x, float y,
+                 const iplug::igraphics::IMouseMod& mod) override {
+    if (drag_band_ < 0) return;
+    for (int id : DragParams(drag_band_)) model_.EndEdit(id);
+    drag_band_ = -1;
+  }
+
+  void OnMouseWheel(float x, float y, const iplug::igraphics::IMouseMod& mod,
+                    float d) override {
+    int band = HitNode(x, y);
+    if (band < 0) band = model_.SelectedBand();
+    if (band < 0 || !SlotMappingFor(params_.bands[band].type, Slot::kZ)) {
+      return;
+    }
+    const int z_id = BandParamId(band, BandField::kZ);
+    const double step = mod.S ? 0.002 : 0.02;
+    model_.SetValueGesture(z_id,
+                           std::clamp(values_[z_id] + d * step, 0.0, 1.0));
+    Refresh();
+  }
+
+  void OnMouseDblClick(float x, float y,
+                       const iplug::igraphics::IMouseMod& mod) override {
+    if (HitNode(x, y) >= 0) return;
+    for (int b = 0; b < kNumBands; ++b) {
+      if (params_.bands[b].type != BandType::kOff) continue;
+      const SlotMapping freq = *SlotMappingFor(BandType::kPeak, Slot::kX);
+      const SlotMapping gain = *SlotMappingFor(BandType::kPeak, Slot::kY);
+      const int type_id = BandParamId(b, BandField::kType);
+      model_.SetValueGesture(type_id, static_cast<double>(BandType::kPeak) /
+                                          ParamTable()[type_id].max);
+      model_.SetValueGesture(BandParamId(b, BandField::kX),
+                             SlotFromPhysical(freq, XToFreq(x)));
+      model_.SetValueGesture(BandParamId(b, BandField::kY),
+                             SlotFromPhysical(gain, YToDb(y)));
+      model_.SelectBand(b);
+      Refresh();
+      return;
+    }
+  }
+
+ private:
+  float FreqToX(double hz) const {
+    const double u = std::log(hz / kMinHz) / std::log(kMaxHz / kMinHz);
+    return mRECT.L + static_cast<float>(u) * mRECT.W();
+  }
+  double XToFreq(float x) const {
+    const double u = std::clamp((x - mRECT.L) / mRECT.W(), 0.f, 1.f);
+    return kMinHz * std::pow(kMaxHz / kMinHz, u);
+  }
+  float DbToY(double db) const {
+    const double u = std::clamp(db, -kRangeDb * 1.2, kRangeDb * 1.2) / kRangeDb;
+    return mRECT.MH() - static_cast<float>(u) * 0.5f * mRECT.H();
+  }
+  double YToDb(float y) const {
+    return (mRECT.MH() - y) / (0.5 * mRECT.H()) * kRangeDb;
+  }
+
+  std::vector<int> DragParams(int band) const {
+    return {BandParamId(band, BandField::kX), BandParamId(band, BandField::kY)};
+  }
+
+  int HitNode(float x, float y) const {
+    // Topmost (highest index) first, but prefer the selected band.
+    const int selected = model_.SelectedBand();
+    auto hit = [&](int b) {
+      const auto p = NodePosition(b);
+      return p && std::hypot(p->x - x, p->y - y) <= kNodeRadius + 3.f;
+    };
+    if (selected >= 0 && hit(selected)) return selected;
+    for (int b = kNumBands - 1; b >= 0; --b) {
+      if (hit(b)) return b;
+    }
+    return -1;
+  }
+
+  std::optional<iplug::igraphics::IVec2> NodePosition(int band) const {
+    if (freqs_.empty()) return std::nullopt;
+    const BandParams& bp = params_.bands[band];
+    double hz = 1000.0;
+    switch (bp.type) {
+      case BandType::kOff:
+      case BandType::kKWeight:
+        return std::nullopt;
+      case BandType::kFletcherMunson:
+        hz = 1000.0;
+        break;
+      case BandType::kVowel:
+        hz = VowelFormants(bp.x).hz[1] * bp.z;  // F2.
+        break;
+      default:
+        hz = bp.x;
+        break;
+    }
+    float y = DbToY(0.0);
+    const int y_id = BandParamId(band, BandField::kY);
+    if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
+      if (std::string(m->unit) == "dB") {
+        y = DbToY(std::max(bp.y, -kRangeDb * 1.2));
+      } else {
+        y = mRECT.B - static_cast<float>(values_[y_id]) * mRECT.H();
+      }
+    } else {
+      // Filters: sit on the band's own curve at the cutoff.
+      const std::vector<float>& c = static_.band_db[band];
+      const size_t i = std::min(
+          c.size() - 1, static_cast<size_t>(std::lround(
+                            std::log(hz / kMinHz) / std::log(kMaxHz / kMinHz) *
+                            (c.size() - 1))));
+      y = DbToY(c.empty() ? 0.0 : c[i]);
+    }
+    return iplug::igraphics::IVec2(FreqToX(std::clamp(hz, kMinHz, kMaxHz)), y);
+  }
+
+  void DrawGrid(iplug::igraphics::IGraphics& g) {
+    namespace ig = iplug::igraphics;
+    const ig::IText label = theme::Text(9.f, theme::kTextDim, ig::EAlign::Near);
+    for (double hz : {20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0,
+                      10000.0, 20000.0}) {
+      const float x = FreqToX(hz);
+      g.DrawLine(theme::kGrid, x, mRECT.T, x, mRECT.B);
+      char buf[16];
+      std::snprintf(buf, sizeof(buf), hz >= 1000.0 ? "%gk" : "%g",
+                    hz >= 1000.0 ? hz / 1000.0 : hz);
+      g.DrawText(label, buf, ig::IRECT(x + 2, mRECT.B - 14, x + 40, mRECT.B));
+    }
+    for (int db = -18; db <= 18; db += 6) {
+      const float y = DbToY(db);
+      g.DrawLine(db == 0 ? theme::kGridStrong : theme::kGrid, mRECT.L, y,
+                 mRECT.R, y);
+      char buf[16];
+      std::snprintf(buf, sizeof(buf), "%+d", db);
+      g.DrawText(label, db == 0 ? "0 dB" : buf,
+                 ig::IRECT(mRECT.L + 3, y - 12, mRECT.L + 40, y));
+    }
+    g.DrawRect(theme::kBorder, mRECT);
+  }
+
+  void StrokeCurve(iplug::igraphics::IGraphics& g, const std::vector<float>& c,
+                   const iplug::igraphics::IColor& color, float thickness) {
+    if (c.size() != freqs_.size()) return;
+    g.PathClear();
+    for (size_t i = 0; i < c.size(); ++i) {
+      const float x = FreqToX(freqs_[i]), y = DbToY(c[i]);
+      if (i == 0) {
+        g.PathMoveTo(x, y);
+      } else {
+        g.PathLineTo(x, y);
+      }
+    }
+    g.PathStroke(color, thickness);
+  }
+
+  void FillCurve(iplug::igraphics::IGraphics& g, const std::vector<float>& c,
+                 const iplug::igraphics::IColor& color) {
+    if (c.size() != freqs_.size()) return;
+    const float zero = DbToY(0.0);
+    g.PathClear();
+    g.PathMoveTo(FreqToX(freqs_.front()), zero);
+    for (size_t i = 0; i < c.size(); ++i)
+      g.PathLineTo(FreqToX(freqs_[i]), DbToY(c[i]));
+    g.PathLineTo(FreqToX(freqs_.back()), zero);
+    g.PathClose();
+    g.PathFill(color);
+  }
+
+  EditorModel& model_;
+  ParamValues values_{};
+  GroupControls live_{};
+  double sample_rate_ = 0.0;
+  EngineParams params_{};
+  std::vector<double> freqs_;
+  ChainResponse static_, ghost_, live_curves_;
+  bool any_dynamic_ = false;
+  int drag_band_ = -1;
+  float drag_x_ = 0.f, drag_y_ = 0.f;
+};
+
+}  // namespace eeq
+
+#endif  // EVERYTHINGEQ_PLUGIN_UI_EQ_GRAPH_H_

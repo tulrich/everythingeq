@@ -17,7 +17,8 @@
 
 // Main input - output, with an optional mono or stereo sidechain bus
 // (ABOUT.md D10): mono -> mono, mono -> stereo, stereo -> stereo.
-#define PLUG_CHANNEL_IO "\
+#define PLUG_CHANNEL_IO \
+  "\
 1-1 \
 1.1-1 \
 1.2-1 \

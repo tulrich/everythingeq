@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <memory>
 #include <vector>
 
 #include "IControls.h"
@@ -10,20 +11,30 @@
 #include "dsp/engine/engine.h"
 #include "model/lookahead_gate.h"
 #include "model/param_table.h"
+#include "plugin/ui/editor_model.h"
 
 namespace eeq {
 
-class LevelMeter;
-
-enum ControlTag { kControlTagLayout = 0, kNumControlTags };
+class Editor;
 
 // The Everything EQ plugin: host parameters, state and presets from model/,
-// audio through eeq::Engine.  The UI is still the Phase 0 placeholder.
+// audio through eeq::Engine, UI from plugin/ui/ (Editor).
 //
 // Overrides keep iPlug2's method names.
-class EverythingEq final : public iplug::Plugin {
+class EverythingEq final : public iplug::Plugin, public EditorModel {
  public:
   explicit EverythingEq(const iplug::InstanceInfo& info);
+  ~EverythingEq() override;
+
+  // EditorModel.
+  ParamValues Values() const override { return CurrentValues(); }
+  double SampleRate() const override { return GetSampleRate(); }
+  GroupControls LiveControls() const override;
+  int SelectedBand() const override { return selected_band_; }
+  void SelectBand(int band) override;
+  void BeginEdit(int param_id) override;
+  void SetEdit(int param_id, double normalized) override;
+  void EndEdit(int param_id) override;
 
   void OnIdle() override;
   void OnUIClose() override;
@@ -63,17 +74,16 @@ class EverythingEq final : public iplug::Plugin {
   std::array<bool, kMaxOut> out_connected_{};
   std::atomic<bool> layout_changed_{true};
 
-  // Audio thread -> UI: max |sample| per channel since the UI last read it.
+  // Audio thread -> UI: max |sample| per channel since the UI last read it,
+  // and the latest dynamics control value per group.
   std::array<std::atomic<float>, kNumMeterChannels> peaks_{};
+  std::array<std::atomic<float>, kNumGroups> group_controls_{};
   std::atomic<bool> transport_started_{false};
   bool transport_was_running_ = false;
-  int shown_latency_ = -1;  // Latency in the UI readout (UI thread).
 
-#if IPLUG_EDITOR
-  LevelMeter* input_meter_ = nullptr;
-  LevelMeter* sidechain_meter_ = nullptr;
-  LevelMeter* output_meter_ = nullptr;
-#endif
+  // UI thread.
+  int selected_band_ = 0;
+  std::unique_ptr<Editor> editor_;
 };
 
 }  // namespace eeq

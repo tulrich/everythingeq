@@ -7,7 +7,7 @@
 #include "IPlug_include_in_plug_src.h"
 #include "model/presets.h"
 #include "model/state.h"
-#include "plugin/ui/level_meter.h"
+#include "plugin/ui/editor.h"
 
 namespace eeq {
 
@@ -35,46 +35,42 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
 
   mLayoutFunc = [&](ig::IGraphics* graphics) {
     graphics->AttachCornerResizer(ig::EUIResizerMode::Scale, false);
-    graphics->AttachPanelBackground(ig::COLOR_DARK_GRAY);
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
-    ig::IRECT bounds = graphics->GetBounds().GetPadded(-20.f);
-
-    // Input (and sidechain) meters on the left, output meter on the right.
-    constexpr float kMeterWidth = 32.f;
-    input_meter_ = new LevelMeter(bounds.ReduceFromLeft(kMeterWidth), "In", 2);
-    bounds.ReduceFromLeft(6.f);
-    sidechain_meter_ =
-        new LevelMeter(bounds.ReduceFromLeft(kMeterWidth), "SC", 2);
-    output_meter_ =
-        new LevelMeter(bounds.ReduceFromRight(kMeterWidth), "Out", 2);
-    graphics->AttachControl(input_meter_);
-    graphics->AttachControl(sidechain_meter_);
-    graphics->AttachControl(output_meter_);
-
-    bounds.Pad(-20.f);
-    const ig::IRECT header = bounds.ReduceFromTop(40.f);
-    const ig::IRECT footer = bounds.ReduceFromBottom(30.f);
-    const ig::IVStyle style =
-        ig::DEFAULT_STYLE.WithColor(ig::kFG, ig::COLOR_WHITE.WithOpacity(0.3f));
-    graphics->AttachControl(new ig::ITextControl(
-        header, "Everything EQ " PLUG_VERSION_STR " (spike build)",
-        ig::IText(24.f, ig::COLOR_WHITE, "Roboto-Regular", ig::EAlign::Near)));
-    graphics->AttachControl(
-        new ig::ITextControl(footer, "",
-                             ig::IText(14.f, ig::COLOR_LIGHT_GRAY,
-                                       "Roboto-Regular", ig::EAlign::Near)),
-        kControlTagLayout);
-    const ig::IRECT knobs = bounds.GetCentredInside(280.f, 160.f);
-    graphics->AttachControl(new ig::IVKnobControl(
-        knobs.GetGridCell(0, 1, 2).GetPadded(-10.f),
-        GlobalParamId(GlobalField::kOutputGain), "Output Gain", style));
-    // Not automatable, so hosts don't show it in automation menus.
-    graphics->AttachControl(new ig::IVKnobControl(
-        knobs.GetGridCell(1, 1, 2).GetPadded(-10.f),
-        GlobalParamId(GlobalField::kLookahead), "Lookahead", style));
+    editor_ = std::make_unique<Editor>(*graphics, *this);
     layout_changed_ = true;
   };
 #endif
+}
+
+EverythingEq::~EverythingEq() = default;
+
+GroupControls EverythingEq::LiveControls() const {
+  GroupControls c{};
+  for (int g = 0; g < kNumGroups; ++g) {
+    c[g] = group_controls_[g].load(std::memory_order_relaxed);
+  }
+  return c;
+}
+
+void EverythingEq::SelectBand(int band) {
+  selected_band_ = std::clamp(band, 0, kNumBands - 1);
+#if IPLUG_EDITOR
+  if (editor_) editor_->OnBandSelected(selected_band_);
+#endif
+}
+
+void EverythingEq::BeginEdit(int param_id) {
+  BeginInformHostOfParamChangeFromUI(param_id);
+}
+
+void EverythingEq::SetEdit(int param_id, double normalized) {
+  SendParameterValueFromUI(param_id, normalized);
+  // Keep any controls bound to this parameter in sync.
+  SendParameterValueFromDelegate(param_id, normalized, true);
+}
+
+void EverythingEq::EndEdit(int param_id) {
+  EndInformHostOfParamChangeFromUI(param_id);
 }
 
 void EverythingEq::InitParams() {
@@ -177,55 +173,23 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
 
 void EverythingEq::OnIdle() {
 #if IPLUG_EDITOR
-  ig::IGraphics* graphics = GetUI();
-  if (!graphics || !input_meter_) return;
-
-  float peaks[kNumMeterChannels];
+  if (!editor_) return;
+  EditorIdleData data;
   for (int i = 0; i < kNumMeterChannels; ++i) {
-    peaks[i] = peaks_[i].exchange(0.f, std::memory_order_relaxed);
+    data.peaks[i] = peaks_[i].exchange(0.f, std::memory_order_relaxed);
   }
-  input_meter_->AddPeaks(peaks);
-  sidechain_meter_->AddPeaks(peaks + 2);
-  output_meter_->AddPeaks(peaks + 4);
-
-  if (transport_started_.exchange(false)) {
-    input_meter_->ResetClip();
-    sidechain_meter_->ResetClip();
-    output_meter_->ResetClip();
-  }
-
-  // Refresh the readout when the layout or the reported latency changes.
-  const bool latency_changed = GetLatency() != shown_latency_;
-  if (layout_changed_.exchange(false) || latency_changed) {
-    shown_latency_ = GetLatency();
-    input_meter_->SetChannelActive(0, in_connected_[0]);
-    input_meter_->SetChannelActive(1, in_connected_[1]);
-    sidechain_meter_->SetChannelActive(0, in_connected_[2]);
-    sidechain_meter_->SetChannelActive(1, in_connected_[3]);
-    output_meter_->SetChannelActive(0, out_connected_[0]);
-    output_meter_->SetChannelActive(1, out_connected_[1]);
-
-    const int num_in = in_connected_[0] + in_connected_[1];
-    const int num_sc = in_connected_[2] + in_connected_[3];
-    const int num_out = out_connected_[0] + out_connected_[1];
-    WDL_String host, text;
-    GetHostStr(host);
-    text.SetFormatted(256,
-                      "Layout: %d in, %d sidechain, %d out   |   host: %s   "
-                      "|   latency: %d samples",
-                      num_in, num_sc, num_out, host.Get(), GetLatency());
-    if (auto* label = graphics->GetControlWithTag(kControlTagLayout)
-                          ->As<ig::ITextControl>()) {
-      label->SetStr(text.Get());
-    }
-  }
+  data.transport_started = transport_started_.exchange(false);
+  for (int i = 0; i < kMaxIn; ++i) data.in_connected[i] = in_connected_[i];
+  for (int i = 0; i < kMaxOut; ++i) data.out_connected[i] = out_connected_[i];
+  data.layout_changed = layout_changed_.exchange(false);
+  data.latency_samples = GetLatency();
+  editor_->Idle(data);
 #endif
 }
 
 void EverythingEq::OnUIClose() {
 #if IPLUG_EDITOR
-  // The meters are owned and deleted by IGraphics.
-  input_meter_ = sidechain_meter_ = output_meter_ = nullptr;
+  editor_.reset();  // Its controls are owned and deleted by IGraphics.
 #endif
 }
 
@@ -355,6 +319,12 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   }
 
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
+  for (int g = 0; g < kNumGroups; ++g) {
+    const DynamicsGroup& group = engine_.group(g);
+    group_controls_[g].store(
+        static_cast<float>(std::max(group.control(0), group.control(1))),
+        std::memory_order_relaxed);
+  }
 
   const int num_out = NOutChansConnected();
   for (int c = 0; c < num_out; ++c) {
