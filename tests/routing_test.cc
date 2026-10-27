@@ -204,6 +204,46 @@ TEST_CASE("Global bypass passes the input through", "[routing]") {
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
 }
 
+TEST_CASE("Releasing bypass crossfades back to the processed signal",
+          "[routing]") {
+  const Stereo x = Noise(kLen, 0.5, 13);
+  EngineParams p;
+  p.bands[0] = {BandType::kPeak, 500.0, 12.0, 2.0};
+  const Stereo wet = Render(p, x);
+  Engine e;
+  e.SetParams(p);
+  e.Prepare(kFs);
+  Stereo y(x.size());
+  const size_t on = 4000, off = 8000;
+  auto run = [&](size_t from, size_t to) {
+    const float* in[2] = {x.l.data() + from, x.r.data() + from};
+    float* out[2] = {y.l.data() + from, y.r.data() + from};
+    e.Process(in, nullptr, out, static_cast<int>(to - from));
+  };
+  run(0, on);
+  p.global.bypass = true;
+  e.SetParams(p);
+  run(on, off);
+  p.global.bypass = false;
+  e.SetParams(p);
+  run(off, kLen);
+  // Dry once the fade in is done, with no step at the release, and back to
+  // the never-bypassed output once the filters have settled.
+  const size_t fade = static_cast<size_t>(Engine::kBypassFadeMs * kFs / 1000);
+  for (size_t i = on + fade; i < off; ++i) REQUIRE(y.l[i] == x.l[i]);
+  double max_step = 0.0, max_input_step = 0.0;
+  for (size_t i = off - 10; i < off + fade; ++i) {
+    max_step = std::max(max_step, std::abs(double(y.l[i]) - y.l[i - 1]));
+    max_input_step =
+        std::max(max_input_step, std::abs(double(wet.l[i]) - wet.l[i - 1]));
+  }
+  REQUIRE(max_step <= max_input_step * 1.5);
+  double err = 0.0;
+  for (size_t i = off + 4800; i < kLen; ++i)
+    err = std::max(err, std::abs(double(y.l[i]) - wet.l[i]));
+  REQUIRE(err < 1e-4);
+}
+
 TEST_CASE("FadeInFromDry starts dry and crossfades to wet", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 12);
   EngineParams p;

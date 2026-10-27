@@ -49,6 +49,8 @@ class Engine {
   using Frame = std::array<double, kNumChannels>;
 
   int BypassFadeSamples() const;
+  // Clears filter and detector state (not the lookahead delay).
+  void ResetProcessing();
   void ControlUpdate(bool snap_now);
   void ApplyStaticDesigns(bool snap_now);
   Frame DetectorInputFrame(int g, const Frame& dry, const Frame& sc);
@@ -72,6 +74,9 @@ class Engine {
   LinearRamp bypass_mix_;
   LinearRamp output_gain_;
   bool bypass_state_ = false;
+  // Fully bypassed: only the delay line runs; the rest restarts from reset
+  // state when bypass is released.
+  bool idle_bypass_ = false;
 };
 
 }  // namespace eeq

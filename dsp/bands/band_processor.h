@@ -25,6 +25,7 @@ class LinearRamp {
     return cur_;
   }
   double value() const { return cur_; }
+  bool settled() const { return remaining_ == 0; }
 
  private:
   double cur_ = 0.0, target_ = 0.0, step_ = 0.0;

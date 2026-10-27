@@ -30,15 +30,20 @@ void Engine::Prepare(double sample_rate) {
 }
 
 void Engine::Reset() {
+  for (DelayLine& d : delay_) d.Reset();
+  bypass_state_ = params_.global.bypass;
+  bypass_mix_.Snap(bypass_state_ ? 1.0 : 0.0);
+  output_gain_.Snap(DbToGain(params_.global.output_gain_db));
+  idle_bypass_ = false;
+  ResetProcessing();
+}
+
+void Engine::ResetProcessing() {
   for (BandSlot& s : slots_) s.Reset();
   for (DetectorFilter& f : band_detectors_) f.Reset();
   for (DetectorFilter& f : solo_filters_) f.Reset();
   for (DynamicsGroup& g : groups_) g.Reset();
-  for (DelayLine& d : delay_) d.Reset();
   control_phase_ = 0;
-  bypass_state_ = params_.global.bypass;
-  bypass_mix_.Snap(bypass_state_ ? 1.0 : 0.0);
-  output_gain_.Snap(DbToGain(params_.global.output_gain_db));
   ApplyStaticDesigns(true);
   ControlUpdate(true);
 }
@@ -196,6 +201,23 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
                      float* const* out, int num_samples) {
   ScopedNoDenormals no_denormals;
   if (params_dirty_) ApplyStaticDesigns(false);
+
+  // Fully bypassed: pass the (delayed) input and skip everything else.
+  if (bypass_state_ && bypass_mix_.settled()) {
+    idle_bypass_ = true;
+    for (int i = 0; i < num_samples; ++i) {
+      for (int ch = 0; ch < kNumChannels; ++ch)
+        out[ch][i] =
+            static_cast<float>(delay_[ch].Process(in[ch][i], latency_));
+    }
+    return;
+  }
+  // Leaving bypass: the skipped state is stale, so restart it.  The bypass
+  // crossfade (already started) hides the filters warming up.
+  if (idle_bypass_) {
+    idle_bypass_ = false;
+    ResetProcessing();
+  }
 
   const GlobalParams& gp = params_.global;
   const bool split = gp.output_mode != OutputMode::kStereo;

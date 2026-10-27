@@ -125,6 +125,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
   * Per group (×4): `Attack, Hold, Release, Threshold, Rise, Knee, Mode, Alpha, RMS Window, Input, SC Filter, SC Hz, SC Q, Link, SC Listen`.
   * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
   * Parameters are listed most-used first. Host names are fixed, so the X/Y/Z slots are named after their most common meaning, `Freq`, `Gain` and `Q`; for other band types the lane shows that type's value and units (e.g. a Vowel band's `Freq` lane reads "AH 2.00"; see the table below). The plugin UI shows type-specific names.
+  * Global `Bypass` crossfades (4 ms) to the dry input (delayed by Lookahead). While fully bypassed the plugin only runs the lookahead delay; on release the filters and detectors restart from reset state under the crossfade. Use it rather than the host's bypass for click-free switching and automation: Logic switches third-party AUs in and out itself (it stops calling the plugin and never sets `kAudioUnitProperty_BypassEffect`), with fades that leave a hard edge. Hosts that do set the AU bypass property or the VST3 bypass parameter get the same 4 ms crossfade.
   * A band's `Bypass` keeps its settings and crossfades it out of the audio path (it still feeds an Internal Band-Sum detector and can be soloed); `Type = Off` means the slot is empty.
 * **X/Y/Z meaning by band type:**
 
