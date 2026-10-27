@@ -18,7 +18,7 @@ namespace eeq {
 class Engine {
  public:
   // Crossfade time for global bypass and FadeInFromDry().
-  static constexpr double kBypassFadeMs = 10.0;
+  static constexpr double kBypassFadeMs = 4.0;
 
   // Allocates.  Must be called before Process() and on sample-rate change.
   void Prepare(double sample_rate);
