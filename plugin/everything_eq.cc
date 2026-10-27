@@ -291,9 +291,22 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   }
 #endif
 
-  if (num_frames > static_cast<int>(scratch_[0].size())) {
-    // Hosts should not exceed the prepared block size, but don't crash if
-    // one does.
+  const int max_block = static_cast<int>(scratch_[0].size());
+  if (num_frames > max_block && max_block > 0) {
+    // Hosts should not exceed the prepared block size; if one does, process
+    // in pieces rather than dropping out.
+    std::array<iplug::sample*, 8> in_ptrs{}, out_ptrs{};
+    const int n_in = std::min<int>(MaxNChannels(iplug::ERoute::kInput), 8);
+    const int n_out = std::min<int>(MaxNChannels(iplug::ERoute::kOutput), 8);
+    for (int offset = 0; offset < num_frames; offset += max_block) {
+      for (int c = 0; c < n_in; ++c) in_ptrs[c] = inputs[c] + offset;
+      for (int c = 0; c < n_out; ++c) out_ptrs[c] = outputs[c] + offset;
+      ProcessBlock(in_ptrs.data(), out_ptrs.data(),
+                   std::min(max_block, num_frames - offset));
+    }
+    return;
+  }
+  if (num_frames > max_block) {  // Not prepared yet.
     for (int c = 0; c < NOutChansConnected(); ++c) {
       std::fill(outputs[c], outputs[c] + num_frames, 0.);
     }
