@@ -24,6 +24,7 @@ constexpr float kMargin = 8.f;
 constexpr float kRow = 24.f;
 constexpr float kGap = 4.f;
 constexpr float kBandLabelWidth = 58.f;
+constexpr int kBandRows = 4;
 
 int Int(double v) { return static_cast<int>(std::lround(v)); }
 
@@ -135,12 +136,12 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
   const ig::IRECT left = body.GetFromLeft(674.f);
   const ig::IRECT right = body.GetReducedFromLeft(682.f);
 
-  BuildBandEditor(left.GetFromTop(3 * kRow + 2 * kGap));
+  BuildBandEditor(left.GetFromTop(kBandRows * kRow + (kBandRows - 1) * kGap));
 
   // Graph with the input meter at its left edge and the output meter at its
   // right (ABOUT.md section 4).
-  const ig::IRECT graph_area =
-      left.GetReducedFromTop(3 * kRow + 3 * kGap).GetReducedFromBottom(56.f);
+  const ig::IRECT graph_area = left.GetReducedFromTop(kBandRows * (kRow + kGap))
+                                   .GetReducedFromBottom(56.f);
   constexpr float kMeterWidth = 32.f;
   input_meter_ = new LevelMeter(graph_area.GetFromLeft(kMeterWidth), "In", 2);
   output_meter_ =
@@ -178,7 +179,8 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
     graphics_.AttachControl(c);
     band_fields_.push_back({f, c});
   };
-  // Row 1: what the band is.  Row 2: dynamics.  Row 3: routing.
+  // Row 1: what the band is.  Row 2: dynamics (Dyn A).  Row 3: routing.
+  // Row 4: the second dynamics assignment (Dyn B).
   add(BandField::kType, cell(0, 0), "TYPE", ParamField::Style::kField, 40.f);
   add(BandField::kX, cell(0, 1), "FREQ");
   add(BandField::kY, cell(0, 2), "GAIN");
@@ -196,6 +198,10 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
       ParamField::Style::kToggle);
   add(BandField::kSolo, toggles.GetGridCell(1, 1, 2).GetHPadded(-2.f), "SOLO",
       ParamField::Style::kToggle);
+  add(BandField::kDynBRange, cell(3, 0), "DYN B RNG", ParamField::Style::kField,
+      64.f);
+  add(BandField::kDynBGroup, cell(3, 1), "DYN B GRP");
+  add(BandField::kDynBTarget, cell(3, 2), "DYN B TGT");
 }
 
 void Editor::BuildDynamicsPanel(const ig::IRECT& r) {
@@ -364,6 +370,12 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   const SlotMapping range_mapping = DynRangeMapping(target);
   const double range =
       SlotToPhysical(range_mapping, v[BandParamId(band, BandField::kDynRange)]);
+  const int group_b = Int(v[BandParamId(band, BandField::kDynBGroup)]);
+  const auto target_b =
+      static_cast<DynTarget>(Int(v[BandParamId(band, BandField::kDynBTarget)]));
+  const SlotMapping range_b_mapping = DynRangeMapping(target_b);
+  const double range_b = SlotToPhysical(
+      range_b_mapping, v[BandParamId(band, BandField::kDynBRange)]);
   // Follow the selected band's group when it is reassigned.
   if (group != shown_band_group_) {
     shown_band_group_ = group;
@@ -384,7 +396,8 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
         break;
       case BandField::kDynMakeup:
         // Only meaningful against a dynamic gain on a gain-type band.
-        enabled = enabled && target == DynTarget::kGain && HasDynMakeup(type);
+        enabled = enabled && HasDynMakeup(type) &&
+                  (target == DynTarget::kGain || target_b == DynTarget::kGain);
         break;
       case BandField::kOption: {
         std::vector<std::string> labels = OptionLabels(type);
@@ -412,11 +425,17 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
 
   // NOW: the band's current dynamic offset in its target's unit.
   std::string now;
-  if (range != 0.0 && !off) {
+  if ((range != 0.0 || range_b != 0.0) && !off) {
     const double scale = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
-    const double offset = model_.LiveControls()[group] * range * scale;
-    now = "B" + std::to_string(band + 1) + " NOW  " +
-          FormatSlotValue(range_mapping, offset);
+    const GroupControls live = model_.LiveControls();
+    now = "B" + std::to_string(band + 1) + " NOW";
+    if (range != 0.0) {
+      now += "  " + FormatSlotValue(range_mapping, live[group] * range * scale);
+    }
+    if (range_b != 0.0) {
+      now += "  B: " +
+             FormatSlotValue(range_b_mapping, live[group_b] * range_b * scale);
+    }
   }
   now_readout_->SetStr(now.c_str());
 }

@@ -68,6 +68,11 @@ struct BandParams {
   // 0..1: broadband gain opposing the band's dynamic gain (Dyn Target Gain
   // on HasDynMakeup types), so e.g. ducking a band boosts everything else.
   double dyn_makeup = 0.0;
+  // A second dynamics assignment ("Dyn B"), applied on top of the first,
+  // e.g. a vowel-tracking group on Morph plus a level group on Gain.
+  int dyn_b_group = -1;
+  DynTarget dyn_b_target = DynTarget::kGain;
+  double dyn_b_range = 0.0;
   Tap tap = Tap::kMain;
   Chan chan = Chan::kStereo;
   bool bypass = false;
@@ -109,6 +114,11 @@ struct EngineParams {
 };
 
 inline constexpr double kBpOffDb = -60.0;
+
+// Whether either of a band's dynamics assignments uses group g.
+inline bool SubscribesTo(const BandParams& bp, int g) {
+  return bp.dyn_group == g || bp.dyn_b_group == g;
+}
 
 // Bands whose dynamic gain can be offset by Dyn Makeup.
 inline bool HasDynMakeup(BandType t) {

@@ -1,0 +1,37 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Vocal Vowel Carve (SC)",
+  "params": {
+    "groups": [
+      {
+        "detect": "Vowel",
+        "input": "ExternalSC",
+        "attackMs": 15,
+        "releaseMs": 15
+      },
+      {
+        "input": "ExternalSC",
+        "thresholdDb": -40,
+        "kneeDb": 18,
+        "attackMs": 10,
+        "releaseMs": 200
+      }
+    ],
+    "bands": [
+      {
+        "type": "Vowel",
+        "x": 0.0,
+        "y": 0,
+        "z": 1.0,
+        "weighting": "Flat",
+        "dynGroup": 0,
+        "dynTarget": "Morph",
+        "dynRange": 4.0,
+        "dynBGroup": 1,
+        "dynBTarget": "Gain",
+        "dynBRange": -6.0
+      }
+    ]
+  }
+}

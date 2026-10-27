@@ -86,9 +86,12 @@ class EqGraph final : public iplug::igraphics::IControl {
     group_gain_db_.fill(0.f);
     for (const BandParams& bp : params_.bands) {
       // BuildEngineParams leaves a band without a Dyn Range unsubscribed.
-      if (bp.type == BandType::kOff || bp.bypass || bp.dyn_group < 0) continue;
-      any_dynamic_ = true;
-      group_active_[bp.dyn_group] = true;
+      if (bp.type == BandType::kOff || bp.bypass) continue;
+      for (int g : {bp.dyn_group, bp.dyn_b_group}) {
+        if (g < 0) continue;
+        any_dynamic_ = true;
+        group_active_[g] = true;
+      }
     }
     if (any_dynamic_) {
       GroupControls full;
@@ -267,7 +270,7 @@ class EqGraph final : public iplug::igraphics::IControl {
       std::fill(delta.begin(), delta.end(), 0.f);
       for (int b = 0; b < kNumBands; ++b) {
         const BandParams& bp = params_.bands[b];
-        if (bp.dyn_group != g || bp.bypass) continue;
+        if (!SubscribesTo(bp, g) || bp.bypass) continue;
         const std::vector<float>& live = live_curves_.band_db[b];
         const std::vector<float>& still = static_.band_db[b];
         if (live.size() != delta.size() || still.size() != delta.size()) {

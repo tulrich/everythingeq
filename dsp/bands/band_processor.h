@@ -66,12 +66,18 @@ struct ResolvedBand {
 BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
                               double sample_rate);
 
-// Applies a dynamics control value (D in [0, 1]) to a band's static
-// parameters per its Dyn Target (ABOUT.md section 3.B, step 5):
-// x/y/z + D * DynRange * global_scale.  Shared by the engine and the UI's
-// response curves.
-ResolvedBand ResolveBand(const BandParams& bp, double control,
-                         double global_scale);
+// Applies dynamics control values (D in [0, 1]) for the band's two
+// assignments (Dyn A: dyn_group/target/range; Dyn B: dyn_b_*) to its static
+// parameters (ABOUT.md section 3.B, step 5): x/y/z + D * DynRange *
+// global_scale per assignment.  Shared by the engine and the UI's response
+// curves.
+ResolvedBand ResolveBand(const BandParams& bp, double control_a,
+                         double control_b, double global_scale);
+// Dyn A only.
+inline ResolvedBand ResolveBand(const BandParams& bp, double control,
+                                double global_scale) {
+  return ResolveBand(bp, control, 0.0, global_scale);
+}
 
 // A stereo band slot.  Handles dirty-checking, coefficient ramps, and
 // crossfading when the band type changes.

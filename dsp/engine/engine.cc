@@ -88,17 +88,21 @@ void Engine::ControlUpdate(bool snap_now) {
   const double scale = params_.global.global_scale;
   for (int b = 0; b < kNumBands; ++b) {
     const BandParams& bp = params_.bands[b];
-    std::array<double, kNumChannels> dyn{};
-    if (bp.dyn_group >= 0 && bp.dyn_group < kNumGroups) {
-      const DynamicsGroup& g = groups_[bp.dyn_group];
+    const bool ms_chan = bp.chan == Chan::kMid || bp.chan == Chan::kSide;
+    const bool mono = params_.global.output_mode != OutputMode::kStereo;
+    auto controls = [&](int group) {
+      std::array<double, kNumChannels> dyn{};
+      if (group < 0 || group >= kNumGroups) return dyn;
+      const DynamicsGroup& g = groups_[group];
       dyn = {g.control(0), g.control(1)};
-      const bool ms_chan = bp.chan == Chan::kMid || bp.chan == Chan::kSide;
-      const bool mono = params_.global.output_mode != OutputMode::kStereo;
       if (ms_chan || mono) dyn[0] = dyn[1] = 0.5 * (dyn[0] + dyn[1]);
-    }
+      return dyn;
+    };
+    const std::array<double, kNumChannels> dyn_a = controls(bp.dyn_group);
+    const std::array<double, kNumChannels> dyn_b = controls(bp.dyn_b_group);
     std::array<ResolvedBand, kNumChannels> r{};
     for (int ch = 0; ch < kNumChannels; ++ch) {
-      r[ch] = ResolveBand(bp, dyn[ch], scale);
+      r[ch] = ResolveBand(bp, dyn_a[ch], dyn_b[ch], scale);
     }
     slots_[b].Update(EffectiveType(bp), r, snap_now);
   }
@@ -115,7 +119,7 @@ Engine::Frame Engine::DetectorInputFrame(int g, const Frame& dry,
       Frame sum{};
       for (int b = 0; b < kNumBands; ++b) {
         const BandParams& bp = params_.bands[b];
-        if (bp.dyn_group != g || bp.type == BandType::kOff) continue;
+        if (!SubscribesTo(bp, g) || bp.type == BandType::kOff) continue;
         for (int ch = 0; ch < kNumChannels; ++ch)
           sum[ch] += band_detectors_[b].Process(ch, dry[ch]);
       }

@@ -117,6 +117,13 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
     at(BandField::kDynMakeup) = Continuous(k + "dyn_makeup", n + "Dyn Makeup",
                                            g, 0.0, 100.0, 0.0, "%", false, 0.1);
+    at(BandField::kDynBGroup) =
+        Enum(k + "dyn_b_group", n + "Dyn B Group", g, DefaultDynGroup(b),
+             {"Group 1", "Group 2", "Group 3", "Group 4"});
+    at(BandField::kDynBTarget) = Enum(k + "dyn_b_target", n + "Dyn B Target", g,
+                                      0, {"Gain", "Freq", "Morph"});
+    at(BandField::kDynBRange) =
+        SlotParam(k + "dyn_b_range", n + "Dyn B Range", g);
     at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
     at(BandField::kTap) = Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"});
     at(BandField::kChan) =
@@ -240,6 +247,11 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     bp.dyn_range = SlotToPhysical(DynRangeMapping(bp.dyn_target),
                                   at(BandField::kDynRange));
     bp.dyn_makeup = at(BandField::kDynMakeup) / 100.0;
+    bp.dyn_b_target = static_cast<DynTarget>(Int(at(BandField::kDynBTarget)));
+    bp.dyn_b_range = SlotToPhysical(DynRangeMapping(bp.dyn_b_target),
+                                    at(BandField::kDynBRange));
+    bp.dyn_b_group =
+        bp.dyn_b_range != 0.0 ? Int(at(BandField::kDynBGroup)) : -1;
     // A band subscribes to its group only when it has a Dyn Range (D19).
     bp.dyn_group = bp.dyn_range != 0.0 ? Int(at(BandField::kDynGroup)) : -1;
     bp.tap = static_cast<Tap>(Int(at(BandField::kTap)));
@@ -297,6 +309,12 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
     set(BandField::kDynRange, SlotFromPhysical(DynRangeMapping(bp.dyn_target),
                                                dynamic ? bp.dyn_range : 0.0));
     set(BandField::kDynMakeup, bp.dyn_makeup * 100.0);
+    const bool dynamic_b = bp.dyn_b_group >= 0 && bp.dyn_b_group < kNumGroups;
+    set(BandField::kDynBGroup, dynamic_b ? bp.dyn_b_group : DefaultDynGroup(b));
+    set(BandField::kDynBTarget, static_cast<int>(bp.dyn_b_target));
+    set(BandField::kDynBRange,
+        SlotFromPhysical(DynRangeMapping(bp.dyn_b_target),
+                         dynamic_b ? bp.dyn_b_range : 0.0));
     set(BandField::kTap, static_cast<int>(bp.tap));
     set(BandField::kChan, static_cast<int>(bp.chan));
     set(BandField::kBypass, bp.bypass);
@@ -346,6 +364,9 @@ std::optional<SlotMapping> MappingForSlotParam(const ParamValues& values,
     case BandField::kDynRange:
       return DynRangeMapping(static_cast<DynTarget>(
           Int(values[BandParamId(band, BandField::kDynTarget)])));
+    case BandField::kDynBRange:
+      return DynRangeMapping(static_cast<DynTarget>(
+          Int(values[BandParamId(band, BandField::kDynBTarget)])));
     case BandField::kX:
       return SlotMappingFor(BandTypeOf(values, band), Slot::kX);
     case BandField::kY:

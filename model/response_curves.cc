@@ -13,9 +13,9 @@ float ToDb(std::complex<double> h) {
   return static_cast<float>(20.0 * std::log10(std::max(std::abs(h), 1e-9)));
 }
 
-double ControlFor(const BandParams& bp, const GroupControls& controls) {
-  if (bp.dyn_group < 0 || bp.dyn_group >= kNumGroups) return 0.0;
-  return std::clamp(controls[bp.dyn_group], 0.0, 1.0);
+double ControlFor(int group, const GroupControls& controls) {
+  if (group < 0 || group >= kNumGroups) return 0.0;
+  return std::clamp(controls[group], 0.0, 1.0);
 }
 
 }  // namespace
@@ -30,11 +30,11 @@ std::vector<double> DisplayFrequencies(int count, double lo, double hi) {
   return f;
 }
 
-std::complex<double> BandParamsResponse(const BandParams& bp, double control,
-                                        double global_scale, double freq_hz,
-                                        double sample_rate,
+std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
+                                        double control_b, double global_scale,
+                                        double freq_hz, double sample_rate,
                                         std::complex<double>* complement) {
-  const ResolvedBand rb = ResolveBand(bp, control, global_scale);
+  const ResolvedBand rb = ResolveBand(bp, control_a, control_b, global_scale);
   const BandDesign d = DesignResolvedBand(bp.type, rb, sample_rate);
   if (complement) *complement = BandComplementResponse(d, freq_hz, sample_rate);
   return BandResponse(d, freq_hz, sample_rate);
@@ -57,11 +57,12 @@ void ComputeChainResponse(const EngineParams& params,
       continue;
     }
     curve.resize(n);
-    const double control = ControlFor(bp, controls);
+    const double control_a = ControlFor(bp.dyn_group, controls);
+    const double control_b = ControlFor(bp.dyn_b_group, controls);
     for (size_t i = 0; i < n; ++i) {
       std::complex<double> comp;
-      const std::complex<double> h =
-          BandParamsResponse(bp, control, scale, freqs[i], sample_rate, &comp);
+      const std::complex<double> h = BandParamsResponse(
+          bp, control_a, control_b, scale, freqs[i], sample_rate, &comp);
       curve[i] = ToDb(h);
       if (bp.bypass) continue;
       // Tap semantics (ABOUT.md section 3.D).

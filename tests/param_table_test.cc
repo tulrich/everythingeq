@@ -53,7 +53,7 @@ ParamValues RandomValues(std::mt19937& rng) {
 TEST_CASE("Parameter IDs and keys are stable", "[params]") {
   const std::vector<ParamSpec>& table = ParamTable();
   REQUIRE(table.size() == static_cast<size_t>(kNumParams));
-  REQUIRE(kNumParams == 174);
+  REQUIRE(kNumParams == 198);
   // IDs are a host-visible contract: compare against the checked-in list.
   std::ifstream golden(EEQ_SOURCE_DIR "/tests/golden/param_keys.txt");
   REQUIRE(golden);
@@ -139,7 +139,7 @@ TEST_CASE("Host values survive engine params and back", "[params]") {
 
 TEST_CASE("Factory presets parse and are representable", "[params]") {
   const std::vector<Preset>& presets = FactoryPresets();
-  REQUIRE(presets.size() == 10);
+  REQUIRE(presets.size() == 11);
   REQUIRE(presets[0].name == "Init");
   REQUIRE(NearlyEqual(presets[0].params,
                       BuildEngineParams(DefaultParamValues(), false)));

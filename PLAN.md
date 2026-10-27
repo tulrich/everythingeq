@@ -196,4 +196,4 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 * Whether to expose `sigA` τ (D5) after listening tests.
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.
-* Tracking detectors (user idea, 2026-10-27): **done** as group `Detect` = Vowel / Pitch (`dsp/dynamics/tracker.h`, ABOUT.md 3.B). Next: a second Dyn assignment per band, so a vowel-following carve can also follow the vocal level (a level group on Gain alongside the vowel group on Morph); also useful for touch-wah with gain plus frequency.
+* Tracking detectors (user idea, 2026-10-27): **done** as group `Detect` = Vowel / Pitch (`dsp/dynamics/tracker.h`, ABOUT.md 3.B). A second Dyn assignment per band (Dyn B) is done too, in a fourth band-editor row for now (to be laid out properly in the UI polish pass); factory preset *Vocal Vowel Carve (SC)*.

@@ -7,6 +7,7 @@
 
 #include "dsp/bands/vowel.h"
 #include "dsp/dynamics/dynamics_group.h"
+#include "model/presets.h"
 #include "tests/test_util.h"
 
 namespace eeq::test {
@@ -128,6 +129,30 @@ TEST_CASE("A Vowel group's D glides to the tracked vowel", "[tracker]") {
   const DynamicsGroup::Meter m = g.TakeMeter();
   REQUIRE(m.voiced);
   REQUIRE(std::abs(m.tracked - 0.75) < 0.08);
+}
+
+TEST_CASE("Vocal Vowel Carve preset follows a sung vowel on the sidechain",
+          "[tracker]") {
+  const double fs = 48000.0;
+  const Preset* preset = nullptr;
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == "Vocal Vowel Carve (SC)") preset = &p;
+  }
+  REQUIRE(preset != nullptr);
+  Engine e;
+  e.SetParams(preset->params);
+  e.Prepare(fs);
+  const std::vector<double> vocal = SungVowel(3.0, 150.0, 0.4, fs);  // EH
+  const Stereo guitar = Noise(vocal.size(), 0.2, 4);
+  std::vector<float> sc(vocal.begin(), vocal.end());
+  Stereo out(vocal.size());
+  const float* in[2] = {guitar.l.data(), guitar.r.data()};
+  const float* side[2] = {sc.data(), sc.data()};
+  float* o[2] = {out.l.data(), out.r.data()};
+  e.Process(in, side, o, static_cast<int>(vocal.size()));
+  // Group 1 tracks the vowel (D = morph / 4), group 2 the vocal level.
+  REQUIRE(std::abs(e.group(0).control(0) * kVowelMorphMax - 3.0) < 0.35);
+  REQUIRE(e.group(1).control(0) > 0.9);
 }
 
 }  // namespace eeq::test

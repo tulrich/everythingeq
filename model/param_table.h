@@ -27,12 +27,15 @@ enum class BandField {
   kDynTarget,
   kDynRange,
   kDynMakeup,
+  kDynBGroup,
+  kDynBTarget,
+  kDynBRange,
   kOption,
   kTap,
   kChan,
   kSolo,
 };
-inline constexpr int kNumBandFields = 13;
+inline constexpr int kNumBandFields = 16;
 
 enum class GroupField {
   kAttack,

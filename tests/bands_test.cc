@@ -177,6 +177,30 @@ TEST_CASE("Dyn Makeup opposes the dynamic gain", "[bands]") {
   REQUIRE(ResolveBand(bp, 0.5, 1.0).makeup_db == 0.0);
 }
 
+TEST_CASE("Dyn A and Dyn B modulate together", "[bands]") {
+  // A vowel carve: Dyn A follows the vowel (Morph), Dyn B the level (Gain).
+  BandParams bp;
+  bp.type = BandType::kVowel;
+  bp.x = 0.0;
+  bp.y = 0.0;
+  bp.z = 1.0;
+  bp.dyn_target = DynTarget::kMorph;
+  bp.dyn_range = 4.0;
+  bp.dyn_b_target = DynTarget::kGain;
+  bp.dyn_b_range = -6.0;
+  bp.dyn_makeup = 0.5;
+  const ResolvedBand rb = ResolveBand(bp, 0.5, 0.25, 1.0);
+  REQUIRE(rb.x == 2.0);
+  REQUIRE(rb.y == -1.5);
+  REQUIRE(rb.makeup_db == 0.75);
+  // Both on Gain: the offsets add, and Makeup opposes the total.
+  bp.dyn_target = DynTarget::kGain;
+  bp.dyn_range = 2.0;
+  const ResolvedBand both = ResolveBand(bp, 1.0, 1.0, 1.0);
+  REQUIRE(both.y == -4.0);
+  REQUIRE(both.makeup_db == 2.0);
+}
+
 TEST_CASE("A ducked midrange Band Shelf with full makeup boosts the ends",
           "[bands]") {
   const double fs = 48000.0;

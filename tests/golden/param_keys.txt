@@ -9,6 +9,9 @@ band1.dyn_group
 band1.dyn_target
 band1.dyn_range
 band1.dyn_makeup
+band1.dyn_b_group
+band1.dyn_b_target
+band1.dyn_b_range
 band1.option
 band1.tap
 band1.chan
@@ -22,6 +25,9 @@ band2.dyn_group
 band2.dyn_target
 band2.dyn_range
 band2.dyn_makeup
+band2.dyn_b_group
+band2.dyn_b_target
+band2.dyn_b_range
 band2.option
 band2.tap
 band2.chan
@@ -35,6 +41,9 @@ band3.dyn_group
 band3.dyn_target
 band3.dyn_range
 band3.dyn_makeup
+band3.dyn_b_group
+band3.dyn_b_target
+band3.dyn_b_range
 band3.option
 band3.tap
 band3.chan
@@ -48,6 +57,9 @@ band4.dyn_group
 band4.dyn_target
 band4.dyn_range
 band4.dyn_makeup
+band4.dyn_b_group
+band4.dyn_b_target
+band4.dyn_b_range
 band4.option
 band4.tap
 band4.chan
@@ -61,6 +73,9 @@ band5.dyn_group
 band5.dyn_target
 band5.dyn_range
 band5.dyn_makeup
+band5.dyn_b_group
+band5.dyn_b_target
+band5.dyn_b_range
 band5.option
 band5.tap
 band5.chan
@@ -74,6 +89,9 @@ band6.dyn_group
 band6.dyn_target
 band6.dyn_range
 band6.dyn_makeup
+band6.dyn_b_group
+band6.dyn_b_target
+band6.dyn_b_range
 band6.option
 band6.tap
 band6.chan
@@ -87,6 +105,9 @@ band7.dyn_group
 band7.dyn_target
 band7.dyn_range
 band7.dyn_makeup
+band7.dyn_b_group
+band7.dyn_b_target
+band7.dyn_b_range
 band7.option
 band7.tap
 band7.chan
@@ -100,6 +121,9 @@ band8.dyn_group
 band8.dyn_target
 band8.dyn_range
 band8.dyn_makeup
+band8.dyn_b_group
+band8.dyn_b_target
+band8.dyn_b_range
 band8.option
 band8.tap
 band8.chan

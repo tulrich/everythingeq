@@ -30,11 +30,11 @@ struct ChainResponse {
   std::vector<float> total_db;
 };
 
-// Response of one band's main output (and its crossover complement) with a
-// dynamics control value applied.
-std::complex<double> BandParamsResponse(const BandParams& bp, double control,
-                                        double global_scale, double freq_hz,
-                                        double sample_rate,
+// Response of one band's main output (and its crossover complement) with
+// dynamics control values applied for its Dyn A and Dyn B assignments.
+std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
+                                        double control_b, double global_scale,
+                                        double freq_hz, double sample_rate,
                                         std::complex<double>* complement);
 
 void ComputeChainResponse(const EngineParams& params,

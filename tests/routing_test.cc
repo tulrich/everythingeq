@@ -291,6 +291,29 @@ TEST_CASE("FadeInFromDry starts dry and crossfades to wet", "[routing]") {
   REQUIRE(max_step <= max_input_step * 1.01);
 }
 
+TEST_CASE("Dyn B subscribes a band to its group's Band-Sum detector",
+          "[routing]") {
+  // A band subscribed only through Dyn B still feeds Internal Band-Sum.
+  const Stereo x = Sine(kLen, 1000.0, 0.5, kFs);
+  EngineParams p;
+  p.bands[0] = {BandType::kPeak, 1000.0, 0.0, 2.0};
+  p.bands[0].dyn_b_group = 2;
+  p.bands[0].dyn_b_range = -6.0;
+  p.groups[2].input = DetectorInput::kInternalBandSum;
+  p.groups[2].threshold_db = -40.0;
+  Engine e;
+  e.SetParams(p);
+  e.Prepare(kFs);
+  Run(e, x);
+  REQUIRE(e.group(2).control(0) > 0.9);
+  // The band ducked by Dyn B: the 1 kHz tone is about 6 dB down.
+  const Stereo y = Run(e, x);
+  double peak = 0.0;
+  for (size_t i = kLen / 2; i < kLen; ++i)
+    peak = std::max(peak, std::abs(double(y.l[i])));
+  REQUIRE(std::abs(20.0 * std::log10(peak / 0.5) + 6.0) < 0.3);
+}
+
 TEST_CASE("Solo auditions the band's detector filter", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 11);
   EngineParams p;

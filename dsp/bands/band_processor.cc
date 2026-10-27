@@ -37,30 +37,49 @@ bool HasFreq(BandType t) {
 
 }  // namespace
 
-ResolvedBand ResolveBand(const BandParams& bp, double control,
-                         double global_scale) {
-  ResolvedBand rb;
-  rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
-  const double mod = control * bp.dyn_range * global_scale;
-  if (mod == 0.0) return rb;
-  switch (bp.dyn_target) {
+namespace {
+
+// Adds one assignment's modulation; returns its gain change in dB.
+double ApplyModulation(BandType type, DynTarget target, double mod,
+                       ResolvedBand& rb) {
+  if (mod == 0.0) return 0.0;
+  switch (target) {
     case DynTarget::kGain:
-      if (HasGain(bp.type)) rb.y += mod;
-      if (HasDynMakeup(bp.type)) rb.makeup_db = -mod * bp.dyn_makeup;
+      if (HasGain(type)) {
+        rb.y += mod;
+        return mod;
+      }
       break;
     case DynTarget::kFreq:
-      if (HasFreq(bp.type)) {
+      if (HasFreq(type)) {
         rb.x *= std::exp2(mod);
-      } else if (bp.type == BandType::kVowel) {
+      } else if (type == BandType::kVowel) {
         rb.z *= std::exp2(mod);
       }
       break;
     case DynTarget::kMorph:
-      if (bp.type == BandType::kVowel) rb.x += mod;
-      if (bp.type == BandType::kBandShelf || bp.type == BandType::kTilt) {
+      if (type == BandType::kVowel) rb.x += mod;
+      if (type == BandType::kBandShelf || type == BandType::kTilt) {
         rb.z += mod;  // Width, octaves.
       }
       break;
+  }
+  return 0.0;
+}
+
+}  // namespace
+
+ResolvedBand ResolveBand(const BandParams& bp, double control_a,
+                         double control_b, double global_scale) {
+  ResolvedBand rb;
+  rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
+  const double gain_mod =
+      ApplyModulation(bp.type, bp.dyn_target,
+                      control_a * bp.dyn_range * global_scale, rb) +
+      ApplyModulation(bp.type, bp.dyn_b_target,
+                      control_b * bp.dyn_b_range * global_scale, rb);
+  if (gain_mod != 0.0 && HasDynMakeup(bp.type)) {
+    rb.makeup_db = -gain_mod * bp.dyn_makeup;
   }
   return rb;
 }
