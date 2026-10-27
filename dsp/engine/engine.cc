@@ -35,14 +35,14 @@ void Engine::Reset() {
   bypass_mix_.Snap(bypass_state_ ? 1.0 : 0.0);
   output_gain_.Snap(DbToGain(params_.global.output_gain_db));
   idle_bypass_ = false;
-  ResetProcessing();
+  for (DetectorFilter& f : band_detectors_) f.Reset();
+  for (DynamicsGroup& g : groups_) g.Reset();
+  ResetBands();
 }
 
-void Engine::ResetProcessing() {
+void Engine::ResetBands() {
   for (BandSlot& s : slots_) s.Reset();
-  for (DetectorFilter& f : band_detectors_) f.Reset();
   for (DetectorFilter& f : solo_filters_) f.Reset();
-  for (DynamicsGroup& g : groups_) g.Reset();
   control_phase_ = 0;
   ApplyStaticDesigns(true);
   ControlUpdate(true);
@@ -125,6 +125,14 @@ Engine::Frame Engine::DetectorInputFrame(int g, const Frame& dry,
   return dry;
 }
 
+// Detectors read the undelayed signals.
+void Engine::ProcessDetectors(const Frame& dry, const Frame& sc) {
+  for (int g = 0; g < kNumGroups; ++g) {
+    const Frame d = DetectorInputFrame(g, dry, sc);
+    groups_[g].Process(d[0], d[1]);
+  }
+}
+
 void Engine::ProcessChain(const Frame& chain_in, Frame& main, Frame& aux,
                           Frame& solo, bool& any_solo) {
   main = chain_in;
@@ -202,25 +210,32 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
   ScopedNoDenormals no_denormals;
   if (params_dirty_) ApplyStaticDesigns(false);
 
-  // Fully bypassed: pass the (delayed) input and skip everything else.
+  const GlobalParams& gp = params_.global;
+  const bool split = gp.output_mode != OutputMode::kStereo;
+
+  // Fully bypassed: pass the (delayed) input.  The detectors keep running so
+  // dynamics pick up where they are on release; the band chain is skipped.
   if (bypass_state_ && bypass_mix_.settled()) {
     idle_bypass_ = true;
     for (int i = 0; i < num_samples; ++i) {
+      const Frame x = {in[0][i], in[1][i]};
+      const Frame sc =
+          sidechain ? Frame{sidechain[0][i], sidechain[1][i]} : Frame{0.0, 0.0};
+      Frame dry = x;
+      if (split) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
+      ProcessDetectors(dry, sc);
       for (int ch = 0; ch < kNumChannels; ++ch)
-        out[ch][i] =
-            static_cast<float>(delay_[ch].Process(in[ch][i], latency_));
+        out[ch][i] = static_cast<float>(delay_[ch].Process(x[ch], latency_));
     }
     return;
   }
-  // Leaving bypass: the skipped state is stale, so restart it.  The bypass
-  // crossfade (already started) hides the filters warming up.
+  // Leaving bypass: the band chain's state is stale, so restart it.  The
+  // bypass crossfade (already started) hides the filters warming up.
   if (idle_bypass_) {
     idle_bypass_ = false;
-    ResetProcessing();
+    ResetBands();
   }
 
-  const GlobalParams& gp = params_.global;
-  const bool split = gp.output_mode != OutputMode::kStereo;
   int listen_group = -1;
   for (int g = 0; g < kNumGroups && listen_group < 0; ++g)
     if (params_.groups[g].sc_listen) listen_group = g;
@@ -235,11 +250,7 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
     Frame dry = x;
     if (split) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
 
-    // Detectors read the undelayed signals.
-    for (int g = 0; g < kNumGroups; ++g) {
-      const Frame d = DetectorInputFrame(g, dry, sc);
-      groups_[g].Process(d[0], d[1]);
-    }
+    ProcessDetectors(dry, sc);
 
     // Audio path is delayed by the lookahead.
     const Frame xd = {delay_[0].Process(x[0], latency_),

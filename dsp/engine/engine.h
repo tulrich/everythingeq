@@ -49,8 +49,11 @@ class Engine {
   using Frame = std::array<double, kNumChannels>;
 
   int BypassFadeSamples() const;
-  // Clears filter and detector state (not the lookahead delay).
-  void ResetProcessing();
+  // Clears the band chain's filter state and snaps its designs to the
+  // current detector state.
+  void ResetBands();
+  // Runs every group's detector on one frame of undelayed input.
+  void ProcessDetectors(const Frame& dry, const Frame& sc);
   void ControlUpdate(bool snap_now);
   void ApplyStaticDesigns(bool snap_now);
   Frame DetectorInputFrame(int g, const Frame& dry, const Frame& sc);
@@ -74,8 +77,8 @@ class Engine {
   LinearRamp bypass_mix_;
   LinearRamp output_gain_;
   bool bypass_state_ = false;
-  // Fully bypassed: only the delay line runs; the rest restarts from reset
-  // state when bypass is released.
+  // Fully bypassed: only the detectors and the delay line run; the band
+  // chain restarts from reset state when bypass is released.
   bool idle_bypass_ = false;
 };
 

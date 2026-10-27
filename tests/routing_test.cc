@@ -204,26 +204,38 @@ TEST_CASE("Global bypass passes the input through", "[routing]") {
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
 }
 
-TEST_CASE("Releasing bypass crossfades back to the processed signal",
+TEST_CASE("Bypass keeps the detectors running and crossfades back",
           "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 13);
   EngineParams p;
   p.bands[0] = {BandType::kPeak, 500.0, 12.0, 2.0};
+  p.bands[0].dyn_group = 0;
+  p.bands[0].dyn_range = -12.0;
+  p.groups[0].input = DetectorInput::kInternalBandSum;
+  p.groups[0].threshold_db = -30.0;
+  p.groups[0].release_ms = 1000.0;
   const Stereo wet = Render(p, x);
-  Engine e;
-  e.SetParams(p);
-  e.Prepare(kFs);
-  Stereo y(x.size());
+  Engine e, ref;
+  for (Engine* engine : {&e, &ref}) {
+    engine->SetParams(p);
+    engine->Prepare(kFs);
+  }
+  Stereo y(x.size()), y_ref(x.size());
   const size_t on = 4000, off = 8000;
   auto run = [&](size_t from, size_t to) {
     const float* in[2] = {x.l.data() + from, x.r.data() + from};
     float* out[2] = {y.l.data() + from, y.r.data() + from};
+    float* out_ref[2] = {y_ref.l.data() + from, y_ref.r.data() + from};
     e.Process(in, nullptr, out, static_cast<int>(to - from));
+    ref.Process(in, nullptr, out_ref, static_cast<int>(to - from));
   };
   run(0, on);
   p.global.bypass = true;
   e.SetParams(p);
   run(on, off);
+  // The detector ran through the bypass exactly as if it hadn't happened.
+  REQUIRE(e.group(0).control(0) > 0.1);
+  REQUIRE(std::abs(e.group(0).control(0) - ref.group(0).control(0)) < 1e-12);
   p.global.bypass = false;
   e.SetParams(p);
   run(off, kLen);
@@ -235,13 +247,14 @@ TEST_CASE("Releasing bypass crossfades back to the processed signal",
   for (size_t i = off - 10; i < off + fade; ++i) {
     max_step = std::max(max_step, std::abs(double(y.l[i]) - y.l[i - 1]));
     max_input_step =
-        std::max(max_input_step, std::abs(double(wet.l[i]) - wet.l[i - 1]));
+        std::max(max_input_step, std::abs(double(y_ref.l[i]) - y_ref.l[i - 1]));
   }
   REQUIRE(max_step <= max_input_step * 1.5);
   double err = 0.0;
   for (size_t i = off + 4800; i < kLen; ++i)
-    err = std::max(err, std::abs(double(y.l[i]) - wet.l[i]));
+    err = std::max(err, std::abs(double(y.l[i]) - y_ref.l[i]));
   REQUIRE(err < 1e-4);
+  REQUIRE(MaxAbsDiff(y_ref, wet) == 0.0);
 }
 
 TEST_CASE("FadeInFromDry starts dry and crossfades to wet", "[routing]") {
