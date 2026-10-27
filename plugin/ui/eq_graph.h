@@ -99,8 +99,8 @@ class EqGraph final : public iplug::igraphics::IControl {
     namespace ig = iplug::igraphics;
     g.FillRect(theme::kBackground, mRECT);
     DrawGrid(g);
+    if (freqs_.empty()) return;  // Not refreshed yet.
     DrawSpectrum(g);
-    if (freqs_.empty()) return;
 
     const int selected = model_.SelectedBand();
     for (int b = 0; b < kNumBands; ++b) {
