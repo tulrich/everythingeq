@@ -158,6 +158,14 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 7. Graph node rules from ABOUT.md §4 (F-M pinned at 1 kHz, Vowel drags Morph/Gain, no node for K-Weight).
 8. Global footer: Output Mode, Lookahead, Scale, Δ, Bypass, preset menu (factory + user, save/rename), Undo/Redo.
 9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.
+10. UI polish (user wish list, 2026-10-27; not started):
+    * Output Gain as a vertical slider beside the EQ graph, like Logic's stock EQ.
+    * 0.5 dB detents on most dB parameters (0.1 dB steps are too fine to land on), with slower mouse response on those so a specific detent is easy to dial in.
+    * Dials for most parameters.
+    * Icons for band types, and elsewhere where they help.
+    * Band ribbon: one click toggles a band on/off; Control-click (or click and hold) opens the type menu.
+    * EQ graph modifiers: Command-drag on a node adjusts Gain only; other modifiers adjust other band params (to be assigned).
+    * Band Shelf type (from Ableton): a plateau between two shelves (2 SVF cells). Proposed slots: X = center (geometric mean of the edges), Y = plateau gain, Z = width in octaves; transition slope (6/12 dB/oct) in Option, which becomes a generic per-type option field (today "Vowel Weighting"). Edge handles on the graph node, Lo/Hi readouts. Detector: HP at the low edge plus LP at the high edge.
 
 ## Phase 8 — Performance, QA & release
 1. **CPU budget:** worst case (8 bands × 4 cells, 4 groups, stereo, 48 kHz, 64-sample buffers) under 2% of one Apple M1 core. Profile and optimize (SIMD across stereo channels) only if the budget is missed.
