@@ -169,10 +169,10 @@ void Engine::ProcessChain(const Frame& chain_in, Frame& main, Frame& aux,
       const BandOutput o = slot.Process(ch, v[ch]);
       if (bp.tap == Tap::kMain) {
         new_main[ch] = o.y;
-      } else if (IsCrossoverType(type)) {
+      } else if (IsCrossover(type, bp.option)) {
         aux_add[ch] = o.y;
         new_main[ch] = o.comp;
-      } else if (IsFilterType(type)) {
+      } else if (IsFilter(type)) {
         aux_add[ch] = o.y;
         new_main[ch] = v[ch] - o.y;
       } else {

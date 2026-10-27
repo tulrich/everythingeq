@@ -15,12 +15,15 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"LowShelf", BandType::kLowShelf},
     {"HighShelf", BandType::kHighShelf},
     {"BandShelf", BandType::kBandShelf},
-    {"LP12", BandType::kLp12},
-    {"HP12", BandType::kHp12},
+    {"LP", BandType::kLp},
+    {"HP", BandType::kHp},
     {"Notch", BandType::kNotch},
     {"BP", BandType::kBp},
-    {"LP24_LR", BandType::kLp24Lr},
-    {"HP24_LR", BandType::kHp24Lr},
+    // Older names (before LP and HP took a Slope option).
+    {"LP12", BandType::kLp},
+    {"HP12", BandType::kHp},
+    {"LP24_LR", BandType::kLp},
+    {"HP24_LR", BandType::kHp},
     {"Tilt", BandType::kTilt},
     {"FletcherMunson", BandType::kFletcherMunson},
     {"Vowel", BandType::kVowel},
@@ -38,6 +41,8 @@ const std::pair<const char*, Chan> kChans[] = {{"Stereo", Chan::kStereo},
                                                {"Side", Chan::kSide}};
 const std::pair<const char*, VowelWeighting> kWeightings[] = {
     {"Natural", VowelWeighting::kNatural}, {"Flat", VowelWeighting::kFlat}};
+const std::pair<const char*, FilterSlope> kSlopes[] = {
+    {"12", FilterSlope::k12}, {"24", FilterSlope::k24}};
 const std::pair<const char*, DetectorInput> kInputs[] = {
     {"InternalDry", DetectorInput::kInternalDry},
     {"InternalBandSum", DetectorInput::kInternalBandSum},
@@ -126,12 +131,22 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
       const json& b = j["bands"][i];
       BandParams& bp = p.bands[i];
       ReadEnum(b, "type", kBandTypes, bp.type);
+      const std::string type_name = b.value("type", "");
+      if (type_name == "LP24_LR" || type_name == "HP24_LR") {
+        bp.option = static_cast<int>(FilterSlope::k24);
+      }
       ReadEnum(b, "dynTarget", kDynTargets, bp.dyn_target);
       ReadEnum(b, "tap", kTaps, bp.tap);
       ReadEnum(b, "chan", kChans, bp.chan);
-      auto weighting = static_cast<VowelWeighting>(bp.option);
-      ReadEnum(b, "weighting", kWeightings, weighting);
-      bp.option = static_cast<int>(weighting);
+      if (bp.type == BandType::kVowel) {
+        auto weighting = static_cast<VowelWeighting>(bp.option);
+        ReadEnum(b, "weighting", kWeightings, weighting);
+        bp.option = static_cast<int>(weighting);
+      } else if (bp.type == BandType::kLp || bp.type == BandType::kHp) {
+        auto slope = static_cast<FilterSlope>(bp.option);
+        ReadEnum(b, "slope", kSlopes, slope);
+        bp.option = static_cast<int>(slope);
+      }
       Read(b, "x", bp.x);
       Read(b, "y", bp.y);
       Read(b, "z", bp.z);
@@ -197,9 +212,14 @@ json EngineParamsToJson(const EngineParams& p) {
       j["x"] = bp.x;
       j["y"] = bp.y;
       j["z"] = bp.z;
-      WriteEnum(j, "weighting", kWeightings,
-                static_cast<VowelWeighting>(bp.option),
-                static_cast<VowelWeighting>(bd.option));
+      if (bp.type == BandType::kVowel) {
+        WriteEnum(j, "weighting", kWeightings,
+                  static_cast<VowelWeighting>(bp.option),
+                  static_cast<VowelWeighting>(bd.option));
+      } else if (bp.type == BandType::kLp || bp.type == BandType::kHp) {
+        WriteEnum(j, "slope", kSlopes, static_cast<FilterSlope>(bp.option),
+                  static_cast<FilterSlope>(bd.option));
+      }
       Write(j, "dynGroup", bp.dyn_group, bd.dyn_group);
       WriteEnum(j, "dynTarget", kDynTargets, bp.dyn_target, bd.dyn_target);
       Write(j, "dynRange", bp.dyn_range, bd.dyn_range);

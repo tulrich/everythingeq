@@ -15,11 +15,11 @@ namespace {
 constexpr double kFs = 48000.0;
 
 EngineParams RandomTappedChain(std::mt19937& rng) {
-  const BandType types[] = {
-      BandType::kPeak,   BandType::kLowShelf, BandType::kHighShelf,
-      BandType::kLp12,   BandType::kHp12,     BandType::kNotch,
-      BandType::kBp,     BandType::kTilt,     BandType::kVowel,
-      BandType::kLp24Lr, BandType::kHp24Lr,   BandType::kFletcherMunson};
+  const BandType types[] = {BandType::kPeak,      BandType::kLowShelf,
+                            BandType::kHighShelf, BandType::kLp,
+                            BandType::kHp,        BandType::kNotch,
+                            BandType::kBp,        BandType::kTilt,
+                            BandType::kVowel,     BandType::kFletcherMunson};
   std::uniform_int_distribution<int> type(0, std::size(types) - 1);
   std::uniform_real_distribution<double> oct(1.0, 9.5), gain(-12.0, 12.0),
       q(0.4, 4.0), morph(0.0, 4.0), unit(0.0, 1.0);
@@ -31,6 +31,8 @@ EngineParams RandomTappedChain(std::mt19937& rng) {
         bp.type == BandType::kVowel ? morph(rng) : 20.0 * std::exp2(oct(rng));
     bp.y = gain(rng);
     bp.z = bp.type == BandType::kVowel ? 1.0 : q(rng);
+    if (bp.type == BandType::kLp || bp.type == BandType::kHp)
+      bp.option = unit(rng) < 0.5 ? 0 : kSlope24;
     bp.tap = unit(rng) < 0.3 ? Tap::kAux : Tap::kMain;
     bp.bypass = unit(rng) < 0.1;
   }

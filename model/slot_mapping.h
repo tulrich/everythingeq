@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "dsp/engine/params.h"
 
@@ -32,6 +33,11 @@ inline constexpr double kSlotDefault = 0.5;
 
 // Mapping for a slot of a band type, or nullopt if the type doesn't use it.
 std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot);
+
+// The per-band Option's name and choices for a band type (kNumOptions or
+// fewer), or "" and none if the type has no option.
+const char* OptionName(BandType type);
+std::vector<std::string> OptionLabels(BandType type);
 
 // Mapping for DynRange under a Dyn Target.
 SlotMapping DynRangeMapping(DynTarget target);

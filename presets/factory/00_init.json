@@ -5,7 +5,7 @@
   "params": {
     "bands": [
       {
-        "type": "HP12",
+        "type": "HP",
         "x": 30,
         "bypass": true
       },
@@ -35,7 +35,7 @@
         "x": 4000
       },
       {
-        "type": "LP12",
+        "type": "LP",
         "x": 8000,
         "bypass": true
       }

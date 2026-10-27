@@ -43,8 +43,8 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kFreq;
       if (slot == Slot::kY) return kGain;
       return kWidth;
-    case BandType::kLp12:
-    case BandType::kHp12:
+    case BandType::kLp:
+    case BandType::kHp:
     case BandType::kNotch:
       if (slot == Slot::kX) return kFreq;
       if (slot == Slot::kZ) return kQ;
@@ -53,10 +53,6 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kFreq;
       if (slot == Slot::kY) return kBpGain;
       return kQ;
-    case BandType::kLp24Lr:
-    case BandType::kHp24Lr:
-      if (slot == Slot::kX) return kFreq;
-      return std::nullopt;
     case BandType::kTilt:
       if (slot == Slot::kX) return kPivot;
       if (slot == Slot::kY) return kTilt;
@@ -73,6 +69,30 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       return std::nullopt;
   }
   return std::nullopt;
+}
+
+const char* OptionName(BandType type) {
+  switch (type) {
+    case BandType::kVowel:
+      return "Weighting";
+    case BandType::kLp:
+    case BandType::kHp:
+      return "Slope";
+    default:
+      return "";
+  }
+}
+
+std::vector<std::string> OptionLabels(BandType type) {
+  switch (type) {
+    case BandType::kVowel:
+      return {"Natural", "Flat"};  // VowelWeighting
+    case BandType::kLp:
+    case BandType::kHp:
+      return {"12 dB/oct", "24 dB/oct"};  // FilterSlope
+    default:
+      return {};
+  }
 }
 
 SlotMapping DynRangeMapping(DynTarget target) {

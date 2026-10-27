@@ -144,7 +144,7 @@ TEST_CASE("Silence after noise decays without denormals", "[svf]") {
   Engine e;
   EngineParams p;
   p.bands[0] = {BandType::kPeak, 40.0, 12.0, 8.0};
-  p.bands[1] = {BandType::kLp24Lr, 100.0};
+  p.bands[1] = {BandType::kLp, 100.0, 0.0, kButterworthQ, kSlope24};
   p.bands[2] = {BandType::kVowel, 2.0, 9.0, 1.0};
   e.SetParams(p);
   e.Prepare(fs);

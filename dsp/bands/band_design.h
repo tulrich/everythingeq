@@ -23,7 +23,7 @@ struct BandDesign {
   int num_cells = 0;
   std::array<SvfCoeffs, 4> cells{};
   double post_gain = 1.0;
-  bool crossover_high = false;  // HP24_LR: y is the high output
+  bool crossover_high = false;  // HP at 24 dB/oct: y is the high output
 };
 
 // Legal parameter ranges (ABOUT.md section 3.E).

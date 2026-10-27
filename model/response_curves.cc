@@ -68,10 +68,10 @@ void ComputeChainResponse(const EngineParams& params,
       // Tap semantics (ABOUT.md section 3.D).
       if (bp.tap == Tap::kMain) {
         main[i] *= h;
-      } else if (IsCrossoverType(bp.type)) {
+      } else if (IsCrossover(bp.type, bp.option)) {
         aux[i] += main[i] * h;
         main[i] *= comp;
-      } else if (IsFilterType(bp.type)) {
+      } else if (IsFilter(bp.type)) {
         aux[i] += main[i] * h;
         main[i] *= 1.0 - h;
       } else {

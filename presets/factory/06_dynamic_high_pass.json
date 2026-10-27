@@ -16,7 +16,7 @@
     ],
     "bands": [
       {
-        "type": "HP12",
+        "type": "HP",
         "x": 30,
         "z": 0.7071,
         "dynGroup": 0,

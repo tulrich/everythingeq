@@ -79,8 +79,10 @@ TEST_CASE("Morph target changes a Band Shelf's width", "[bands]") {
 TEST_CASE("LR24 crossover sums to a flat all-pass", "[bands]") {
   const double fs = GENERATE(44100.0, 48000.0, 96000.0);
   const double fc = GENERATE(80.0, 1000.0, 8000.0);
-  const BandDesign lp = DesignBand(BandType::kLp24Lr, fc, 0, 0, 0, fs);
-  const BandDesign hp = DesignBand(BandType::kHp24Lr, fc, 0, 0, 0, fs);
+  const BandDesign lp =
+      DesignBand(BandType::kLp, fc, 0, kButterworthQ, kSlope24, fs);
+  const BandDesign hp =
+      DesignBand(BandType::kHp, fc, 0, kButterworthQ, kSlope24, fs);
   SvfCoeffs ap = DesignSvf(SvfShape::kAllPass, fc, kButterworthQ, 0.0, fs);
   for (double f : LogFreqs(10.0, 0.49 * fs, 60)) {
     CAPTURE(fs, fc, f);
@@ -98,7 +100,8 @@ TEST_CASE("LR24 crossover sums to a flat all-pass", "[bands]") {
 
 TEST_CASE("LR24 processor output matches its design", "[bands]") {
   const double fs = 48000.0;
-  const BandDesign d = DesignBand(BandType::kLp24Lr, 500.0, 0, 0, 0, fs);
+  const BandDesign d =
+      DesignBand(BandType::kLp, 500.0, 0, kButterworthQ, kSlope24, fs);
   BandProcessor p;
   p.Apply(d, 1);
   std::vector<double> lo(24000), hi(24000);

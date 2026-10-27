@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <optional>
 
 #include "model/slot_mapping.h"
@@ -49,6 +50,19 @@ ParamSpec Bool(std::string key, std::string name, std::string group, bool def) {
   return s;
 }
 
+// The per-band Option: its labels depend on the band type (OptionLabels).
+ParamSpec OptionParam(std::string key, std::string name, std::string group) {
+  ParamSpec s;
+  s.key = std::move(key);
+  s.name = std::move(name);
+  s.group = std::move(group);
+  s.kind = ParamKind::kOption;
+  s.min = 0.0;
+  s.max = kNumOptions - 1;
+  s.step = 1.0;
+  return s;
+}
+
 ParamSpec SlotParam(std::string key, std::string name, std::string group) {
   ParamSpec s;
   s.key = std::move(key);
@@ -69,10 +83,10 @@ struct DefaultBand {
   bool bypass;
 };
 constexpr DefaultBand kDefaultBands[kNumBands] = {
-    {BandType::kHp12, 30.0, true},         {BandType::kLowShelf, 100.0, false},
+    {BandType::kHp, 30.0, true},           {BandType::kLowShelf, 100.0, false},
     {BandType::kPeak, 150.0, false},       {BandType::kPeak, 500.0, false},
     {BandType::kBandShelf, 1000.0, false}, {BandType::kPeak, 2000.0, false},
-    {BandType::kHighShelf, 4000.0, false}, {BandType::kLp12, 8000.0, true},
+    {BandType::kHighShelf, 4000.0, false}, {BandType::kLp, 8000.0, true},
 };
 
 std::vector<ParamSpec> MakeTable() {
@@ -86,11 +100,10 @@ std::vector<ParamSpec> MakeTable() {
     auto at = [&](BandField f) -> ParamSpec& { return t[BandParamId(b, f)]; };
     const DefaultBand& d = kDefaultBands[b];
     at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, d.bypass);
-    at(BandField::kType) =
-        Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
-             {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP12",
-              "HP12", "Notch", "BP", "LP24 LR", "HP24 LR", "Tilt",
-              "Fletcher-Munson", "Vowel", "K-Weight"});
+    at(BandField::kType) = Enum(
+        k + "type", n + "Type", g, static_cast<int>(d.type),
+        {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP", "HP",
+         "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel", "K-Weight"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
@@ -102,8 +115,7 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kDynTarget) = Enum(k + "dyn_target", n + "Dyn Target", g, 0,
                                      {"Gain", "Freq", "Morph"});
     at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
-    at(BandField::kOption) =
-        Enum(k + "option", n + "Vowel Weighting", g, 0, {"Natural", "Flat"});
+    at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
     at(BandField::kTap) = Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"});
     at(BandField::kChan) =
         Enum(k + "chan", n + "Chan", g, 0, {"Stereo", "L", "R", "Mid", "Side"});
@@ -202,7 +214,8 @@ double SanitizeParamValue(int id, double value) {
   const ParamSpec& s = ParamTable()[id];
   if (!std::isfinite(value)) return s.default_value;
   value = std::clamp(value, s.min, s.max);
-  if (s.kind == ParamKind::kEnum || s.kind == ParamKind::kBool) {
+  if (s.kind == ParamKind::kEnum || s.kind == ParamKind::kBool ||
+      s.kind == ParamKind::kOption) {
     value = std::round(value);
   }
   return value;
@@ -349,6 +362,13 @@ std::string FormatParamValue(const ParamValues& values, int id, double value) {
       std::snprintf(buf, sizeof(buf), s.unit.empty() ? "%.2f" : "%.1f %s",
                     value, s.unit.c_str());
       return buf;
+    case ParamKind::kOption: {
+      const std::vector<std::string> labels =
+          OptionLabels(BandTypeOf(values, id / kNumBandFields));
+      if (labels.empty()) return "-";
+      return labels[std::clamp(Int(value), 0,
+                               static_cast<int>(labels.size()) - 1)];
+    }
     case ParamKind::kSlot:
       break;
   }
@@ -359,6 +379,24 @@ std::string FormatParamValue(const ParamValues& values, int id, double value) {
 
 std::optional<double> ParseSlotText(const ParamValues& values, int id,
                                     const std::string& text) {
+  if (ParamTable()[id].kind == ParamKind::kOption) {
+    const std::vector<std::string> labels =
+        OptionLabels(BandTypeOf(values, id / kNumBandFields));
+    for (size_t i = 0; i < labels.size(); ++i) {
+      if (labels[i] == text) return static_cast<double>(i);
+    }
+    // A bare number: an index ("1") or a slope ("24").
+    char* end = nullptr;
+    const double v = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || labels.empty()) return std::nullopt;
+    for (size_t i = 0; i < labels.size(); ++i) {
+      if (std::strtod(labels[i].c_str(), nullptr) == v) {
+        return static_cast<double>(i);
+      }
+    }
+    return std::clamp(std::round(v), 0.0,
+                      static_cast<double>(labels.size() - 1));
+  }
   const std::optional<SlotMapping> m = MappingForSlotParam(values, id);
   if (!m) return std::nullopt;
   const std::optional<double> physical = ParseSlotValue(*m, text);

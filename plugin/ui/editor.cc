@@ -184,7 +184,7 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
   graphics_.AttachControl(now_readout_);
   add(BandField::kTap, cell(2, 0), "TAP", ParamField::Style::kField, 40.f);
   add(BandField::kChan, cell(2, 1), "CHAN");
-  add(BandField::kOption, cell(2, 2), "WEIGHT");
+  add(BandField::kOption, cell(2, 2), "OPTION");
   const ig::IRECT toggles = cell(2, 3);
   add(BandField::kBypass, toggles.GetGridCell(0, 1, 2).GetHPadded(-2.f), "BYP",
       ParamField::Style::kToggle);
@@ -366,9 +366,14 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
       case BandField::kZ:
         m = SlotMappingFor(type, Slot::kZ);
         break;
-      case BandField::kOption:
-        enabled = type == BandType::kVowel;
+      case BandField::kOption: {
+        std::vector<std::string> labels = OptionLabels(type);
+        enabled = enabled && !labels.empty();
+        f.control->SetLabel(labels.empty() ? "OPTION"
+                                           : Upper(OptionName(type)));
+        f.control->SetMenuLabels(std::move(labels));
         break;
+      }
       default:
         break;
     }

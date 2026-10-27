@@ -116,12 +116,12 @@ TEST_CASE("Default host values give the default band layout", "[params]") {
   // Only the bands differ from the engine's defaults.
   REQUIRE(j.size() == 1);
   REQUIRE(j["bands"].size() == kNumBands);
-  REQUIRE(p.bands[0].type == BandType::kHp12);
+  REQUIRE(p.bands[0].type == BandType::kHp);
   REQUIRE(p.bands[0].bypass);
   REQUIRE(std::abs(p.bands[0].x - 30.0) < 1e-6);
   REQUIRE(p.bands[3].type == BandType::kPeak);
   REQUIRE(std::abs(p.bands[3].x - 500.0) < 1e-6);
-  REQUIRE(p.bands[7].type == BandType::kLp12);
+  REQUIRE(p.bands[7].type == BandType::kLp);
   REQUIRE(p.bands[7].bypass);
   for (int b = 1; b < kNumBands - 1; ++b) REQUIRE_FALSE(p.bands[b].bypass);
 }
@@ -203,6 +203,22 @@ TEST_CASE("Display text follows the band type", "[params]") {
   v[BandParamId(0, BandField::kDynTarget)] = static_cast<int>(DynTarget::kFreq);
   REQUIRE(FormatParamValue(v, BandParamId(0, BandField::kDynRange), 0.75) ==
           "+4.0 oct");
+}
+
+TEST_CASE("Option text follows the band type", "[params]") {
+  ParamValues v = DefaultParamValues();
+  const int type = BandParamId(0, BandField::kType);
+  const int option = BandParamId(0, BandField::kOption);
+  v[type] = static_cast<int>(BandType::kLp);
+  REQUIRE(FormatParamValue(v, option, 1.0) == "24 dB/oct");
+  REQUIRE(ParseSlotText(v, option, "12 dB/oct") == 0.0);
+  REQUIRE(ParseSlotText(v, option, "24") == 1.0);
+  v[type] = static_cast<int>(BandType::kVowel);
+  REQUIRE(FormatParamValue(v, option, 1.0) == "Flat");
+  REQUIRE(ParseSlotText(v, option, "Natural") == 0.0);
+  v[type] = static_cast<int>(BandType::kPeak);
+  REQUIRE(FormatParamValue(v, option, 1.0) == "-");
+  REQUIRE_FALSE(ParseSlotText(v, option, "1").has_value());
 }
 
 TEST_CASE("Slot display text parses back consistently", "[params]") {

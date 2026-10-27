@@ -22,12 +22,18 @@ Stereo Render(const EngineParams& p, const Stereo& x) {
 
 // Random static chain of gain-type and filter-type bands.
 EngineParams RandomChain(std::mt19937& rng) {
-  const BandType types[] = {BandType::kPeak,           BandType::kLowShelf,
-                            BandType::kBandShelf,      BandType::kHighShelf,
-                            BandType::kLp12,           BandType::kHp12,
-                            BandType::kNotch,          BandType::kBp,
-                            BandType::kTilt,           BandType::kVowel,
-                            BandType::kFletcherMunson, BandType::kKWeight};
+  const BandType types[] = {BandType::kPeak,
+                            BandType::kLowShelf,
+                            BandType::kBandShelf,
+                            BandType::kHighShelf,
+                            BandType::kLp,
+                            BandType::kHp,
+                            BandType::kNotch,
+                            BandType::kBp,
+                            BandType::kTilt,
+                            BandType::kVowel,
+                            BandType::kFletcherMunson,
+                            BandType::kKWeight};
   std::uniform_int_distribution<int> type(0, std::size(types) - 1);
   std::uniform_real_distribution<double> oct(0.0, 10.0), gain(-12.0, 12.0),
       q(0.3, 6.0), morph(0.0, 4.0);
@@ -60,7 +66,7 @@ TEST_CASE("All bands off or bypassed is bit-exact identity", "[routing]") {
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
   p.bands[2] = {BandType::kPeak, 1000.0, 9.0, 1.0};
   p.bands[2].bypass = true;
-  p.bands[5] = {BandType::kLp24Lr, 300.0};
+  p.bands[5] = {BandType::kLp, 300.0, 0.0, kButterworthQ, kSlope24};
   p.bands[5].bypass = true;
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
 }
@@ -71,7 +77,7 @@ TEST_CASE("Delta tap on the last band recombines to the untapped chain",
   const Stereo x = Noise(kLen, 0.5, 4);
   EngineParams p = RandomChain(rng);
   const int last = LastActiveBand(p);
-  if (IsFilterType(p.bands[last].type)) p.bands[last].type = BandType::kPeak;
+  if (IsFilter(p.bands[last].type)) p.bands[last].type = BandType::kPeak;
   const Stereo untapped = Render(p, x);
   p.bands[last].tap = Tap::kAux;
   REQUIRE(MaxAbsDiff(Render(p, x), untapped) < 1e-5);
@@ -83,7 +89,7 @@ TEST_CASE("Split tap on the last band recombines to the chain without it",
   const Stereo x = Noise(kLen, 0.5, 5);
   EngineParams p = RandomChain(rng);
   const int b = LastActiveBand(p);
-  const BandType filters[] = {BandType::kLp12, BandType::kHp12, BandType::kBp,
+  const BandType filters[] = {BandType::kLp, BandType::kHp, BandType::kBp,
                               BandType::kNotch};
   p.bands[b].type = filters[rng() % 4];
   p.bands[b].tap = Tap::kAux;
@@ -98,7 +104,7 @@ TEST_CASE("Mid-chain taps bypass the downstream bands for Aux only",
   // downstream band and y the tapped filter output.
   const Stereo x = Noise(kLen, 0.5, 15);
   EngineParams p;
-  p.bands[0] = {BandType::kLp12, 400.0, 0.0, 0.7071};
+  p.bands[0] = {BandType::kLp, 400.0, 0.0, 0.7071};
   p.bands[0].tap = Tap::kAux;
   p.bands[1] = {BandType::kHighShelf, 2000.0, 6.0, 0.7071};
   const Stereo out = Render(p, x);
@@ -116,7 +122,7 @@ TEST_CASE("Mid-chain taps bypass the downstream bands for Aux only",
 TEST_CASE("LR tap recombines to the LR all-pass", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 6);
   EngineParams p;
-  p.bands[0] = {BandType::kHp24Lr, 150.0};
+  p.bands[0] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
   p.bands[0].tap = Tap::kAux;
   const Stereo y = Render(p, x);
   SvfCell ap[2];
@@ -135,7 +141,7 @@ TEST_CASE("Split modes: L/R carries Main/Aux and M/S encodes them",
   const Stereo x = Noise(kLen, 0.5, 7);
   EngineParams p;
   p.bands[0] = {BandType::kPeak, 2000.0, 6.0, 1.0};
-  p.bands[1] = {BandType::kHp24Lr, 150.0};
+  p.bands[1] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
   p.bands[1].tap = Tap::kAux;
   p.bands[2] = {BandType::kLowShelf, 80.0, 4.0, 0.7071};
 

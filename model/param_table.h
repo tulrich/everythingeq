@@ -86,7 +86,8 @@ enum class ParamKind {
   kContinuous,  // Plain value in [min, max].
   kEnum,        // Integer index into enum_labels.
   kBool,
-  kSlot,  // Normalized [0, 1]; meaning depends on the band type.
+  kSlot,    // Normalized [0, 1]; meaning depends on the band type.
+  kOption,  // Integer 0..kNumOptions-1; labels depend on the band type.
 };
 
 struct ParamSpec {
@@ -127,8 +128,8 @@ ParamValues ValuesFromEngineParams(const EngineParams& params);
 // Display text for a parameter value, using the current band type for slots.
 std::string FormatParamValue(const ParamValues& values, int id, double value);
 
-// Inverse of FormatParamValue for slot parameters: returns the normalized
-// value, or nullopt if the text can't be parsed (or the slot is unused).
+// Inverse of FormatParamValue for slot and option parameters: returns the
+// host value, or nullopt if the text can't be parsed (or the slot is unused).
 std::optional<double> ParseSlotText(const ParamValues& values, int id,
                                     const std::string& text);
 

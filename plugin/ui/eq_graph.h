@@ -201,7 +201,8 @@ class EqGraph final : public iplug::igraphics::IControl {
       const SlotMapping q = *SlotMappingFor(bp.type, Slot::kZ);
       model_.SetEdit(
           BandParamId(drag_band_, BandField::kZ),
-          SlotFromPhysical(q, std::pow(10.0, YToDb(drag_y_) / 20.0)));
+          SlotFromPhysical(
+              q, std::pow(10.0, YToDb(drag_y_) / QDbScale(drag_band_))));
     } else if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
       if (std::string(m->unit) == "dB") {
         model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_)));
@@ -301,10 +302,16 @@ class EqGraph final : public iplug::igraphics::IControl {
     return (mRECT.MH() - y) / (0.5 * mRECT.H()) * kRangeDb;
   }
 
-  // LP12 and HP12 nodes drag Q vertically (as in Logic's Channel EQ): the
-  // node sits at the curve's level at the cutoff, which is Q in dB.
+  // LP and HP nodes drag Q vertically (as in Logic's Channel EQ): the node
+  // sits at the curve's level at the cutoff, which is Q in dB per cell (two
+  // cells at 24 dB/oct).
   static bool DragsQ(BandType type) {
-    return type == BandType::kLp12 || type == BandType::kHp12;
+    return type == BandType::kLp || type == BandType::kHp;
+  }
+  double QDbScale(int band) const {
+    return IsCrossover(params_.bands[band].type, params_.bands[band].option)
+               ? 40.0
+               : 20.0;
   }
 
   std::vector<int> DragParams(int band) const {
@@ -406,7 +413,7 @@ class EqGraph final : public iplug::igraphics::IControl {
         y = mRECT.B - static_cast<float>(values_[y_id]) * mRECT.H();
       }
     } else if (DragsQ(bp.type)) {
-      y = DbToY(20.0 * std::log10(bp.z));
+      y = DbToY(QDbScale(band) * std::log10(bp.z));
     } else {
       // Filters: sit on the band's own curve at the cutoff.
       const std::vector<float>& c = static_.band_db[band];

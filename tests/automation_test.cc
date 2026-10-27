@@ -41,9 +41,10 @@ ParamValues BaseValues() {
   SetBand(v, 2, BandType::kTilt, 0.5, 0.55, 0.5);
   SetBand(v, 3, BandType::kFletcherMunson, 0.5, 0.6, 0.5);
   SetBand(v, 4, BandType::kLowShelf, 0.4, 0.6, 0.5);
-  SetBand(v, 5, BandType::kHp12, 0.2, 0.5, 0.5);
+  SetBand(v, 5, BandType::kHp, 0.2, 0.5, 0.5);
   SetBand(v, 6, BandType::kBp, 0.5, 0.5, 0.5);
-  SetBand(v, 7, BandType::kLp24Lr, 0.9, 0.5, 0.5);
+  SetBand(v, 7, BandType::kLp, 0.9, 0.5, 0.5);
+  v[BandParamId(7, BandField::kOption)] = kSlope24;
   // Dynamic bands on two groups.
   v[BandParamId(0, BandField::kDynGroup)] = 0;
   v[BandParamId(0, BandField::kDynRange)] = 0.55;

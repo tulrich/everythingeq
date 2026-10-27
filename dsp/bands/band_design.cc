@@ -92,12 +92,26 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
           {DesignSvf(SvfShape::kHighShelf, lo, kButterworthQ, g, fs),
            DesignSvf(SvfShape::kHighShelf, hi, kButterworthQ, -g, fs)});
     }
-    case BandType::kLp12:
-      return MakeSerial(
-          {DesignSvf(SvfShape::kLowPass, ClampF(x), ClampQ(z), 0.0, fs)});
-    case BandType::kHp12:
-      return MakeSerial(
-          {DesignSvf(SvfShape::kHighPass, ClampF(x), ClampQ(z), 0.0, fs)});
+    case BandType::kLp:
+    case BandType::kHp: {
+      const bool high = type == BandType::kHp;
+      if (option != static_cast<int>(FilterSlope::k24)) {
+        return MakeSerial(
+            {DesignSvf(high ? SvfShape::kHighPass : SvfShape::kLowPass,
+                       ClampF(x), ClampQ(z), 0.0, fs)});
+      }
+      // Linkwitz-Riley (LR4 at Q 0.707): a split cell then a second LP or HP.
+      BandDesign d;
+      d.topology = BandTopology::kCrossover;
+      d.num_cells = 3;
+      const SvfCoeffs lp =
+          DesignSvf(SvfShape::kLowPass, ClampF(x), ClampQ(z), 0.0, fs);
+      const SvfCoeffs hp =
+          DesignSvf(SvfShape::kHighPass, ClampF(x), ClampQ(z), 0.0, fs);
+      d.cells = {lp, lp, hp, SvfCoeffs{}};
+      d.crossover_high = high;
+      return d;
+    }
     case BandType::kNotch:
       return MakeSerial(
           {DesignSvf(SvfShape::kNotch, ClampF(x), ClampQ(z), 0.0, fs)});
@@ -107,19 +121,6 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return MakeSerial(
           {DesignSvf(SvfShape::kBandPass, ClampF(x), ClampQ(z), 0.0, fs)},
           gain);
-    }
-    case BandType::kLp24Lr:
-    case BandType::kHp24Lr: {
-      BandDesign d;
-      d.topology = BandTopology::kCrossover;
-      d.num_cells = 3;
-      const SvfCoeffs lp =
-          DesignSvf(SvfShape::kLowPass, ClampF(x), kButterworthQ, 0.0, fs);
-      const SvfCoeffs hp =
-          DesignSvf(SvfShape::kHighPass, ClampF(x), kButterworthQ, 0.0, fs);
-      d.cells = {lp, lp, hp, SvfCoeffs{}};
-      d.crossover_high = type == BandType::kHp24Lr;
-      return d;
     }
     case BandType::kTilt: {
       const double half = std::clamp(y, -kMaxTiltDb, kMaxTiltDb) / 2.0;
@@ -190,13 +191,11 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
       break;
     }
     case BandType::kLowShelf:
-    case BandType::kLp12:
-    case BandType::kLp24Lr:
+    case BandType::kLp:
       add(SvfShape::kLowPass, ClampF(x), kButterworthQ);
       break;
     case BandType::kHighShelf:
-    case BandType::kHp12:
-    case BandType::kHp24Lr:
+    case BandType::kHp:
       add(SvfShape::kHighPass, ClampF(x), kButterworthQ);
       break;
     case BandType::kVowel: {

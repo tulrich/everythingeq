@@ -17,12 +17,10 @@ enum class BandType {
   kLowShelf,
   kHighShelf,
   kBandShelf,
-  kLp12,
-  kHp12,
+  kLp,
+  kHp,
   kNotch,
   kBp,
-  kLp24Lr,
-  kHp24Lr,
   kTilt,
   kFletcherMunson,
   kVowel,
@@ -32,7 +30,10 @@ enum class BandType {
 enum class DynTarget { kGain, kFreq, kMorph };
 enum class Tap { kMain, kAux };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
+// The per-band Option, by band type.
 enum class VowelWeighting { kNatural, kFlat };
+enum class FilterSlope { k12, k24 };  // LP, HP
+inline constexpr int kNumOptions = 2;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
 enum class ScFilter { kOff, kBp, kLp, kHp, kTilt, kKWeight };
@@ -43,9 +44,9 @@ enum class OutputMode { kStereo, kSplitLr, kSplitMs };
 //   Peak, Low/HighShelf: x = Hz, y = gain dB, z = Q
 //   BandShelf:           x = center Hz (geometric mean of the edges),
 //                        y = plateau gain dB, z = width in octaves
-//   LP12, HP12, Notch:   x = Hz, z = Q (y unused)
+//   LP, HP, Notch:       x = Hz, z = Q (y unused); LP and HP at 24 dB/oct
+//                        are Linkwitz-Riley crossovers (LR4 at Q 0.707)
 //   BP:                  x = Hz, y = gain dB (<= kBpOffDb is silence), z = Q
-//   LP24_LR, HP24_LR:    x = Hz (y, z unused)
 //   Tilt:                x = pivot Hz, y = high-minus-low gain dB
 //   FletcherMunson:      y = phon delta (positive = boost lows/highs)
 //   Vowel:               x = morph index 0..4, y = formant gain dB,
@@ -56,7 +57,7 @@ struct BandParams {
   double x = 1000.0;
   double y = 0.0;
   double z = 0.70710678118654752440;
-  int option = 0;      // Vowel: VowelWeighting
+  int option = 0;      // Vowel: VowelWeighting; LP, HP: FilterSlope
   int dyn_group = -1;  // -1 = static, else 0..kNumGroups-1
   DynTarget dyn_target = DynTarget::kGain;
   double dyn_range = 0.0;  // dB, octaves or morph index (per dyn_target)
@@ -101,12 +102,16 @@ struct EngineParams {
 
 inline constexpr double kBpOffDb = -60.0;
 
-inline bool IsFilterType(BandType t) {
-  return t == BandType::kLp12 || t == BandType::kHp12 || t == BandType::kBp ||
-         t == BandType::kNotch;
+// LP and HP at 24 dB/oct: the Aux tap gets the complementary crossover band.
+inline bool IsCrossover(BandType t, int option) {
+  return (t == BandType::kLp || t == BandType::kHp) &&
+         option == static_cast<int>(FilterSlope::k24);
 }
-inline bool IsCrossoverType(BandType t) {
-  return t == BandType::kLp24Lr || t == BandType::kHp24Lr;
+// Filters (checked after IsCrossover): the Aux tap gets the input minus the
+// filtered band.
+inline bool IsFilter(BandType t) {
+  return t == BandType::kLp || t == BandType::kHp || t == BandType::kBp ||
+         t == BandType::kNotch;
 }
 
 }  // namespace eeq

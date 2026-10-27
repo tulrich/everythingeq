@@ -9,6 +9,7 @@
 
 #include "model/param_table.h"
 #include "model/presets.h"
+#include "model/slot_mapping.h"
 #include "model/undo_history.h"
 
 namespace eeq::test {
@@ -81,9 +82,29 @@ TEST_CASE("Version 2 band types shift past Band Shelf", "[state]") {
   REQUIRE((*v)[BandParamId(0, BandField::kType)] ==
           static_cast<int>(BandType::kHighShelf));
   REQUIRE((*v)[BandParamId(1, BandField::kType)] ==
-          static_cast<int>(BandType::kLp12));
+          static_cast<int>(BandType::kLp));
   REQUIRE((*v)[BandParamId(2, BandField::kType)] ==
           static_cast<int>(BandType::kKWeight));
+}
+
+TEST_CASE("Version 3 LR crossovers become 24 dB/oct LP and HP", "[state]") {
+  // v3: LP12 5, HP12 6, LP24_LR 9, HP24_LR 10, Tilt 11, K-Weight 14.
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 3,
+      "params": {"band1.type": 5, "band1.option": 1,
+                 "band2.type": 9, "band2.z": 0.9,
+                 "band3.type": 10, "band4.type": 11, "band5.type": 14}})");
+  REQUIRE(v.has_value());
+  auto at = [&](int b, BandField f) { return (*v)[BandParamId(b, f)]; };
+  REQUIRE(at(0, BandField::kType) == static_cast<int>(BandType::kLp));
+  REQUIRE(at(0, BandField::kOption) == 0);  // A stray Vowel option cleared.
+  REQUIRE(at(1, BandField::kType) == static_cast<int>(BandType::kLp));
+  REQUIRE(at(1, BandField::kOption) == static_cast<int>(FilterSlope::k24));
+  REQUIRE(at(1, BandField::kZ) == kSlotDefault);  // Q 0.707: still LR4.
+  REQUIRE(at(2, BandField::kType) == static_cast<int>(BandType::kHp));
+  REQUIRE(at(2, BandField::kOption) == static_cast<int>(FilterSlope::k24));
+  REQUIRE(at(3, BandField::kType) == static_cast<int>(BandType::kTilt));
+  REQUIRE(at(4, BandField::kType) == static_cast<int>(BandType::kKWeight));
 }
 
 TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {

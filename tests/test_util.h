@@ -14,6 +14,9 @@
 
 namespace eeq::test {
 
+// LP and HP at 24 dB/oct (Linkwitz-Riley at Q 0.707).
+inline constexpr int kSlope24 = static_cast<int>(FilterSlope::k24);
+
 inline double MagDb(std::complex<double> z) {
   return 20.0 * std::log10(std::max(std::abs(z), 1e-30));
 }

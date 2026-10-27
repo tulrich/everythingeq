@@ -2,7 +2,9 @@
 #define EVERYTHINGEQ_PLUGIN_UI_PARAM_FIELD_H_
 
 #include <algorithm>
+#include <cmath>
 #include <string>
+#include <vector>
 
 #include "IControl.h"
 #include "plugin/ui/theme.h"
@@ -12,7 +14,9 @@ namespace eeq {
 // A compact "LABEL [ value ]" control bound to one parameter (ABOUT.md
 // section 4).  Continuous parameters: drag vertically (Shift = fine) or use
 // the wheel; double-click to type a value.  Enums: click for a menu.  Bools:
-// click to toggle (drawn as a button).  Option-click resets to the default.
+// click to toggle (drawn as a button).  Integer parameters whose choices
+// depend on context get a menu from SetMenuLabels().  Option-click resets to
+// the default.
 // Disabled fields are drawn at the inactive opacity and ignore the mouse.
 //
 // The bound parameter can change (e.g. when another band is selected), see
@@ -27,9 +31,18 @@ class ParamField final : public iplug::igraphics::IControl {
       : IControl(bounds, param_id),
         label_(std::move(label)),
         label_width_(label_width),
-        style_(style) {
+        style_(style),
+        menu_("") {
     // iPlug2 controls have menus and text entry disabled by default.
     DisablePrompt(false);
+  }
+
+  // Choices for an integer parameter, shown as a menu (index = value).
+  void SetMenuLabels(std::vector<std::string> labels) {
+    if (labels != menu_labels_) {
+      menu_labels_ = std::move(labels);
+      SetDirty(false);
+    }
   }
 
   void SetLabel(const std::string& label) {
@@ -78,7 +91,7 @@ class ParamField final : public iplug::igraphics::IControl {
                                                        : theme::kPanel),
                     box, 3.f);
     g.DrawRoundRect(fade(theme::kBorder), box, 3.f);
-    const bool is_enum = p && p->NDisplayTexts() > 0;
+    const bool is_enum = HasMenu();
     if (is_enum) {
       // Menu affordance.
       const float x = box.R - 9.f, y = box.MH();
@@ -103,15 +116,42 @@ class ParamField final : public iplug::igraphics::IControl {
       SetDirty(true);
       return;
     }
+    if (!menu_labels_.empty()) {
+      const int current = static_cast<int>(std::lround(p->Value()));
+      menu_.Clear();
+      for (size_t i = 0; i < menu_labels_.size(); ++i) {
+        menu_.AddItem(menu_labels_[i].c_str(), -1,
+                      static_cast<int>(i) == current
+                          ? iplug::igraphics::IPopupMenu::Item::kChecked
+                          : iplug::igraphics::IPopupMenu::Item::kNoFlags);
+      }
+      GetUI()->CreatePopupMenu(*this, menu_,
+                               mRECT.GetReducedFromLeft(label_width_));
+      return;
+    }
     if (p->NDisplayTexts() > 0) {
       PromptUserInput(mRECT.GetReducedFromLeft(label_width_));
     }
   }
 
+  void OnPopupMenuSelection(iplug::igraphics::IPopupMenu* menu,
+                            int val_idx) override {
+    if (menu_labels_.empty()) {
+      IControl::OnPopupMenuSelection(menu, val_idx);
+      return;
+    }
+    const iplug::IParam* p = GetParam();
+    if (!menu || !p) return;
+    const int chosen = menu->GetChosenItemIdx();
+    if (chosen < 0) return;
+    SetValue(p->ToNormalized(chosen));
+    SetDirty(true);
+  }
+
   void OnMouseDblClick(float x, float y,
                        const iplug::igraphics::IMouseMod& mod) override {
     const iplug::IParam* p = GetParam();
-    if (p && p->NDisplayTexts() == 0 && style_ == Style::kField) {
+    if (p && !HasMenu() && style_ == Style::kField) {
       PromptUserInput(mRECT.GetReducedFromLeft(label_width_));
     }
   }
@@ -133,6 +173,11 @@ class ParamField final : public iplug::igraphics::IControl {
   }
 
  private:
+  bool HasMenu() const {
+    const iplug::IParam* p = GetParam();
+    return !menu_labels_.empty() || (p && p->NDisplayTexts() > 0);
+  }
+
   bool IsContinuous() const {
     const iplug::IParam* p = GetParam();
     return p && style_ == Style::kField && p->NDisplayTexts() == 0 &&
@@ -142,6 +187,8 @@ class ParamField final : public iplug::igraphics::IControl {
   std::string label_;
   float label_width_;
   Style style_;
+  std::vector<std::string> menu_labels_;
+  iplug::igraphics::IPopupMenu menu_;
 };
 
 }  // namespace eeq

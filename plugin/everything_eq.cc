@@ -119,6 +119,22 @@ void EverythingEq::InitParams() {
                             flags, s.group.c_str());
         }
         break;
+      case ParamKind::kOption:
+        // An integer whose display text follows the band type, so hosts show
+        // e.g. "24 dB/oct" for LP and "Flat" for Vowel.
+        param->InitInt(s.name.c_str(), static_cast<int>(s.default_value),
+                       static_cast<int>(s.min), static_cast<int>(s.max), "",
+                       flags, s.group.c_str());
+        param->SetDisplayFunc([this, id](double value, WDL_String& text) {
+          text.Set(FormatParamValue(CurrentValues(), id, value).c_str());
+        });
+        param->SetParseFunc([this, id](const char* text, double& value) {
+          const std::optional<double> v =
+              ParseSlotText(CurrentValues(), id, text);
+          if (v) value = *v;
+          return v.has_value();
+        });
+        break;
       case ParamKind::kSlot:
         // Normalized; the display text follows the band type (D14).
         param->InitDouble(

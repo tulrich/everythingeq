@@ -35,10 +35,10 @@ void DynamicsGroup::DesignScFilter(bool snap_now) {
       d = DesignBand(BandType::kBp, hz, 0.0, q, 0, fs_);
       break;
     case ScFilter::kLp:
-      d = DesignBand(BandType::kLp12, hz, 0.0, q, 0, fs_);
+      d = DesignBand(BandType::kLp, hz, 0.0, q, 0, fs_);
       break;
     case ScFilter::kHp:
-      d = DesignBand(BandType::kHp12, hz, 0.0, q, 0, fs_);
+      d = DesignBand(BandType::kHp, hz, 0.0, q, 0, fs_);
       break;
     case ScFilter::kTilt:
       d = DesignBand(BandType::kTilt, hz, kScTiltDb, 0.0, 0, fs_);

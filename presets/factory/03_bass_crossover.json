@@ -28,7 +28,8 @@
         "dynRange": 6
       },
       {
-        "type": "HP24_LR",
+        "type": "HP",
+        "slope": "24",
         "x": 150,
         "tap": "Aux"
       }
