@@ -159,6 +159,46 @@ TEST_CASE("Morph target changes a Tilt's width", "[bands]") {
   REQUIRE(ResolveBand(bp, 0.5, 1.0).z == 3.0);
 }
 
+TEST_CASE("Dyn Makeup opposes the dynamic gain", "[bands]") {
+  BandParams bp;
+  bp.type = BandType::kPeak;
+  bp.y = 2.0;
+  bp.dyn_target = DynTarget::kGain;
+  bp.dyn_range = -6.0;
+  bp.dyn_makeup = 0.5;
+  const ResolvedBand rb = ResolveBand(bp, 0.5, 1.0);
+  REQUIRE(rb.y == -1.0);
+  REQUIRE(rb.makeup_db == 1.5);
+  // No makeup for other targets or for types without a dynamic gain.
+  bp.dyn_target = DynTarget::kFreq;
+  REQUIRE(ResolveBand(bp, 0.5, 1.0).makeup_db == 0.0);
+  bp.dyn_target = DynTarget::kGain;
+  bp.type = BandType::kLp;
+  REQUIRE(ResolveBand(bp, 0.5, 1.0).makeup_db == 0.0);
+}
+
+TEST_CASE("A ducked midrange Band Shelf with full makeup boosts the ends",
+          "[bands]") {
+  const double fs = 48000.0;
+  BandParams bp;
+  bp.type = BandType::kBandShelf;
+  bp.x = 1000.0;
+  bp.z = 6.0;  // 125 Hz - 8 kHz.
+  bp.dyn_target = DynTarget::kGain;
+  bp.dyn_range = -1.5;
+  bp.dyn_makeup = 1.0;
+  const BandDesign d =
+      DesignResolvedBand(bp.type, ResolveBand(bp, 1.0, 1.0), fs);
+  auto db = [&](double f) { return MagDb(BandResponse(d, f, fs)); };
+  REQUIRE(std::abs(db(1000.0)) < 0.01);
+  REQUIRE(std::abs(db(20.0) - 1.5) < 0.05);
+  REQUIRE(std::abs(db(20000.0) - 1.5) < 0.1);
+  // At rest the band is flat.
+  const BandDesign rest =
+      DesignResolvedBand(bp.type, ResolveBand(bp, 0.0, 1.0), fs);
+  REQUIRE(std::abs(MagDb(BandResponse(rest, 20.0, fs))) < 1e-9);
+}
+
 TEST_CASE("K-weighting matches ITU-R BS.1770 at 48 kHz", "[bands]") {
   const double fs = 48000.0;
   const double b1[3] = {1.53512485958697, -2.69169618940638, 1.19839281085285};

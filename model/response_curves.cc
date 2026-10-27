@@ -35,8 +35,7 @@ std::complex<double> BandParamsResponse(const BandParams& bp, double control,
                                         double sample_rate,
                                         std::complex<double>* complement) {
   const ResolvedBand rb = ResolveBand(bp, control, global_scale);
-  const BandDesign d =
-      DesignBand(bp.type, rb.x, rb.y, rb.z, rb.option, sample_rate);
+  const BandDesign d = DesignResolvedBand(bp.type, rb, sample_rate);
   if (complement) *complement = BandComplementResponse(d, freq_hz, sample_rate);
   return BandResponse(d, freq_hz, sample_rate);
 }

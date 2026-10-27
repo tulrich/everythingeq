@@ -144,9 +144,9 @@ TEST_CASE("Automating continuous parameters is click-free", "[automation]") {
     REQUIRE(r.hf_rms < std::max(3e-4 * r.rms, 1e-5));
     ++swept;
   }
-  // 4 slots per band, 11 continuous parameters per group, Scale and Output
-  // Gain (Lookahead isn't automatable).
-  REQUIRE(swept == kNumBands * 4 + kNumGroups * 11 + 2);
+  // 4 slots and Dyn Makeup per band, 11 continuous parameters per group,
+  // Scale and Output Gain (Lookahead isn't automatable).
+  REQUIRE(swept == kNumBands * 5 + kNumGroups * 11 + 2);
 }
 
 TEST_CASE("Switching enum parameters stays finite and bounded",
@@ -154,7 +154,10 @@ TEST_CASE("Switching enum parameters stays finite and bounded",
   const Stereo x = Sine(static_cast<size_t>(0.25 * kFs), kInputHz, 0.25, kFs);
   for (int id = 0; id < kNumParams; ++id) {
     const ParamSpec& s = ParamTable()[id];
-    if (s.kind != ParamKind::kEnum && s.kind != ParamKind::kBool) continue;
+    if (s.kind != ParamKind::kEnum && s.kind != ParamKind::kBool &&
+        s.kind != ParamKind::kOption) {
+      continue;
+    }
     ParamValues v = BaseValues();
     Engine engine;
     engine.SetParams(BuildEngineParams(v, false));

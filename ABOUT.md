@@ -77,7 +77,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
        $$T_{\text{eff}} = (1-\alpha)\cdot\text{Threshold} + \alpha\cdot\text{Rise}$$
        so sweeping $\alpha$ moves smoothly between the two without chasing the Threshold knob across a 30 dB DC shift. The UI greys `Rise` at $\alpha = 0$ and `Threshold` at $\alpha = 1$. The trigger meter and threshold handle display $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$.
   4. **Layer 2 (Gain Computer & Post-Threshold Ballistics):** Compare $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$, `Knee`, and `Trigger Mode (Above/Below)` to produce a raw normalized target scalar $\in [0.0, 1.0]$ (a smooth ramp across the knee width centered on $T_{\text{eff}}$; with Knee = 0, a hard 0/1 switch), then smooth with asymmetric `Attack`, `Hold`, and `Release` ballistics to emit the master Group Control signal $D_m \in [0.0, 1.0]$.
-  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index; for Band Shelf and Tilt, Morph changes the width in octaves). Results are clamped to each parameter's legal range.
+  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index; for Band Shelf and Tilt, Morph changes the width in octaves). Results are clamped to each parameter's legal range. With `Dyn Makeup` > 0 and Dyn Target Gain, the band also applies a broadband gain of $-\text{Makeup} \cdot D_m \cdot \text{DynRange} \cdot \text{Global\_Scale}$.
 
 ### C. Vowel & Formant Filter Outline
 * **Acoustic Basis:** Models the first three vocal tract resonances: **$F_1$** (250–900 Hz, jaw openness), **$F_2$** (800–2500 Hz, tongue front/back), and **$F_3$** (2200–3200 Hz, brightness/timbre).
@@ -123,7 +123,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 ### E. Parameters & State
 * A **fixed, versioned parameter list** (required for host automation):
-  * Per band (×8): `Bypass, Type, Freq (X), Gain (Y), Q (Z), Dyn Group, Dyn Target, DynRange, Option, Tap, Chan, Solo`. `Option` is a small integer whose meaning and display text depend on the band type (Vowel: Weighting; LP/HP: Slope), like the X/Y/Z slots.
+  * Per band (×8): `Bypass, Type, Freq (X), Gain (Y), Q (Z), Dyn Group, Dyn Target, DynRange, Dyn Makeup, Option, Tap, Chan, Solo`. `Option` is a small integer whose meaning and display text depend on the band type (Vowel: Weighting; LP/HP: Slope), like the X/Y/Z slots.
   * Per group (×4): `Attack, Hold, Release, Threshold, Rise, Knee, Mode, Alpha, RMS Window, Input, SC Filter, SC Hz, SC Q, Link, SC Listen`.
   * Global: `Output Mode, Global Scale, Delta, Bypass, Output Gain, Lookahead` (Lookahead is not automatable).
   * Parameters are listed most-used first. Host names are fixed, so the X/Y/Z slots are named after their most common meaning, `Freq`, `Gain` and `Q`; for other band types the lane shows that type's value and units (e.g. a Vowel band's `Freq` lane reads "AH 2.00"; see the table below). The plugin UI shows type-specific names.
@@ -158,6 +158,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
 | DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
 | Band layout | Type and Freq per band | B1 HP 12 dB/oct 30 Hz (bypassed), B2 Low Shelf 100 Hz, B3–B4 Peak 150 Hz / 500 Hz, B5 Band Shelf 500 Hz – 2 kHz (center 1 kHz, width 2 oct), B6 Peak 2 kHz, B7 High Shelf 4 kHz, B8 LP 12 dB/oct 8 kHz (bypassed) | flat (0 dB, Q 0.707) and transparent until edited; the Init preset matches |
+| Dyn Makeup | 0 – 100% | 0% | with Dyn Target = Gain on Peak, Low/High Shelf, Band Shelf and Vowel: a broadband gain of −Makeup × the band's current dynamic gain. E.g. a midrange Band Shelf with DynRange −1.5 dB and Makeup 100% boosts everything outside the plateau by 1.5 dB on each hit instead of ducking the mids. |
 | Dyn Group | G1–G4 | Bands 1–2: G1, 3–4: G2, 5–6: G3, 7–8: G4 | a band moves with its group only when DynRange ≠ 0 |
 | SC Hz / SC Q | 20 Hz – 20 kHz / 0.1 – 40 | 1 kHz / 0.707 | log |
 | RMS Window | 1 – 400 ms | 15 ms | log |

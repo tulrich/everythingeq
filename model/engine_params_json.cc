@@ -152,6 +152,7 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
       Read(b, "z", bp.z);
       Read(b, "dynGroup", bp.dyn_group);
       Read(b, "dynRange", bp.dyn_range);
+      Read(b, "dynMakeup", bp.dyn_makeup);
       Read(b, "bypass", bp.bypass);
       Read(b, "solo", bp.solo);
     }
@@ -223,6 +224,7 @@ json EngineParamsToJson(const EngineParams& p) {
       Write(j, "dynGroup", bp.dyn_group, bd.dyn_group);
       WriteEnum(j, "dynTarget", kDynTargets, bp.dyn_target, bd.dyn_target);
       Write(j, "dynRange", bp.dyn_range, bd.dyn_range);
+      Write(j, "dynMakeup", bp.dyn_makeup, bd.dyn_makeup);
       WriteEnum(j, "tap", kTaps, bp.tap, bd.tap);
       WriteEnum(j, "chan", kChans, bp.chan, bd.chan);
       Write(j, "bypass", bp.bypass, bd.bypass);

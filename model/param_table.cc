@@ -115,6 +115,8 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kDynTarget) = Enum(k + "dyn_target", n + "Dyn Target", g, 0,
                                      {"Gain", "Freq", "Morph"});
     at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
+    at(BandField::kDynMakeup) = Continuous(k + "dyn_makeup", n + "Dyn Makeup",
+                                           g, 0.0, 100.0, 0.0, "%", false, 0.1);
     at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
     at(BandField::kTap) = Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"});
     at(BandField::kChan) =
@@ -235,6 +237,7 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     bp.dyn_target = static_cast<DynTarget>(Int(at(BandField::kDynTarget)));
     bp.dyn_range = SlotToPhysical(DynRangeMapping(bp.dyn_target),
                                   at(BandField::kDynRange));
+    bp.dyn_makeup = at(BandField::kDynMakeup) / 100.0;
     // A band subscribes to its group only when it has a Dyn Range (D19).
     bp.dyn_group = bp.dyn_range != 0.0 ? Int(at(BandField::kDynGroup)) : -1;
     bp.tap = static_cast<Tap>(Int(at(BandField::kTap)));
@@ -290,6 +293,7 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
     set(BandField::kDynTarget, static_cast<int>(bp.dyn_target));
     set(BandField::kDynRange, SlotFromPhysical(DynRangeMapping(bp.dyn_target),
                                                dynamic ? bp.dyn_range : 0.0));
+    set(BandField::kDynMakeup, bp.dyn_makeup * 100.0);
     set(BandField::kTap, static_cast<int>(bp.tap));
     set(BandField::kChan, static_cast<int>(bp.chan));
     set(BandField::kBypass, bp.bypass);

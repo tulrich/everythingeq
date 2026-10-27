@@ -149,6 +149,14 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
   graphics_.AttachControl(graph_);
   graphics_.AttachControl(input_meter_);
   graphics_.AttachControl(output_meter_);
+  // The selected band's live dynamic offset, over the graph's corner.
+  const ig::IRECT graph_rect = graph_->GetRECT();
+  now_readout_ = new ig::ITextControl(
+      ig::IRECT(graph_rect.L + 6.f, graph_rect.T + 4.f, graph_rect.L + 200.f,
+                graph_rect.T + 18.f),
+      "", theme::Text(11.f, theme::kTextDim, ig::EAlign::Near));
+  now_readout_->SetIgnoreMouse(true);
+  graphics_.AttachControl(now_readout_);
 
   BuildFooter(left.GetFromBottom(48.f));
   BuildDynamicsPanel(right);
@@ -179,9 +187,7 @@ void Editor::BuildBandEditor(const ig::IRECT& r) {
       64.f);
   add(BandField::kDynGroup, cell(1, 1), "DYN GRP");
   add(BandField::kDynTarget, cell(1, 2), "DYN TGT");
-  now_readout_ = new ig::ITextControl(cell(1, 3), "NOW  --",
-                                      theme::Text(11.f, theme::kTextDim));
-  graphics_.AttachControl(now_readout_);
+  add(BandField::kDynMakeup, cell(1, 3), "MAKEUP");
   add(BandField::kTap, cell(2, 0), "TAP", ParamField::Style::kField, 40.f);
   add(BandField::kChan, cell(2, 1), "CHAN");
   add(BandField::kOption, cell(2, 2), "OPTION");
@@ -366,6 +372,10 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
       case BandField::kZ:
         m = SlotMappingFor(type, Slot::kZ);
         break;
+      case BandField::kDynMakeup:
+        // Only meaningful against a dynamic gain on a gain-type band.
+        enabled = enabled && target == DynTarget::kGain && HasDynMakeup(type);
+        break;
       case BandField::kOption: {
         std::vector<std::string> labels = OptionLabels(type);
         enabled = enabled && !labels.empty();
@@ -391,11 +401,12 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   }
 
   // NOW: the band's current dynamic offset in its target's unit.
-  std::string now = "NOW  --";
+  std::string now;
   if (range != 0.0 && !off) {
     const double scale = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
     const double offset = model_.LiveControls()[group] * range * scale;
-    now = "NOW  " + FormatSlotValue(range_mapping, offset);
+    now = "B" + std::to_string(band + 1) + " NOW  " +
+          FormatSlotValue(range_mapping, offset);
   }
   now_readout_->SetStr(now.c_str());
 }

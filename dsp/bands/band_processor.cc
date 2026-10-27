@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "dsp/common/math.h"
+
 namespace eeq {
 namespace {
 
@@ -44,6 +46,7 @@ ResolvedBand ResolveBand(const BandParams& bp, double control,
   switch (bp.dyn_target) {
     case DynTarget::kGain:
       if (HasGain(bp.type)) rb.y += mod;
+      if (HasDynMakeup(bp.type)) rb.makeup_db = -mod * bp.dyn_makeup;
       break;
     case DynTarget::kFreq:
       if (HasFreq(bp.type)) {
@@ -60,6 +63,15 @@ ResolvedBand ResolveBand(const BandParams& bp, double control,
       break;
   }
   return rb;
+}
+
+BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
+                              double fs) {
+  BandDesign d = DesignBand(type, rb.x, rb.y, rb.z, rb.option, fs);
+  if (rb.makeup_db != 0.0 && d.topology == BandTopology::kSerial) {
+    d.post_gain *= DbToGain(rb.makeup_db);
+  }
+  return d;
 }
 
 void BandProcessor::Reset() {
@@ -122,7 +134,7 @@ bool BandSlot::Changed(const ResolvedBand& a, const ResolvedBand& b) {
     return std::abs(u - v) > 1e-4 * std::max(std::abs(u), 1e-3);
   };
   return rel(a.x, b.x) || std::abs(a.y - b.y) > 0.005 || rel(a.z, b.z) ||
-         a.option != b.option;
+         a.option != b.option || std::abs(a.makeup_db - b.makeup_db) > 0.005;
 }
 
 void BandSlot::Update(BandType type,
@@ -136,8 +148,7 @@ void BandSlot::Update(BandType type,
   for (int ch = 0; ch < kNumChannels; ++ch) {
     if (initialized_ && !type_changed && !Changed(p[ch], last_[ch])) continue;
     last_[ch] = p[ch];
-    design_[ch] =
-        DesignBand(type, p[ch].x, p[ch].y, p[ch].z, p[ch].option, fs_);
+    design_[ch] = DesignResolvedBand(type, p[ch], fs_);
     if (type_changed) cur_[ch] = BandProcessor{};
     cur_[ch].Apply(design_[ch], snap_now ? 1 : kControlBlock);
   }

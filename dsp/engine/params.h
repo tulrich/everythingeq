@@ -62,6 +62,9 @@ struct BandParams {
   int dyn_group = -1;  // -1 = static, else 0..kNumGroups-1
   DynTarget dyn_target = DynTarget::kGain;
   double dyn_range = 0.0;  // dB, octaves or morph index (per dyn_target)
+  // 0..1: broadband gain opposing the band's dynamic gain (Dyn Target Gain
+  // on HasDynMakeup types), so e.g. ducking a band boosts everything else.
+  double dyn_makeup = 0.0;
   Tap tap = Tap::kMain;
   Chan chan = Chan::kStereo;
   bool bypass = false;
@@ -102,6 +105,13 @@ struct EngineParams {
 };
 
 inline constexpr double kBpOffDb = -60.0;
+
+// Bands whose dynamic gain can be offset by Dyn Makeup.
+inline bool HasDynMakeup(BandType t) {
+  return t == BandType::kPeak || t == BandType::kLowShelf ||
+         t == BandType::kHighShelf || t == BandType::kBandShelf ||
+         t == BandType::kVowel;
+}
 
 // LP and HP at 24 dB/oct: the Aux tap gets the complementary crossover band.
 inline bool IsCrossover(BandType t, int option) {

@@ -59,7 +59,12 @@ class BandProcessor {
 struct ResolvedBand {
   double x = 1000.0, y = 0.0, z = kButterworthQ;
   int option = 0;
+  double makeup_db = 0.0;  // Broadband gain from Dyn Makeup.
 };
+
+// The band's design for resolved parameters, including Dyn Makeup.
+BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
+                              double sample_rate);
 
 // Applies a dynamics control value (D in [0, 1]) to a band's static
 // parameters per its Dyn Target (ABOUT.md section 3.B, step 5):
