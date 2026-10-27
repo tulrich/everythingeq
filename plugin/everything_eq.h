@@ -31,6 +31,7 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   ParamValues Values() const override { return CurrentValues(); }
   double SampleRate() const override { return GetSampleRate(); }
   GroupControls LiveControls() const override;
+  std::array<Tracked, kNumGroups> LiveTracking() const override;
   int PopAnalyzerSamples(bool post, float* dest, int max_count) override;
   int PopDetectorFrames(DetectorFrame* dest, int max_count) override;
   int SelectedBand() const override { return selected_band_; }
@@ -83,6 +84,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   // and the latest dynamics control value per group.
   std::array<std::atomic<float>, kNumMeterChannels> peaks_{};
   std::array<std::atomic<float>, kNumGroups> group_controls_{};
+  std::array<std::atomic<float>, kNumGroups> group_tracked_{};
+  std::array<std::atomic<bool>, kNumGroups> group_voiced_{};
   std::atomic<bool> transport_started_{false};
   std::atomic<bool> editor_open_{false};
   SpscRing<float, 32768> analyzer_pre_;

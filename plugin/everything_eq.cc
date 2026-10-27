@@ -57,6 +57,16 @@ GroupControls EverythingEq::LiveControls() const {
   return c;
 }
 
+std::array<EditorModel::Tracked, kNumGroups> EverythingEq::LiveTracking()
+    const {
+  std::array<Tracked, kNumGroups> t{};
+  for (int g = 0; g < kNumGroups; ++g) {
+    t[g] = {group_tracked_[g].load(std::memory_order_relaxed),
+            group_voiced_[g].load(std::memory_order_relaxed)};
+  }
+  return t;
+}
+
 int EverythingEq::PopAnalyzerSamples(bool post, float* dest, int max_count) {
   auto& ring = post ? analyzer_post_ : analyzer_pre_;
   return static_cast<int>(ring.Pop(dest, static_cast<size_t>(max_count)));
@@ -384,6 +394,9 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
     frame.trigger_min[g] = static_cast<float>(m.trigger_min);
     frame.trigger_max[g] = static_cast<float>(m.trigger_max);
     frame.control_max[g] = static_cast<float>(m.control_max);
+    group_tracked_[g].store(static_cast<float>(m.tracked),
+                            std::memory_order_relaxed);
+    group_voiced_[g].store(m.voiced, std::memory_order_relaxed);
   }
   if (editor_open_.load(std::memory_order_relaxed)) {
     detector_frames_.Push(frame);

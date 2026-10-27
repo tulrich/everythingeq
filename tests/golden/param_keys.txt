@@ -114,6 +114,7 @@ group1.mode
 group1.alpha
 group1.rms_window_ms
 group1.input
+group1.detect
 group1.sc_filter
 group1.sc_hz
 group1.sc_q
@@ -129,6 +130,7 @@ group2.mode
 group2.alpha
 group2.rms_window_ms
 group2.input
+group2.detect
 group2.sc_filter
 group2.sc_hz
 group2.sc_q
@@ -144,6 +146,7 @@ group3.mode
 group3.alpha
 group3.rms_window_ms
 group3.input
+group3.detect
 group3.sc_filter
 group3.sc_hz
 group3.sc_q
@@ -159,6 +162,7 @@ group4.mode
 group4.alpha
 group4.rms_window_ms
 group4.input
+group4.detect
 group4.sc_filter
 group4.sc_hz
 group4.sc_q

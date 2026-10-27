@@ -51,6 +51,10 @@ const std::pair<const char*, ScFilter> kScFilters[] = {
     {"Off", ScFilter::kOff},   {"BP", ScFilter::kBp},
     {"LP", ScFilter::kLp},     {"HP", ScFilter::kHp},
     {"Tilt", ScFilter::kTilt}, {"KWeight", ScFilter::kKWeight}};
+const std::pair<const char*, DetectMode> kDetectModes[] = {
+    {"Level", DetectMode::kLevel},
+    {"Vowel", DetectMode::kVowel},
+    {"Pitch", DetectMode::kPitch}};
 const std::pair<const char*, TriggerMode> kModes[] = {
     {"Above", TriggerMode::kAbove}, {"Below", TriggerMode::kBelow}};
 const std::pair<const char*, OutputMode> kOutputModes[] = {
@@ -109,6 +113,7 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
     for (size_t i = 0; i < j["groups"].size() && i < kNumGroups; ++i) {
       const json& g = j["groups"][i];
       GroupParams& gp = p.groups[i];
+      ReadEnum(g, "detect", kDetectModes, gp.detect);
       ReadEnum(g, "input", kInputs, gp.input);
       ReadEnum(g, "scFilter", kScFilters, gp.sc_filter);
       ReadEnum(g, "mode", kModes, gp.mode);
@@ -183,6 +188,7 @@ json EngineParamsToJson(const EngineParams& p) {
   const GroupParams d{};
   for (const GroupParams& gp : p.groups) {
     json j = json::object();
+    WriteEnum(j, "detect", kDetectModes, gp.detect, d.detect);
     WriteEnum(j, "input", kInputs, gp.input, d.input);
     WriteEnum(j, "scFilter", kScFilters, gp.sc_filter, d.sc_filter);
     WriteEnum(j, "mode", kModes, gp.mode, d.mode);

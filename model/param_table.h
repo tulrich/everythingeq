@@ -45,13 +45,14 @@ enum class GroupField {
   kAlpha,
   kRmsWindow,
   kInput,
+  kDetect,
   kScFilter,
   kScHz,
   kScQ,
   kLink,
   kScListen,
 };
-inline constexpr int kNumGroupFields = 15;
+inline constexpr int kNumGroupFields = 16;
 
 enum class GlobalField {
   kOutputMode,

@@ -25,6 +25,13 @@ class EditorModel {
   virtual double SampleRate() const = 0;
   // Latest dynamics control value D per group, from the audio thread.
   virtual GroupControls LiveControls() const = 0;
+  // Vowel / Pitch groups: the tracker's latest estimate (as a control value
+  // in [0, 1], held while unvoiced) and whether the input is voiced now.
+  struct Tracked {
+    float value = 0.f;
+    bool voiced = false;
+  };
+  virtual std::array<Tracked, kNumGroups> LiveTracking() const = 0;
   // Audio published since the last call (mono): the plugin input ("pre") or
   // output ("post"), for the analyzer.  Returns the number of samples.
   virtual int PopAnalyzerSamples(bool post, float* dest, int max_count) = 0;

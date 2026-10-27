@@ -10,6 +10,7 @@ namespace eeq {
 void DynamicsGroup::Prepare(double sample_rate) {
   fs_ = sample_rate;
   initialized_ = false;
+  tracker_.Prepare(fs_);
   SetParams(p_);
   Reset();
 }
@@ -22,6 +23,7 @@ void DynamicsGroup::Reset() {
   trigger_.fill(0.0);
   filtered_.fill(0.0);
   hold_.fill(0);
+  tracker_.Reset();
 }
 
 void DynamicsGroup::DesignScFilter(bool snap_now) {
@@ -63,6 +65,7 @@ void DynamicsGroup::SetParams(const GroupParams& p) {
   hold_samples_ =
       static_cast<int>(std::lround(std::max(p_.hold_ms, 0.0) * fs_ / 1000.0));
   teff_ = (1.0 - p_.alpha) * p_.threshold_db + p_.alpha * p_.rise_db;
+  tracker_.set_mode(p_.detect);
   DesignScFilter(!initialized_);
   initialized_ = true;
 }
@@ -84,6 +87,9 @@ void DynamicsGroup::Process(double in0, double in1) {
   const double pw[kNumChannels] = {p0 + p_.link * (pmax - p0),
                                    p1 + p_.link * (pmax - p1)};
 
+  const bool tracking = p_.detect != DetectMode::kLevel;
+  if (tracking) tracker_.Push(0.5 * (filtered_[0] + filtered_[1]));
+
   for (int ch = 0; ch < kNumChannels; ++ch) {
     sig_a_[ch] += coeff_a_ * (pw[ch] - sig_a_[ch]);
     sig_b_[ch] += coeff_b_ * (pw[ch] - sig_b_[ch]);
@@ -91,9 +97,18 @@ void DynamicsGroup::Process(double in0, double in1) {
     const double b_db = 10.0 * std::log10(std::max(sig_b_[ch], kFloorPower));
     trigger_[ch] = a_db - p_.alpha * b_db;
 
+    double& d = control_[ch];
+    if (tracking) {
+      // Glide toward the tracked value: Attack upward, Release downward.
+      const double target = tracker_.value();
+      d += (target >= d ? coeff_attack_ : coeff_release_) * (target - d);
+      meter_.trigger_min = std::min(meter_.trigger_min, trigger_[ch]);
+      meter_.trigger_max = std::max(meter_.trigger_max, trigger_[ch]);
+      meter_.control_max = std::max(meter_.control_max, d);
+      continue;
+    }
     const double target =
         GainComputer(trigger_[ch], teff_, p_.knee_db, p_.mode);
-    double& d = control_[ch];
     if (target >= d) {
       d += coeff_attack_ * (target - d);
       hold_[ch] = hold_samples_;

@@ -151,6 +151,8 @@ std::vector<ParamSpec> MakeTable() {
     at(GroupField::kInput) =
         Enum(k + "input", n + "Input", g, 0,
              {"Internal Dry", "Internal Band-Sum", "External SC"});
+    at(GroupField::kDetect) =
+        Enum(k + "detect", n + "Detect", g, 0, {"Level", "Vowel", "Pitch"});
     at(GroupField::kScFilter) =
         Enum(k + "sc_filter", n + "SC Filter", g, 0,
              {"Off", "BP", "LP", "HP", "Tilt", "K-Weight"});
@@ -250,6 +252,7 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     auto at = [&](GroupField f) { return v[GroupParamId(i, f)]; };
     GroupParams& gp = p.groups[i];
     gp.input = static_cast<DetectorInput>(Int(at(GroupField::kInput)));
+    gp.detect = static_cast<DetectMode>(Int(at(GroupField::kDetect)));
     gp.sc_filter = static_cast<ScFilter>(Int(at(GroupField::kScFilter)));
     gp.sc_hz = at(GroupField::kScHz);
     gp.sc_q = at(GroupField::kScQ);
@@ -303,6 +306,7 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
     auto set = [&](GroupField f, double x) { v[GroupParamId(i, f)] = x; };
     const GroupParams& gp = p.groups[i];
     set(GroupField::kInput, static_cast<int>(gp.input));
+    set(GroupField::kDetect, static_cast<int>(gp.detect));
     set(GroupField::kScFilter, static_cast<int>(gp.sc_filter));
     set(GroupField::kScHz, gp.sc_hz);
     set(GroupField::kScQ, gp.sc_q);

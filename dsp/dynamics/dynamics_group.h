@@ -4,6 +4,7 @@
 #include <array>
 
 #include "dsp/bands/band_processor.h"
+#include "dsp/dynamics/tracker.h"
 #include "dsp/engine/params.h"
 
 namespace eeq {
@@ -12,6 +13,8 @@ namespace eeq {
 //   SC filter -> x^2 -> stereo link -> sigA / sigB one-pole envelopes (dB)
 //   -> alpha continuum trigger -> knee gain computer -> attack/hold/release
 //   -> control signal D in [0, 1] per channel.
+// With Detect = Vowel or Pitch, the conditioned input (mono) feeds a Tracker
+// instead and D follows its estimate through the attack/release smoothing.
 class DynamicsGroup {
  public:
   static constexpr double kFastTauMs = 1.0;    // sigA (D5)
@@ -33,9 +36,14 @@ class DynamicsGroup {
     double trigger_max = 0.0;
     double control_max = 0.0;
     bool valid = false;  // False if no samples were processed.
+    // Vowel / Pitch: the tracker's latest estimate (held when unvoiced).
+    double tracked = 0.0;
+    bool voiced = false;
   };
   Meter TakeMeter() {
     Meter m = meter_;
+    m.tracked = tracker_.value();
+    m.voiced = tracker_.voiced();
     meter_ = Meter{1e9, -1e9, 0.0, false};
     return m;
   }
@@ -44,6 +52,7 @@ class DynamicsGroup {
   double trigger(int ch) const { return trigger_[ch]; }
   double filtered(int ch) const { return filtered_[ch]; }  // SC listen signal
   double effective_threshold() const { return teff_; }
+  const Tracker& tracker() const { return tracker_; }
 
   // Pure gain-computer mapping, exposed for tests and the UI meter.
   static double GainComputer(double trigger_db, double teff_db, double knee_db,
@@ -64,6 +73,7 @@ class DynamicsGroup {
   std::array<double, kNumChannels> sig_a_{}, sig_b_{}, control_{}, trigger_{},
       filtered_{};
   std::array<int, kNumChannels> hold_{};
+  Tracker tracker_;
   Meter meter_{1e9, -1e9, 0.0, false};
 };
 

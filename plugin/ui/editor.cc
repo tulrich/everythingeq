@@ -232,27 +232,37 @@ void Editor::BuildDynamicsPanel(const ig::IRECT& r) {
   float y = column.T;
   auto section = [&](const char* title) {
     graphics_.AttachControl(
-        new SectionLabel(ig::IRECT(column.L, y, column.R, y + 12.f), title));
-    y += 14.f;
+        new SectionLabel(ig::IRECT(column.L, y, column.R, y + 11.f), title));
+    y += 12.f;
   };
   auto add = [&](GroupField f, const char* label, const char* tooltip,
                  ParamField::Style style = ParamField::Style::kField) {
-    const ig::IRECT rect(column.L, y, column.R, y + 19.f);
+    const ig::IRECT rect(column.L, y, column.R, y + 18.f);
     auto* c = new ParamField(
         style == ParamField::Style::kToggle ? rect.GetFromLeft(90.f) : rect,
         GroupParamId(0, f), label, 66.f, style);
     c->SetTooltip(tooltip);
     graphics_.AttachControl(c);
     group_fields_.push_back({f, c});
-    y += 21.f;
+    y += 20.f;
   };
   section("BALLISTICS");
   add(GroupField::kAttack, "Attack",
-      "How fast D rises toward the trigger's target.");
+      "How fast D rises toward the trigger's target (Vowel/Pitch: toward the "
+      "tracked value).");
   add(GroupField::kHold, "Hold",
       "How long D holds before releasing once the trigger drops.");
-  add(GroupField::kRelease, "Release", "How fast D falls back.");
+  add(GroupField::kRelease, "Release",
+      "How fast D falls back (Vowel/Pitch: toward a lower tracked value).");
   section("TRIGGER");
+  add(GroupField::kDetect, "Detect",
+      "Level: D follows the trigger (compressor-like). Vowel: D follows the "
+      "sung vowel of the detector input (D = Morph / 4; a Vowel band at OO "
+      "with Dyn Target Morph and Dyn Range +4 follows it). Pitch: D follows "
+      "the pitch (a band at 27.5 Hz with Dyn Target Freq and Dyn Range "
+      "+8 oct follows f0; 55 Hz follows the 2nd harmonic). Tracking holds "
+      "its last value through silence and unvoiced sounds; use a clean, "
+      "single-voice sidechain.");
   add(GroupField::kThreshold, "Threshold",
       "Level (dBFS) the detector must cross at Alpha 0. Greyed at Alpha 1.");
   add(GroupField::kRise, "Rise",
@@ -420,6 +430,9 @@ void Editor::UpdateDynamicsPanel(const ParamValues& v) {
     bound_group_ = g;
   }
   const double alpha = v[GroupParamId(g, GroupField::kAlpha)];
+  const bool level =
+      static_cast<DetectMode>(Int(v[GroupParamId(g, GroupField::kDetect)])) ==
+      DetectMode::kLevel;
   const auto sc_filter =
       static_cast<ScFilter>(Int(v[GroupParamId(g, GroupField::kScFilter)]));
   const bool has_sc_hz =
@@ -428,10 +441,17 @@ void Editor::UpdateDynamicsPanel(const ParamValues& v) {
     bool enabled = true;
     switch (f.field) {
       case GroupField::kThreshold:
-        enabled = alpha < 1.0;  // Greyed at alpha = 1 (ABOUT.md 3.B).
+        enabled = level && alpha < 1.0;  // Greyed at alpha = 1 (ABOUT.md 3.B).
         break;
       case GroupField::kRise:
-        enabled = alpha > 0.0;  // Greyed at alpha = 0.
+        enabled = level && alpha > 0.0;  // Greyed at alpha = 0.
+        break;
+      case GroupField::kHold:
+      case GroupField::kKnee:
+      case GroupField::kMode:
+      case GroupField::kAlpha:
+      case GroupField::kRmsWindow:
+        enabled = level;  // The tracking modes don't use the gain computer.
         break;
       case GroupField::kScHz:
         enabled = has_sc_hz;

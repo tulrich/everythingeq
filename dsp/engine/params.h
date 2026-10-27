@@ -38,6 +38,9 @@ inline constexpr int kNumOptions = 2;
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
 enum class ScFilter { kOff, kBp, kLp, kHp, kTilt, kKWeight };
 enum class TriggerMode { kAbove, kBelow };
+// What a group's D follows: input level (the gain computer), or the tracked
+// vowel or pitch of the detector input (dsp/dynamics/tracker.h).
+enum class DetectMode { kLevel, kVowel, kPitch };
 enum class OutputMode { kStereo, kSplitLr, kSplitMs };
 
 // Physical (unnormalized) band parameters.  Meaning of x/y/z by type:
@@ -72,6 +75,7 @@ struct BandParams {
 };
 
 struct GroupParams {
+  DetectMode detect = DetectMode::kLevel;
   DetectorInput input = DetectorInput::kInternalDry;
   ScFilter sc_filter = ScFilter::kOff;
   double sc_hz = 1000.0;

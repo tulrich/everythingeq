@@ -5,9 +5,13 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "IControl.h"
+#include "dsp/bands/vowel.h"
+#include "dsp/dynamics/tracker.h"
+#include "model/slot_mapping.h"
 #include "plugin/ui/editor_model.h"
 #include "plugin/ui/eq_graph.h"
 #include "plugin/ui/theme.h"
@@ -97,12 +101,13 @@ class DetectorScope final : public iplug::igraphics::IControl {
     g.FillRoundRect(theme::kBackground, mRECT, 3.f);
 
     // Active region (above or below the threshold), knee band, threshold.
+    const bool level = s.detect == DetectMode::kLevel;
     const float ty = DbToY(s.teff, s, trig);
     const ig::IRECT active_rect = s.below
                                       ? ig::IRECT(trig.L, ty, trig.R, trig.B)
                                       : ig::IRECT(trig.L, trig.T, trig.R, ty);
-    g.FillRect(theme::kAccent.WithOpacity(0.06f), active_rect);
-    if (s.knee > 0.0) {
+    if (level) g.FillRect(theme::kAccent.WithOpacity(0.06f), active_rect);
+    if (level && s.knee > 0.0) {
       const float k0 = DbToY(s.teff + s.knee / 2, s, trig);
       const float k1 = DbToY(s.teff - s.knee / 2, s, trig);
       g.FillRect(theme::kAccent.WithOpacity(0.15f),
@@ -129,7 +134,8 @@ class DetectorScope final : public iplug::igraphics::IControl {
       }
     }
     if (started) g.PathStroke(theme::kText.WithOpacity(0.85f), 1.f);
-    g.DrawLine(theme::kAccent, trig.L, ty, trig.R, ty, nullptr, 1.5f);
+    if (level)
+      g.DrawLine(theme::kAccent, trig.L, ty, trig.R, ty, nullptr, 1.5f);
 
     // D strip.
     const bool active = graph_.group_active(group_);
@@ -153,10 +159,21 @@ class DetectorScope final : public iplug::igraphics::IControl {
     std::snprintf(buf, sizeof(buf), "%+.0f", s.lo);
     g.DrawText(dim_text, buf,
                ig::IRECT(trig.L + 2, trig.B - 11, trig.L + 40, trig.B));
-    std::snprintf(buf, sizeof(buf), "%s %.1f dB",
-                  s.alpha >= 0.5 ? "Rise" : "Thresh", s.teff);
-    g.DrawText(theme::Text(9.f, theme::kAccent, ig::EAlign::Far), buf,
-               ig::IRECT(trig.R - 90, ty - 12, trig.R - 3, ty - 1));
+    if (level) {
+      std::snprintf(buf, sizeof(buf), "%s %.1f dB",
+                    s.alpha >= 0.5 ? "Rise" : "Thresh", s.teff);
+      g.DrawText(theme::Text(9.f, theme::kAccent, ig::EAlign::Far), buf,
+                 ig::IRECT(trig.R - 90, ty - 12, trig.R - 3, ty - 1));
+    } else {
+      // The tracked vowel or pitch, dimmed while held (unvoiced input).
+      const EditorModel::Tracked t = model_.LiveTracking()[group_];
+      const std::string text =
+          TrackedText(s.detect, t.value) + (t.voiced ? "" : "  (held)");
+      g.DrawText(theme::Text(11.f, t.voiced ? theme::kAccent : theme::kTextDim,
+                             ig::EAlign::Far),
+                 text.c_str(),
+                 ig::IRECT(trig.R - 140, trig.T + 2, trig.R - 4, trig.T + 15));
+    }
     std::snprintf(
         buf, sizeof(buf), "D %d%%",
         static_cast<int>(std::lround(model_.LiveControls()[group_] * 100)));
@@ -179,6 +196,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
   void OnMouseDown(float x, float y,
                    const iplug::igraphics::IMouseMod& mod) override {
     const Settings s = Read(model_.Values());
+    if (s.detect != DetectMode::kLevel) return;  // No threshold to drag.
     drag_id_ = GroupParamId(
         group_, s.alpha >= 0.5 ? GroupField::kRise : GroupField::kThreshold);
     drag_weight_ = s.alpha >= 0.5 ? s.alpha : 1.0 - s.alpha;
@@ -206,12 +224,30 @@ class DetectorScope final : public iplug::igraphics::IControl {
     drag_id_ = -1;
   }
 
+  // "AH 2.10" (Vowel) or "220 Hz A3" (Pitch) for a tracked control value.
+  static std::string TrackedText(DetectMode mode, double value) {
+    char buf[32];
+    if (mode == DetectMode::kVowel) {
+      return FormatSlotValue(*SlotMappingFor(BandType::kVowel, Slot::kX),
+                             value * kVowelMorphMax);
+    }
+    static const char* const kNotes[] = {"C",  "C#", "D",  "D#", "E",  "F",
+                                         "F#", "G",  "G#", "A",  "A#", "B"};
+    const double hz = Tracker::ValueToPitch(value);
+    const int midi =
+        static_cast<int>(std::lround(69.0 + 12.0 * std::log2(hz / 440.0)));
+    std::snprintf(buf, sizeof(buf), "%.0f Hz %s%d", hz,
+                  kNotes[(midi % 12 + 12) % 12], midi / 12 - 1);
+    return buf;
+  }
+
  private:
   static constexpr float kStrip = 14.f;
 
   struct Settings {
     double alpha, teff, knee, lo, hi;
     bool below;
+    DetectMode detect;
   };
 
   Settings Read(const ParamValues& v) const {
@@ -222,6 +258,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
              s.alpha * at(GroupField::kRise);
     s.knee = at(GroupField::kKnee);
     s.below = std::lround(at(GroupField::kMode)) == 1;
+    s.detect = static_cast<DetectMode>(std::lround(at(GroupField::kDetect)));
     // Level (dBFS) at alpha 0 blends into rise (dB above average) at 1.
     s.lo = (1.0 - s.alpha) * -72.0 + s.alpha * -24.0;
     s.hi = (1.0 - s.alpha) * 0.0 + s.alpha * 36.0;
