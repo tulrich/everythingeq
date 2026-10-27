@@ -81,6 +81,17 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
     case BandType::kHighShelf:
       return MakeSerial({DesignSvf(SvfShape::kHighShelf, ClampF(x), ClampQ(z),
                                    ClampGain(y), fs)});
+    case BandType::kBandShelf: {
+      // A plateau between two Butterworth shelves whose half-gain points are
+      // the edges.  Narrow widths don't reach the full gain (like a wide bell).
+      const double half = 0.5 * std::clamp(z, kMinWidthOct, kMaxWidthOct);
+      const double lo = ClampF(x * std::exp2(-half));
+      const double hi = ClampF(x * std::exp2(half));
+      const double g = ClampGain(y);
+      return MakeSerial(
+          {DesignSvf(SvfShape::kHighShelf, lo, kButterworthQ, g, fs),
+           DesignSvf(SvfShape::kHighShelf, hi, kButterworthQ, -g, fs)});
+    }
     case BandType::kLp12:
       return MakeSerial(
           {DesignSvf(SvfShape::kLowPass, ClampF(x), ClampQ(z), 0.0, fs)});
@@ -172,6 +183,12 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
     case BandType::kBp:
       add(SvfShape::kBandPass, ClampF(x), ClampQ(z));
       break;
+    case BandType::kBandShelf: {
+      // Bandpass with its -3 dB points at the plateau edges.
+      const double w = std::exp2(std::clamp(z, kMinWidthOct, kMaxWidthOct));
+      add(SvfShape::kBandPass, ClampF(x), ClampQ(std::sqrt(w) / (w - 1.0)));
+      break;
+    }
     case BandType::kLowShelf:
     case BandType::kLp12:
     case BandType::kLp24Lr:

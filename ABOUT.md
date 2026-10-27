@@ -44,8 +44,9 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 ### A. Filter Engine: ZDF / TPT State Variable Filters
 * **Topology:** Linear trapezoidal integrated State Variable Filters (Andrew Simper / Cytomic & Vadim Zavalishin TPT formulation).
 * **Why ZDF SVF:** Solves the instantaneous feedback loop algebraically, so cutoff ($g = \tan(\pi f / f_s)$) and damping ($k = 1/Q$) remain orthogonal up to Nyquist, and the state variables stay meaningful when coefficients change every sample. Direct-form biquads add no latency either, but their state is tied to the coefficient set, so fast modulation causes zipper noise, transients, or instability. All shapes (LP/BP/HP/peak/shelf/notch) come from one cell as a linear mix of its outputs.
-* **Polymorphic Band Slot:** Each of the 10 band slots wraps a small unit cascade (up to 4 SVF cells) configured by `Band_Type`:
+* **Polymorphic Band Slot:** Each of the 8 band slots wraps a small unit cascade (up to 4 SVF cells) configured by `Band_Type`:
   * *Primitives (Peak, Low/High Shelf, LP12, HP12, Notch, BP):* 1x SVF cell.
+  * *Band Shelf:* a plateau of the band's gain between two edges, built from 2x Butterworth High Shelf cells (+gain at the low edge, −gain at the high edge) whose half-gain points are the edges. X is the center (the geometric mean of the edges), Z the width in octaves. Transitions are 12 dB/oct without overshoot; below about 2 octaves wide the plateau doesn't reach the full gain and the shape becomes a broad bell.
   * *Linkwitz-Riley Crossovers (LP24_LR, HP24_LR):* 2x cascaded Butterworth SVF cells ($Q = 0.7071$). LP24_LR and HP24_LR at the same cutoff sum to a flat-magnitude all-pass, **not** to the dry signal.
   * *Broadband Tilt:* 1x Low Shelf + 1x High Shelf pivoted inversely around center frequency $f_0$.
   * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline (`tools/fmfit`, within ~0.15 dB at a 20-phon delta). Per ISO 226 the presence cell comes out as a small **cut** for positive phon deltas (about −1.2 dB at 2.6 kHz for 20 phon): at lower levels the ear is relatively *more* sensitive there.
@@ -61,6 +62,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 * **Lookahead (global, 0–10 ms):** The audio path (dry input feeding the band chain, Main, Aux, Delta and Bypass paths) is delayed by `Lookahead` samples, while all detectors read the undelayed input and sidechain. The plugin reports this delay to the host as latency, so hosts with plugin delay compensation keep tracks (and the external sidechain) aligned. It is a single global value, because a plugin reports one latency. It is not automatable; latency changes take effect when the host re-queries (in some hosts, e.g. Logic, on transport restart). The new latency is reported at once, but in hosts that defer re-reading it (Logic and GarageBand) the audio path keeps the previous delay while the transport runs and switches on the next transport start, so the track never plays misaligned. At 0 ms there is no delay line and zero reported latency.
 * **Detector filter per band type** (used for `Internal Band-Sum` and band Solo):
   * Peak, Notch, BP, Vowel: unit-gain bandpass at the band's center frequency and Q (for Vowel, the sum of its three formant bandpasses).
+  * Band Shelf: unit-gain bandpass at the center whose −3 dB points are the edges.
   * Low Shelf, LP12, LP24_LR: lowpass at the band's frequency. High Shelf, HP12, HP24_LR: highpass at the band's frequency.
   * Tilt, Fletcher-Munson, K-Weight: full-band (no filter).
 * **Two-Layer Envelope + Log-Derivative Continuum:**
@@ -75,7 +77,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
        $$T_{\text{eff}} = (1-\alpha)\cdot\text{Threshold} + \alpha\cdot\text{Rise}$$
        so sweeping $\alpha$ moves smoothly between the two without chasing the Threshold knob across a 30 dB DC shift. The UI greys `Rise` at $\alpha = 0$ and `Threshold` at $\alpha = 1$. The trigger meter and threshold handle display $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$.
   4. **Layer 2 (Gain Computer & Post-Threshold Ballistics):** Compare $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$, `Knee`, and `Trigger Mode (Above/Below)` to produce a raw normalized target scalar $\in [0.0, 1.0]$ (a smooth ramp across the knee width centered on $T_{\text{eff}}$; with Knee = 0, a hard 0/1 switch), then smooth with asymmetric `Attack`, `Hold`, and `Release` ballistics to emit the master Group Control signal $D_m \in [0.0, 1.0]$.
-  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index). Results are clamped to each parameter's legal range.
+  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index; for Band Shelf, Morph changes the width in octaves). Results are clamped to each parameter's legal range.
 
 ### C. Vowel & Formant Filter Outline
 * **Acoustic Basis:** Models the first three vocal tract resonances: **$F_1$** (250–900 Hz, jaw openness), **$F_2$** (800–2500 Hz, tongue front/back), and **$F_3$** (2200–3200 Hz, brightness/timbre).
@@ -132,6 +134,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Type | X (`Freq`) | Y (`Gain`) | Z (`Q`) | Option (`Vowel Weighting`) |
 | :--- | :--- | :--- | :--- | :--- |
 | Peak, Low Shelf, High Shelf | Freq (Hz) | Gain (dB) | Q | – |
+| Band Shelf | Center (Hz) | Gain (dB) | Width (oct) | – (later: transition slope) |
 | LP12, HP12, Notch | Freq (Hz) | – | Q | – |
 | BP | Freq (Hz) | Gain (dB; `-60` = silence) | Q | – |
 | LP24_LR, HP24_LR | Freq (Hz) | – | – | – |
@@ -140,20 +143,21 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Natural / Flat |
 | K-Weight | – | – | – | – |
 
-* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Morph 2 (AH), Tract 1.0×, DynRange 0. Dynamic modulation is clamped to the same ranges as the static value.
+* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Width 2 oct, Morph 2 (AH), Tract 1.0×, DynRange 0. Dynamic modulation is clamped to the same ranges as the static value.
 
 | Parameter | Range | Default | Skew / notes |
 | :--- | :--- | :--- | :--- |
-| Type | Off + 13 types | Off | |
+| Type | Off + 14 types | Off | |
 | Freq (X) | 20 Hz – 20 kHz | 1 kHz | log |
 | Gain (Y) | ±30 dB (BP: −60 … +30) | 0 dB | linear |
 | Q (Z) | 0.1 – 40 | 0.707 | log |
+| Width (Z) | 0.1 – 10 oct | 2 oct | log |
 | Tilt (Y) | ±24 dB | 0 dB | |
 | Phon Delta (Y) | ±40 phon | 0 | |
 | Vowel Morph (X) | 0 – 4 | 2 (AH) | linear |
 | Tract Scale (Z) | 0.70 – 1.40× | 1.0× | log |
 | DynRange | Gain ±60 dB; Freq ±8 oct; Morph ±4 | 0 | linear, centered |
-| Band layout | Type and Freq per band | B1 HP12 30 Hz (bypassed), B2 Low Shelf 100 Hz, B3–B6 Peak 150 Hz / 500 Hz / 1 kHz / 2 kHz, B7 High Shelf 4 kHz, B8 LP12 8 kHz (bypassed) | flat (0 dB, Q 0.707) and transparent until edited; the Init preset matches |
+| Band layout | Type and Freq per band | B1 HP12 30 Hz (bypassed), B2 Low Shelf 100 Hz, B3–B4 Peak 150 Hz / 500 Hz, B5 Band Shelf 500 Hz – 2 kHz (center 1 kHz, width 2 oct), B6 Peak 2 kHz, B7 High Shelf 4 kHz, B8 LP12 8 kHz (bypassed) | flat (0 dB, Q 0.707) and transparent until edited; the Init preset matches |
 | Dyn Group | G1–G4 | Bands 1–2: G1, 3–4: G2, 5–6: G3, 7–8: G4 | a band moves with its group only when DynRange ≠ 0 |
 | SC Hz / SC Q | 20 Hz – 20 kHz / 0.1 – 40 | 1 kHz / 0.707 | log |
 | RMS Window | 1 – 400 ms | 15 ms | log |
@@ -212,7 +216,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
                                                                         +--------------------------+
 ```
 
-* **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. LP12 and HP12 nodes sit on the curve at the cutoff (Q in dB) and drag Q vertically, as in Logic's Channel EQ. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node.
+* **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. LP12 and HP12 nodes sit on the curve at the cutoff (Q in dB) and drag Q vertically, as in Logic's Channel EQ. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node. A selected Band Shelf also shows handles at its two edges; dragging one moves that edge while the other stays put (the wheel on its node changes the width).
 * **Group meters:** each group tab has a strip along its bottom: the group's live $D_m$ in blue (grey, with a dimmed label, while no active band has the group and a nonzero DynRange), and below it, in yellow, the gain the group's bands apply right now, growing from the center (left for a cut, right for a boost; full width = 24 dB). The applied gain is the largest deviation of those bands' combined response from their static response (a silent band counts as −60 dB). The detector scope repeats it as a number beside D.
 * **Level meters:** a vertical input meter at the left edge of the EQ graph and the output meter at its right (the `(M)` column), one bar per channel. Scale −60 to +6 dBFS (float signals can exceed full scale), segmented: green below −12 dBFS, yellow from −12 to 0, red above 0, with a peak-hold tick. Above each meter, a numeric readout of the recent peak (the meter's name sits below it); once a peak exceeds 0 dBFS the readout latches in red, showing the highest peak, until it is clicked or the host transport starts. Inactive channels (e.g. R on a mono track) are drawn empty.
 * **Presets & editing:** an in-plugin preset menu (factory presets plus user presets saved as files) alongside the host's own preset handling, and undo/redo of parameter edits made in the plugin UI. No A/B comparison or band copy/paste in v1.

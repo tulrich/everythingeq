@@ -22,12 +22,12 @@ Stereo Render(const EngineParams& p, const Stereo& x) {
 
 // Random static chain of gain-type and filter-type bands.
 EngineParams RandomChain(std::mt19937& rng) {
-  const BandType types[] = {BandType::kPeak,      BandType::kLowShelf,
-                            BandType::kHighShelf, BandType::kLp12,
-                            BandType::kHp12,      BandType::kNotch,
-                            BandType::kBp,        BandType::kTilt,
-                            BandType::kVowel,     BandType::kFletcherMunson,
-                            BandType::kKWeight};
+  const BandType types[] = {BandType::kPeak,           BandType::kLowShelf,
+                            BandType::kBandShelf,      BandType::kHighShelf,
+                            BandType::kLp12,           BandType::kHp12,
+                            BandType::kNotch,          BandType::kBp,
+                            BandType::kTilt,           BandType::kVowel,
+                            BandType::kFletcherMunson, BandType::kKWeight};
   std::uniform_int_distribution<int> type(0, std::size(types) - 1);
   std::uniform_real_distribution<double> oct(0.0, 10.0), gain(-12.0, 12.0),
       q(0.3, 6.0), morph(0.0, 4.0);

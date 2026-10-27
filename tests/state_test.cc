@@ -65,11 +65,25 @@ TEST_CASE("State tolerates missing, unknown and out-of-range keys", "[state]") {
                  "band1.dyn_group": 2.4, "future.param": 1}})");
   REQUIRE(v.has_value());
   ParamValues expected = DefaultParamValues();
-  expected[BandParamId(1, BandField::kType)] = 7;
+  // Type 7 was BP before v3 inserted Band Shelf.
+  expected[BandParamId(1, BandField::kType)] = static_cast<int>(BandType::kBp);
   expected[BandParamId(1, BandField::kX)] = 1.0;
   expected[GlobalParamId(GlobalField::kOutputGain)] = -24.0;
   expected[BandParamId(0, BandField::kDynGroup)] = 1;  // Migrated from v1.
   REQUIRE(*v == expected);
+}
+
+TEST_CASE("Version 2 band types shift past Band Shelf", "[state]") {
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 2,
+      "params": {"band1.type": 3, "band2.type": 4, "band3.type": 13}})");
+  REQUIRE(v.has_value());
+  REQUIRE((*v)[BandParamId(0, BandField::kType)] ==
+          static_cast<int>(BandType::kHighShelf));
+  REQUIRE((*v)[BandParamId(1, BandField::kType)] ==
+          static_cast<int>(BandType::kLp12));
+  REQUIRE((*v)[BandParamId(2, BandField::kType)] ==
+          static_cast<int>(BandType::kKWeight));
 }
 
 TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {

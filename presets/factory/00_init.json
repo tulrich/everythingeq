@@ -22,8 +22,9 @@
         "x": 500
       },
       {
-        "type": "Peak",
-        "x": 1000
+        "type": "BandShelf",
+        "x": 1000,
+        "z": 2
       },
       {
         "type": "Peak",

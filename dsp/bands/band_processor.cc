@@ -10,6 +10,7 @@ bool HasGain(BandType t) {
     case BandType::kPeak:
     case BandType::kLowShelf:
     case BandType::kHighShelf:
+    case BandType::kBandShelf:
     case BandType::kBp:
     case BandType::kTilt:
     case BandType::kFletcherMunson:
@@ -53,6 +54,7 @@ ResolvedBand ResolveBand(const BandParams& bp, double control,
       break;
     case DynTarget::kMorph:
       if (bp.type == BandType::kVowel) rb.x += mod;
+      if (bp.type == BandType::kBandShelf) rb.z += mod;  // Width, octaves.
       break;
   }
   return rb;

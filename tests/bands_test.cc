@@ -26,6 +26,56 @@ double CellHz(const SvfCoeffs& c, double fs) {
 
 }  // namespace
 
+TEST_CASE("Band Shelf is a plateau between half-gain edges", "[bands]") {
+  const double fs = 48000.0;
+  const double gain = GENERATE(-12.0, 9.0);
+  // Edges at 125 Hz and 8 kHz.
+  const BandDesign d =
+      DesignBand(BandType::kBandShelf, 1000.0, gain, 6.0, 0, fs);
+  auto db = [&](double f) { return MagDb(BandResponse(d, f, fs)); };
+  CAPTURE(gain);
+  REQUIRE(std::abs(db(1000.0) - gain) < 0.05);
+  REQUIRE(std::abs(db(125.0) - gain / 2) < 0.1);
+  REQUIRE(std::abs(db(8000.0) - gain / 2) < 0.1);
+  REQUIRE(std::abs(db(15.0)) < 0.1);
+  REQUIRE(std::abs(db(20000.0)) < 0.5);
+  // Monotonic transitions (Butterworth shelves don't overshoot).
+  double prev = db(10.0);
+  for (double f : LogFreqs(10.0, 1000.0, 40)) {
+    REQUIRE((gain > 0 ? db(f) >= prev - 1e-9 : db(f) <= prev + 1e-9));
+    prev = db(f);
+  }
+}
+
+TEST_CASE("Band Shelf narrows into a bell that doesn't reach full gain",
+          "[bands]") {
+  const double fs = 48000.0;
+  const double peak = MagDb(BandResponse(
+      DesignBand(BandType::kBandShelf, 1000.0, 12.0, 0.5, 0, fs), 1000.0, fs));
+  REQUIRE(peak > 0.5);
+  REQUIRE(peak < 12.0);
+}
+
+TEST_CASE("Band Shelf detector passes the plateau", "[bands]") {
+  const double fs = 48000.0;
+  const DetectorDesign d =
+      DesignDetector(BandType::kBandShelf, 1000.0, 2.0, fs);
+  auto db = [&](double f) { return MagDb(DetectorResponse(d, f, fs)); };
+  REQUIRE(std::abs(db(1000.0)) < 0.01);
+  REQUIRE(std::abs(db(500.0) + 3.01) < 0.05);
+  REQUIRE(std::abs(db(2000.0) + 3.01) < 0.05);
+}
+
+TEST_CASE("Morph target changes a Band Shelf's width", "[bands]") {
+  BandParams bp;
+  bp.type = BandType::kBandShelf;
+  bp.z = 2.0;
+  bp.dyn_target = DynTarget::kMorph;
+  bp.dyn_range = 1.5;
+  REQUIRE(ResolveBand(bp, 1.0, 1.0).z == 3.5);
+  REQUIRE(ResolveBand(bp, 1.0, 1.0).x == bp.x);
+}
+
 TEST_CASE("LR24 crossover sums to a flat all-pass", "[bands]") {
   const double fs = GENERATE(44100.0, 48000.0, 96000.0);
   const double fc = GENERATE(80.0, 1000.0, 8000.0);

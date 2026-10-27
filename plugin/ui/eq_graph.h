@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "IControl.h"
+#include "dsp/bands/band_design.h"
 #include "dsp/bands/vowel.h"
 #include "model/response_curves.h"
 #include "model/slot_mapping.h"
@@ -24,7 +25,9 @@ namespace eeq {
 // Nodes: frequency bands drag frequency (horizontal, in Hz) and gain
 // (vertical, in dB); filters sit on their curve at the cutoff; Vowel drags
 // Morph and Formant Gain; Fletcher-Munson is pinned at 1 kHz and drags Phon;
-// K-Weight has no node.  The wheel adjusts Q (Tract Scale for Vowel).
+// K-Weight has no node.  The wheel adjusts Q (Tract Scale for Vowel, Width for
+// Band Shelf).  A selected Band Shelf also shows handles at its edges (the
+// half-gain points); dragging one moves that edge and keeps the other fixed.
 // Double-clicking empty space adds a Peak band in the first free slot.
 class EqGraph final : public iplug::igraphics::IControl {
  public:
@@ -32,6 +35,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   static constexpr double kMaxHz = 20000.0;
   static constexpr double kRangeDb = 18.0;
   static constexpr float kNodeRadius = 6.f;
+  static constexpr float kEdgeHalfW = 2.5f;
+  static constexpr float kEdgeHalfH = 7.f;
 
   EqGraph(const iplug::igraphics::IRECT& bounds, EditorModel& model)
       : IControl(bounds), model_(model) {}
@@ -120,6 +125,16 @@ class EqGraph final : public iplug::igraphics::IControl {
       StrokeCurve(g, static_.total_db, theme::kText, 2.f);
     }
 
+    if (selected >= 0) {
+      for (int side = 0; side < 2; ++side) {
+        const std::optional<ig::IVec2> e = EdgePosition(selected, side);
+        if (!e) continue;
+        g.FillRoundRect(theme::BandColor(selected),
+                        ig::IRECT(e->x - kEdgeHalfW, e->y - kEdgeHalfH,
+                                  e->x + kEdgeHalfW, e->y + kEdgeHalfH),
+                        1.5f);
+      }
+    }
     for (int b = 0; b < kNumBands; ++b) {
       const std::optional<ig::IVec2> p = NodePosition(b);
       if (!p) continue;
@@ -140,6 +155,15 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   void OnMouseDown(float x, float y,
                    const iplug::igraphics::IMouseMod& mod) override {
+    drag_edge_ = HitEdge(x, y);
+    if (drag_edge_ >= 0) {
+      drag_band_ = model_.SelectedBand();
+      const std::array<double, 2> edges = ShelfEdges(drag_band_);
+      drag_x_ = FreqToX(edges[drag_edge_]);
+      drag_fixed_hz_ = edges[1 - drag_edge_];
+      for (int id : DragParams(drag_band_)) model_.BeginEdit(id);
+      return;
+    }
     drag_band_ = HitNode(x, y);
     if (drag_band_ < 0) return;
     model_.SelectBand(drag_band_);
@@ -157,6 +181,11 @@ class EqGraph final : public iplug::igraphics::IControl {
     const float gear = mod.S ? 0.1f : 1.f;
     drag_x_ += dx * gear;
     drag_y_ += dy * gear;
+    if (drag_edge_ >= 0) {
+      DragEdge();
+      Refresh();
+      return;
+    }
     const BandParams& bp = params_.bands[drag_band_];
     const int x_id = BandParamId(drag_band_, BandField::kX);
     const int y_id = BandParamId(drag_band_, BandField::kY);
@@ -189,6 +218,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     if (drag_band_ < 0) return;
     for (int id : DragParams(drag_band_)) model_.EndEdit(id);
     drag_band_ = -1;
+    drag_edge_ = -1;
   }
 
   void OnMouseWheel(float x, float y, const iplug::igraphics::IMouseMod& mod,
@@ -278,10 +308,61 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   std::vector<int> DragParams(int band) const {
+    if (drag_edge_ >= 0) {
+      return {BandParamId(band, BandField::kX),
+              BandParamId(band, BandField::kZ)};
+    }
     return {
         BandParamId(band, BandField::kX),
         BandParamId(band, DragsQ(params_.bands[band].type) ? BandField::kZ
                                                            : BandField::kY)};
+  }
+
+  // A Band Shelf's edges (Hz): the half-gain points of its two shelves.
+  std::array<double, 2> ShelfEdges(int band) const {
+    const BandParams& bp = params_.bands[band];
+    const double h = std::exp2(0.5 * bp.z);
+    return {bp.x / h, bp.x * h};
+  }
+
+  std::optional<iplug::igraphics::IVec2> EdgePosition(int band,
+                                                      int side) const {
+    if (freqs_.empty() || band < 0 ||
+        params_.bands[band].type != BandType::kBandShelf) {
+      return std::nullopt;
+    }
+    const double hz = std::clamp(ShelfEdges(band)[side], kMinHz, kMaxHz);
+    return iplug::igraphics::IVec2(
+        FreqToX(hz),
+        DbToY(std::clamp(0.5 * params_.bands[band].y, -kRangeDb, kRangeDb)));
+  }
+
+  // 0 = low edge, 1 = high edge of the selected Band Shelf, or -1.
+  int HitEdge(float x, float y) const {
+    for (int side = 0; side < 2; ++side) {
+      const auto e = EdgePosition(model_.SelectedBand(), side);
+      if (e && std::abs(e->x - x) <= kEdgeHalfW + 3.f &&
+          std::abs(e->y - y) <= kEdgeHalfH + 3.f) {
+        return side;
+      }
+    }
+    return -1;
+  }
+
+  void DragEdge() {
+    const double min_ratio = std::exp2(kMinWidthOct);
+    const double f = XToFreq(drag_x_);
+    const double lo = drag_edge_ == 0 ? std::min(f, drag_fixed_hz_ / min_ratio)
+                                      : drag_fixed_hz_;
+    const double hi = drag_edge_ == 1 ? std::max(f, drag_fixed_hz_ * min_ratio)
+                                      : drag_fixed_hz_;
+    const BandType type = params_.bands[drag_band_].type;
+    model_.SetEdit(
+        BandParamId(drag_band_, BandField::kX),
+        SlotFromPhysical(*SlotMappingFor(type, Slot::kX), std::sqrt(lo * hi)));
+    model_.SetEdit(
+        BandParamId(drag_band_, BandField::kZ),
+        SlotFromPhysical(*SlotMappingFor(type, Slot::kZ), std::log2(hi / lo)));
   }
 
   int HitNode(float x, float y) const {
@@ -443,6 +524,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::array<float, kNumGroups> group_gain_db_{};
   bool any_dynamic_ = false;
   int drag_band_ = -1;
+  int drag_edge_ = -1;  // Band Shelf edge being dragged: 0 = low, 1 = high.
+  double drag_fixed_hz_ = 0.0;
   float drag_x_ = 0.f, drag_y_ = 0.f;
 };
 

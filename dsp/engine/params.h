@@ -16,6 +16,7 @@ enum class BandType {
   kPeak,
   kLowShelf,
   kHighShelf,
+  kBandShelf,
   kLp12,
   kHp12,
   kNotch,
@@ -40,6 +41,8 @@ enum class OutputMode { kStereo, kSplitLr, kSplitMs };
 
 // Physical (unnormalized) band parameters.  Meaning of x/y/z by type:
 //   Peak, Low/HighShelf: x = Hz, y = gain dB, z = Q
+//   BandShelf:           x = center Hz (geometric mean of the edges),
+//                        y = plateau gain dB, z = width in octaves
 //   LP12, HP12, Notch:   x = Hz, z = Q (y unused)
 //   BP:                  x = Hz, y = gain dB (<= kBpOffDb is silence), z = Q
 //   LP24_LR, HP24_LR:    x = Hz (y, z unused)

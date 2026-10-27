@@ -35,6 +35,8 @@ inline constexpr double kMaxGainDb = 30.0;
 inline constexpr double kMaxTiltDb = 24.0;
 inline constexpr double kMaxPhonDelta = 40.0;
 inline constexpr double kTiltShelfQ = 0.5;
+inline constexpr double kMinWidthOct = 0.1;
+inline constexpr double kMaxWidthOct = 10.0;
 
 BandDesign DesignBand(BandType type, double x, double y, double z, int option,
                       double sample_rate);

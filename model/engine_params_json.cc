@@ -14,6 +14,7 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"Peak", BandType::kPeak},
     {"LowShelf", BandType::kLowShelf},
     {"HighShelf", BandType::kHighShelf},
+    {"BandShelf", BandType::kBandShelf},
     {"LP12", BandType::kLp12},
     {"HP12", BandType::kHp12},
     {"Notch", BandType::kNotch},

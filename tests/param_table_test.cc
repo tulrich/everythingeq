@@ -199,7 +199,7 @@ TEST_CASE("Display text follows the band type", "[params]") {
   REQUIRE(FormatParamValue(v, x, 0.5) == "-");
   v[type] = static_cast<int>(BandType::kBp);
   REQUIRE(FormatParamValue(v, y, 0.0) == "-inf dB");
-  REQUIRE(FormatParamValue(v, type, 7.0) == "BP");
+  REQUIRE(FormatParamValue(v, type, static_cast<int>(BandType::kBp)) == "BP");
   v[BandParamId(0, BandField::kDynTarget)] = static_cast<int>(DynTarget::kFreq);
   REQUIRE(FormatParamValue(v, BandParamId(0, BandField::kDynRange), 0.75) ==
           "+4.0 oct");

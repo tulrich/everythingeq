@@ -12,6 +12,7 @@ constexpr SlotMapping kFreq{20.0, 1000.0, 20000.0, true, "Freq", "Hz"};
 constexpr SlotMapping kGain{-30.0, 0.0, 30.0, false, "Gain", "dB"};
 constexpr SlotMapping kBpGain{-60.0, 0.0, 30.0, false, "Gain", "dB", true};
 constexpr SlotMapping kQ{0.1, 0.70710678118654752440, 40.0, true, "Q", ""};
+constexpr SlotMapping kWidth{0.1, 2.0, 10.0, true, "Width", "oct"};
 constexpr SlotMapping kPivot{20.0, 1000.0, 20000.0, true, "Pivot", "Hz"};
 constexpr SlotMapping kTilt{-24.0, 0.0, 24.0, false, "Tilt", "dB"};
 constexpr SlotMapping kPhon{-40.0, 0.0, 40.0, false, "Phon", "phon"};
@@ -38,6 +39,10 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kFreq;
       if (slot == Slot::kY) return kGain;
       return kQ;
+    case BandType::kBandShelf:
+      if (slot == Slot::kX) return kFreq;
+      if (slot == Slot::kY) return kGain;
+      return kWidth;
     case BandType::kLp12:
     case BandType::kHp12:
     case BandType::kNotch:
@@ -121,6 +126,8 @@ std::string FormatSlotValue(const SlotMapping& m, double physical) {
     const int nearest = static_cast<int>(std::lround(shown));
     std::snprintf(buf, sizeof(buf), "%s %.2f",
                   kVowels[std::clamp(nearest, 0, 4)], physical);
+  } else if (std::string(m.name) == "Width") {
+    std::snprintf(buf, sizeof(buf), "%.2f oct", physical);
   } else if (unit == "x") {
     std::snprintf(buf, sizeof(buf), "%.2fx", physical);
   } else if (unit.empty()) {

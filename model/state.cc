@@ -29,6 +29,16 @@ void MigrateState(int version, nlohmann::json& params) {
       }
     }
   }
+  if (version < 3) {
+    // Version 3 inserted Band Shelf after High Shelf in the Type enum.
+    constexpr int kBandShelfIndex = static_cast<int>(BandType::kBandShelf);
+    for (int b = 0; b < kNumBands; ++b) {
+      const auto it = params.find("band" + std::to_string(b + 1) + ".type");
+      if (it == params.end() || !it->is_number()) continue;
+      const int type = static_cast<int>(std::lround(it->get<double>()));
+      if (type >= kBandShelfIndex) *it = type + 1;
+    }
+  }
 }
 
 }  // namespace

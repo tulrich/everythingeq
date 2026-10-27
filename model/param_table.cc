@@ -71,7 +71,7 @@ struct DefaultBand {
 constexpr DefaultBand kDefaultBands[kNumBands] = {
     {BandType::kHp12, 30.0, true},         {BandType::kLowShelf, 100.0, false},
     {BandType::kPeak, 150.0, false},       {BandType::kPeak, 500.0, false},
-    {BandType::kPeak, 1000.0, false},      {BandType::kPeak, 2000.0, false},
+    {BandType::kBandShelf, 1000.0, false}, {BandType::kPeak, 2000.0, false},
     {BandType::kHighShelf, 4000.0, false}, {BandType::kLp12, 8000.0, true},
 };
 
@@ -88,9 +88,9 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, d.bypass);
     at(BandField::kType) =
         Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
-             {"Off", "Peak", "Low Shelf", "High Shelf", "LP12", "HP12", "Notch",
-              "BP", "LP24 LR", "HP24 LR", "Tilt", "Fletcher-Munson", "Vowel",
-              "K-Weight"});
+             {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP12",
+              "HP12", "Notch", "BP", "LP24 LR", "HP24 LR", "Tilt",
+              "Fletcher-Munson", "Vowel", "K-Weight"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
