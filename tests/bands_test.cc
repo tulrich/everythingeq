@@ -126,6 +126,39 @@ TEST_CASE("Tilt pivots around f0", "[bands]") {
   }
 }
 
+TEST_CASE("Tilt width spreads a straight ramp across the octaves", "[bands]") {
+  const double fs = 48000.0;
+  const double width = GENERATE(0.0, 2.0, 4.0, 6.0, 8.0);
+  const double tilt = 12.0;
+  const BandDesign d = DesignBand(BandType::kTilt, 1000.0, tilt, width, 0, fs);
+  auto db = [&](double f) { return MagDb(BandResponse(d, f, fs)); };
+  CAPTURE(width);
+  REQUIRE(std::abs(db(1000.0)) < 0.05);
+  // Monotonic: no ripple.
+  double prev = db(10.0);
+  for (double f : LogFreqs(10.0, 22000.0, 200)) {
+    REQUIRE(db(f) >= prev - 1e-9);
+    prev = db(f);
+  }
+  if (width >= 4.0) {
+    // The middle half of the ramp is straight within 0.25 dB.
+    for (double oct = -width / 4; oct <= width / 4; oct += 0.25) {
+      CAPTURE(oct);
+      REQUIRE(std::abs(db(1000.0 * std::exp2(oct)) - tilt * oct / width) <
+              0.25);
+    }
+  }
+}
+
+TEST_CASE("Morph target changes a Tilt's width", "[bands]") {
+  BandParams bp;
+  bp.type = BandType::kTilt;
+  bp.z = 4.0;
+  bp.dyn_target = DynTarget::kMorph;
+  bp.dyn_range = -2.0;
+  REQUIRE(ResolveBand(bp, 0.5, 1.0).z == 3.0);
+}
+
 TEST_CASE("K-weighting matches ITU-R BS.1770 at 48 kHz", "[bands]") {
   const double fs = 48000.0;
   const double b1[3] = {1.53512485958697, -2.69169618940638, 1.19839281085285};

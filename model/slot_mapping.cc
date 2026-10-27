@@ -15,6 +15,7 @@ constexpr SlotMapping kQ{0.1, 0.70710678118654752440, 40.0, true, "Q", ""};
 constexpr SlotMapping kWidth{0.1, 2.0, 10.0, true, "Width", "oct"};
 constexpr SlotMapping kPivot{20.0, 1000.0, 20000.0, true, "Pivot", "Hz"};
 constexpr SlotMapping kTilt{-24.0, 0.0, 24.0, false, "Tilt", "dB"};
+constexpr SlotMapping kTiltWidth{0.0, 4.0, 10.0, false, "Width", "oct"};
 constexpr SlotMapping kPhon{-40.0, 0.0, 40.0, false, "Phon", "phon"};
 constexpr SlotMapping kMorph{0.0, 2.0, 4.0, false, "Morph", ""};
 constexpr SlotMapping kFormantGain{-30.0,          0.0, 30.0, false,
@@ -56,7 +57,7 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
     case BandType::kTilt:
       if (slot == Slot::kX) return kPivot;
       if (slot == Slot::kY) return kTilt;
-      return std::nullopt;
+      return kTiltWidth;
     case BandType::kFletcherMunson:
       if (slot == Slot::kY) return kPhon;
       return std::nullopt;

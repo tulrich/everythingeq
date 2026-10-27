@@ -67,6 +67,13 @@ BandDesign DesignVowel(double morph, double gain_db, double scale, int option,
 
 }  // namespace
 
+BandDesign DesignShelfTilt(double hz, double tilt_db, double fs) {
+  const double half = std::clamp(tilt_db, -kMaxTiltDb, kMaxTiltDb) / 2.0;
+  return MakeSerial(
+      {DesignSvf(SvfShape::kLowShelf, ClampF(hz), 0.5, -half, fs),
+       DesignSvf(SvfShape::kHighShelf, ClampF(hz), 0.5, half, fs)});
+}
+
 BandDesign DesignBand(BandType type, double x, double y, double z, int option,
                       double fs) {
   switch (type) {
@@ -123,10 +130,19 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
           gain);
     }
     case BandType::kTilt: {
-      const double half = std::clamp(y, -kMaxTiltDb, kMaxTiltDb) / 2.0;
-      return MakeSerial(
-          {DesignSvf(SvfShape::kLowShelf, ClampF(x), kTiltShelfQ, -half, fs),
-           DesignSvf(SvfShape::kHighShelf, ClampF(x), kTiltShelfQ, half, fs)});
+      // Four high shelves at the midpoints of the width, each with a quarter
+      // of the tilt: a monotonic dB-per-octave ramp from -tilt/2 to +tilt/2
+      // across the width, centered on the pivot.
+      const double tilt = std::clamp(y, -kMaxTiltDb, kMaxTiltDb);
+      const double width = std::clamp(z, 0.0, kMaxWidthOct);
+      BandDesign d = MakeSerial({}, DbToGain(-tilt / 2.0));
+      for (int i = 0; i < kTiltCells; ++i) {
+        const double t = (i + 0.5) / kTiltCells - 0.5;
+        d.cells[d.num_cells++] =
+            DesignSvf(SvfShape::kHighShelf, ClampF(x * std::exp2(t * width)),
+                      kTiltShelfQ, tilt / kTiltCells, fs);
+      }
+      return d;
     }
     case BandType::kFletcherMunson:
       return DesignFletcherMunson(y, fs);

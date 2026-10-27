@@ -41,7 +41,7 @@ void DynamicsGroup::DesignScFilter(bool snap_now) {
       d = DesignBand(BandType::kHp, hz, 0.0, q, 0, fs_);
       break;
     case ScFilter::kTilt:
-      d = DesignBand(BandType::kTilt, hz, kScTiltDb, 0.0, 0, fs_);
+      d = DesignShelfTilt(hz, kScTiltDb, fs_);
       break;
     case ScFilter::kKWeight:
       d = DesignBand(BandType::kKWeight, 0.0, 0.0, 0.0, 0, fs_);

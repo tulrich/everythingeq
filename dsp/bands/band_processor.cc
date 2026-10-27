@@ -54,7 +54,9 @@ ResolvedBand ResolveBand(const BandParams& bp, double control,
       break;
     case DynTarget::kMorph:
       if (bp.type == BandType::kVowel) rb.x += mod;
-      if (bp.type == BandType::kBandShelf) rb.z += mod;  // Width, octaves.
+      if (bp.type == BandType::kBandShelf || bp.type == BandType::kTilt) {
+        rb.z += mod;  // Width, octaves.
+      }
       break;
   }
   return rb;

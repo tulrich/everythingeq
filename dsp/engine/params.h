@@ -47,7 +47,8 @@ enum class OutputMode { kStereo, kSplitLr, kSplitMs };
 //   LP, HP, Notch:       x = Hz, z = Q (y unused); LP and HP at 24 dB/oct
 //                        are Linkwitz-Riley crossovers (LR4 at Q 0.707)
 //   BP:                  x = Hz, y = gain dB (<= kBpOffDb is silence), z = Q
-//   Tilt:                x = pivot Hz, y = high-minus-low gain dB
+//   Tilt:                x = pivot Hz, y = high-minus-low gain dB,
+//                        z = width in octaves (the span of the ramp)
 //   FletcherMunson:      y = phon delta (positive = boost lows/highs)
 //   Vowel:               x = morph index 0..4, y = formant gain dB,
 //                        z = tract scale

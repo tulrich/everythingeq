@@ -48,7 +48,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * *Primitives (Peak, Low/High Shelf, Notch, BP, and LP/HP at 12 dB/oct):* 1x SVF cell.
   * *Band Shelf:* a plateau of the band's gain between two edges, built from 2x Butterworth High Shelf cells (+gain at the low edge, −gain at the high edge) whose half-gain points are the edges. X is the center (the geometric mean of the edges), Z the width in octaves. Transitions are 12 dB/oct without overshoot; below about 2 octaves wide the plateau doesn't reach the full gain and the shape becomes a broad bell.
   * *LP/HP at 24 dB/oct (Linkwitz-Riley crossovers):* 2x cascaded SVF cells, both at the band's Q (default 0.7071 = LR4). LP and HP at 24 dB/oct, the same cutoff and Q 0.7071 sum to a flat-magnitude all-pass, **not** to the dry signal. Other Q values make a resonant 24 dB/oct filter.
-  * *Broadband Tilt:* 1x Low Shelf + 1x High Shelf pivoted inversely around center frequency $f_0$.
+  * *Broadband Tilt:* 4x High Shelf cells (Q 0.6, a quarter of the tilt each) at the midpoints of a span of `Width` octaves centered on the pivot $f_0$, with −tilt/2 of broadband gain: a monotonic ramp from −tilt/2 to +tilt/2 that is close to a straight dB-per-octave line across the width (within 0.25 dB through its middle half for widths of 4 octaves and up). Width 0 is a steep step at the pivot.
   * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline (`tools/fmfit`, within ~0.15 dB at a 20-phon delta). Per ISO 226 the presence cell comes out as a small **cut** for positive phon deltas (about −1.2 dB at 2.6 kHz for 20 phon): at lower levels the ear is relatively *more* sensitive there.
   * *Vowel Formant:* 3x peaking SVF cells (see §3.C).
   * *K-Weighting Utility:* 2x fixed SVF stages (+4 dB high-shelf at ~1.68 kHz + 2nd-order RLB high-pass at 38 Hz), matching ITU-R BS.1770 within tolerance at all supported sample rates.
@@ -77,7 +77,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
        $$T_{\text{eff}} = (1-\alpha)\cdot\text{Threshold} + \alpha\cdot\text{Rise}$$
        so sweeping $\alpha$ moves smoothly between the two without chasing the Threshold knob across a 30 dB DC shift. The UI greys `Rise` at $\alpha = 0$ and `Threshold` at $\alpha = 1$. The trigger meter and threshold handle display $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$.
   4. **Layer 2 (Gain Computer & Post-Threshold Ballistics):** Compare $\text{Trigger}_{\text{dB}}$ against $T_{\text{eff}}$, `Knee`, and `Trigger Mode (Above/Below)` to produce a raw normalized target scalar $\in [0.0, 1.0]$ (a smooth ramp across the knee width centered on $T_{\text{eff}}$; with Knee = 0, a hard 0/1 switch), then smooth with asymmetric `Attack`, `Hold`, and `Release` ballistics to emit the master Group Control signal $D_m \in [0.0, 1.0]$.
-  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index; for Band Shelf, Morph changes the width in octaves). Results are clamped to each parameter's legal range.
+  5. **Per-Band Modulation:** Each band subscribed to Group $m$ applies `ActiveParam = StaticParam + (D_m * Band_DynRange) * Global_Scale` to the parameter chosen by its `Dyn Target` (Gain in dB, Freq in octaves, or Vowel Morph index; for Band Shelf and Tilt, Morph changes the width in octaves). Results are clamped to each parameter's legal range.
 
 ### C. Vowel & Formant Filter Outline
 * **Acoustic Basis:** Models the first three vocal tract resonances: **$F_1$** (250–900 Hz, jaw openness), **$F_2$** (800–2500 Hz, tongue front/back), and **$F_3$** (2200–3200 Hz, brightness/timbre).
@@ -138,7 +138,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | LP, HP | Freq (Hz) | – | Q | Slope: 12 / 24 dB/oct (24 = Linkwitz-Riley) |
 | Notch | Freq (Hz) | – | Q | – |
 | BP | Freq (Hz) | Gain (dB; `-60` = silence) | Q | – |
-| Tilt | Pivot (Hz) | Tilt (dB, high minus low) | – | – |
+| Tilt | Pivot (Hz) | Tilt (dB, high minus low) | Width (oct) | – |
 | Fletcher-Munson | – | Phon Delta | – | – |
 | Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Weighting: Natural / Flat |
 | K-Weight | – | – | – | – |
@@ -151,7 +151,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Freq (X) | 20 Hz – 20 kHz | 1 kHz | log |
 | Gain (Y) | ±30 dB (BP: −60 … +30) | 0 dB | linear |
 | Q (Z) | 0.1 – 40 | 0.707 | log |
-| Width (Z) | 0.1 – 10 oct | 2 oct | log |
+| Width (Z) | Band Shelf: 0.1 – 10 oct; Tilt: 0 – 10 oct | Band Shelf 2 oct; Tilt 4 oct | Band Shelf log; Tilt linear |
 | Tilt (Y) | ±24 dB | 0 dB | |
 | Phon Delta (Y) | ±40 phon | 0 | |
 | Vowel Morph (X) | 0 – 4 | 2 (AH) | linear |

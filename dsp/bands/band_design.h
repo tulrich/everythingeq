@@ -34,12 +34,16 @@ inline constexpr double kMaxQ = 40.0;
 inline constexpr double kMaxGainDb = 30.0;
 inline constexpr double kMaxTiltDb = 24.0;
 inline constexpr double kMaxPhonDelta = 40.0;
-inline constexpr double kTiltShelfQ = 0.5;
+inline constexpr double kTiltShelfQ = 0.6;  // Monotonic at every width.
+inline constexpr int kTiltCells = 4;
 inline constexpr double kMinWidthOct = 0.1;
 inline constexpr double kMaxWidthOct = 10.0;
 
 BandDesign DesignBand(BandType type, double x, double y, double z, int option,
                       double sample_rate);
+
+// A fixed two-shelf tilt (Q 0.5 shelves at hz): the group SC filter's Tilt.
+BandDesign DesignShelfTilt(double hz, double tilt_db, double sample_rate);
 
 // Response of the band's main output y.
 std::complex<double> BandResponse(const BandDesign& d, double freq_hz,
