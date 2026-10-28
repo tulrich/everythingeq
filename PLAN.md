@@ -165,6 +165,22 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
     * Icons for band types, and elsewhere where they help.
     * Band ribbon: one click toggles a band on/off; Control-click (or click and hold) opens the type menu.
     * EQ graph modifiers: Command-drag on a node adjusts Gain only; other modifiers adjust other band params (to be assigned).
+    * **Design challenge: make band ↔ group associations obvious at a glance.** Today the routing is invisible unless you open each band's Dyn rows and each group's panel. One easy mistake: a vowel-boost patch did nothing because its Level group was still on External Sidechain. The display should answer these without clicking:
+      - Which groups drive this band, through which target (Gain/Freq/Morph), by how much, and in which direction?
+      - Which bands does this group drive?
+      - What does each group listen to (Input: Internal Dry, Band Sum, External SC, …) and how does it detect (Level / Vowel / Pitch)?
+      - Is a group actually producing anything right now? Show live D, and flag silent sources, e.g. External SC selected with no sidechain connected.
+      - Which combinations probably don't make sense, e.g. a Gain target on a Pitch group, or a Freq target on a Vowel group?
+
+      Ideas to explore:
+      - A color per group, reused on the group tabs, on the band nodes in the graph (a ring or tick per assignment), on the ribbon and in the Dyn rows.
+      - Group tabs that carry a summary ("G2 Level · Dry", "G1 Vowel · SC") and a live D bar.
+      - Hovering a group highlights its bands, and hovering a band highlights its groups.
+      - A compact routing matrix (bands × groups, cells showing target and range), possibly as an alternate view of the dynamics panel.
+      - Patch-cable lines between group tabs and graph nodes while a modifier is held.
+      - Dragging a group chip onto a node to create an assignment.
+
+      Wants real design effort (mockups, trying it on the Vocal Vowel Carve and drum band-shelf use cases) before any implementation. It also bears on the layout of the Dyn B row, which is a stopgap.
     * Band Shelf is done (B5 default, edge handles, Morph target = width, state v3). Option is now generic (state v4: LP24_LR/HP24_LR folded into LP/HP with a Slope option); a Band Shelf transition slope could use it later.
 
 ## Phase 8 — Performance, QA & release
