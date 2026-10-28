@@ -213,3 +213,11 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.
 * Tracking detectors (user idea, 2026-10-27): **done** as group `Detect` = Vowel / Pitch (`dsp/dynamics/tracker.h`, ABOUT.md 3.B). A second Dyn assignment per band (Dyn B) is done too, in a fourth band-editor row for now (to be laid out properly in the UI polish pass); factory preset *Vocal Vowel Carve (SC)*.
+* More tracking use cases (user ideas, 2026-10-28). Each could be written up in ABOUT.md §2 and get a factory preset:
+  - **Talk box.** A vocal track feeds the sidechain, possibly while it's muted or pulled down in the mix. A Vowel band on a synth or guitar (positive Formant Gain, Dyn A Morph +4 on a Vowel group) follows the sung vowels. A Level group on the same sidechain, with Dyn B Gain, opens the band only while the singer is singing. Open questions:
+    - Does Logic still send a muted track's audio to sidechains, or is a fader at −∞ or an unused output bus needed?
+    - The band only moves along the OO–EE path with three formants, so consonants and nasals don't come through. A real talk box or vocoder imposes the whole spectral envelope. A vocoder-style band type (LPC envelope as the filter) is a possible later extension.
+  - **Harmonic EQ.** Tie a band's frequency to the detected fundamental, or to a harmonic of it, to reshape timbre consistently as the note changes. For example, boost the 2nd harmonic for warmth, notch the 3rd for hollowness, or put a resonant BP on the 5th. This already works: on a Pitch group with Dyn Target Freq and DynRange +8 oct, a band at X = 27.5 × n Hz follows harmonic n. To consider:
+    - Expose "Harmonic n" directly instead of the 27.5 Hz arithmetic. This could be a per-band option or a display mode for X when the band follows a Pitch group.
+    - Tracking only works on monophonic sources, and a glide or octave errors show up as audible jumps. Faster attack/release suits this better than the vowel defaults.
+    - Several bands on one Pitch group could form a harmonic comb (e.g. odd harmonics only).
