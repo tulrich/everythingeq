@@ -2,8 +2,11 @@
 #define EVERYTHINGEQ_PLUGIN_UI_EDITOR_MODEL_H_
 
 #include <array>
+#include <string>
+#include <string_view>
 
 #include "model/param_table.h"
+#include "model/preset_library.h"
 #include "model/response_curves.h"
 
 namespace eeq {
@@ -44,6 +47,24 @@ class EditorModel {
   virtual void BeginEdit(int param_id) = 0;
   virtual void SetEdit(int param_id, double normalized) = 0;
   virtual void EndEdit(int param_id) = 0;
+
+  // Presets (ABOUT.md section 3.E).  Loading a preset is one undo step.
+  // Saving and renaming return false and set *error on failure.
+  virtual const PresetLibrary& Presets() const = 0;
+  virtual void RefreshPresets() = 0;
+  virtual PresetRef CurrentPreset() const = 0;
+  // The settings differ from the current preset's.
+  virtual bool PresetModified() = 0;
+  virtual bool LoadPreset(int index, std::string* error) = 0;
+  virtual bool SavePreset(std::string_view name, std::string* error) = 0;
+  // Renames the current (user) preset.
+  virtual bool RenamePreset(std::string_view name, std::string* error) = 0;
+
+  // Undo/redo of edits made in the plugin UI.
+  virtual bool CanUndo() const = 0;
+  virtual bool CanRedo() const = 0;
+  virtual void Undo() = 0;
+  virtual void Redo() = 0;
 
   // Sets a plain value as a single complete gesture.
   void SetValueGesture(int param_id, double normalized) {

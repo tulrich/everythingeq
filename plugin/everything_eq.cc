@@ -1,9 +1,12 @@
 #include "plugin/everything_eq.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 
+#include "IPlugPaths.h"
 #include "IPlug_include_in_plug_src.h"
 #include "dsp/common/denormals.h"
 #include "model/presets.h"
@@ -14,10 +17,23 @@ namespace eeq {
 
 namespace ig = iplug::igraphics;
 
+namespace {
+
+// ~/Library/Application Support/Everything EQ/Presets (macOS),
+// %LOCALAPPDATA%\Everything EQ\Presets (Windows).
+std::filesystem::path UserPresetDir() {
+  WDL_String path;
+  iplug::AppSupportPath(path);
+  return std::filesystem::path(path.Get()) / "Everything EQ" / "Presets";
+}
+
+}  // namespace
+
 EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
     : iplug::Plugin(
           info, iplug::MakeConfig(kNumParams,
-                                  static_cast<int>(FactoryPresets().size()))) {
+                                  static_cast<int>(FactoryPresets().size()))),
+      presets_(UserPresetDir()) {
   InitParams();
   MakeFactoryPresets();
   // Host bypass (AU, VST3) crossfades in the engine instead of switching
@@ -40,6 +56,15 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
   mLayoutFunc = [&](ig::IGraphics* graphics) {
     graphics->AttachCornerResizer(ig::EUIResizerMode::Scale, false);
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
+    // Command-Z / Shift-Command-Z (Control on Windows), when the host passes
+    // the keys on.
+    graphics->SetKeyHandlerFunc(
+        [this](const iplug::IKeyPress& key, bool is_up) {
+          const bool z = key.VK == 'Z' || std::tolower(key.utf8[0]) == 'z';
+          if (!key.C || key.A || !z) return false;
+          if (!is_up) key.S ? Redo() : Undo();
+          return true;
+        });
     editor_ = std::make_unique<Editor>(*graphics, *this);
     editor_open_ = true;
     layout_changed_ = true;
@@ -96,6 +121,137 @@ void EverythingEq::SetEdit(int param_id, double normalized) {
 
 void EverythingEq::EndEdit(int param_id) {
   EndInformHostOfParamChangeFromUI(param_id);
+}
+
+void EverythingEq::BeginInformHostOfParamChangeFromUI(int param_index) {
+  if (!applying_undo_) undo_.BeginGesture();
+  iplug::Plugin::BeginInformHostOfParamChangeFromUI(param_index);
+}
+
+void EverythingEq::SendParameterValueFromUI(int param_index,
+                                            double normalized) {
+  const double before = GetParam(param_index)->Value();
+  iplug::Plugin::SendParameterValueFromUI(param_index, normalized);
+  if (!applying_undo_) {
+    undo_.Record(param_index, before, GetParam(param_index)->Value());
+  }
+}
+
+void EverythingEq::EndInformHostOfParamChangeFromUI(int param_index) {
+  iplug::Plugin::EndInformHostOfParamChangeFromUI(param_index);
+  if (!applying_undo_) undo_.EndGesture();
+}
+
+void EverythingEq::ApplyValues(const ParamValues& values) {
+  undo_.EndAllGestures();
+  undo_.BeginGesture();
+  for (int id = 0; id < kNumParams; ++id) {
+    const iplug::IParam* p = GetParam(id);
+    if (p->Value() == values[id]) continue;
+    BeginEdit(id);
+    SetEdit(id, p->ToNormalized(values[id]));
+    EndEdit(id);
+  }
+  undo_.EndGesture();
+}
+
+void EverythingEq::ApplyChanges(const std::vector<ParamChange>& changes) {
+  applying_undo_ = true;
+  for (const ParamChange& c : changes) {
+    BeginEdit(c.id);
+    SetEdit(c.id, GetParam(c.id)->ToNormalized(c.value));
+    EndEdit(c.id);
+  }
+  applying_undo_ = false;
+}
+
+void EverythingEq::Undo() {
+  SyncUiState();
+  undo_.EndAllGestures();
+  ApplyChanges(undo_.Undo());
+}
+
+void EverythingEq::Redo() {
+  SyncUiState();
+  undo_.EndAllGestures();
+  ApplyChanges(undo_.Redo());
+}
+
+void EverythingEq::SyncUiState() {
+  if (state_restored_.exchange(false)) {
+    // The host replaced the settings (project load, its preset menu): the
+    // history no longer applies.
+    undo_.Clear();
+    preset_values_.reset();
+  }
+}
+
+void EverythingEq::RefreshPresets() {
+  presets_.Refresh();
+  preset_values_.reset();  // A user preset may have changed on disk.
+}
+
+PresetRef EverythingEq::CurrentPreset() const {
+  std::lock_guard<std::mutex> lock(preset_mutex_);
+  return current_preset_;
+}
+
+void EverythingEq::SetCurrentPreset(const PresetRef& ref) {
+  std::lock_guard<std::mutex> lock(preset_mutex_);
+  current_preset_ = ref;
+}
+
+bool EverythingEq::PresetModified() {
+  SyncUiState();
+  const PresetRef ref = CurrentPreset();
+  if (ref.name.empty()) return false;
+  if (!preset_values_ || !(preset_values_ref_ == ref)) {
+    preset_values_ = presets_.Load(presets_.Find(ref));
+    preset_values_ref_ = ref;
+    modified_epoch_ = ~0u;
+  }
+  if (!preset_values_) return false;  // E.g. a deleted user preset.
+  const unsigned epoch = param_epoch_.load(std::memory_order_relaxed);
+  if (epoch != modified_epoch_) {
+    modified_epoch_ = epoch;
+    modified_ = !ValuesMatch(CurrentValues(), *preset_values_);
+  }
+  return modified_;
+}
+
+bool EverythingEq::LoadPreset(int index, std::string* error) {
+  SyncUiState();
+  const std::optional<ParamValues> values = presets_.Load(index, error);
+  if (!values) return false;
+  ApplyValues(*values);
+  SetCurrentPreset(presets_.Ref(index));
+  preset_values_ = values;
+  preset_values_ref_ = presets_.Ref(index);
+  modified_epoch_ = ~0u;
+  return true;
+}
+
+bool EverythingEq::SavePreset(std::string_view name, std::string* error) {
+  SyncUiState();
+  const int index = presets_.Save(name, CurrentValues(), error);
+  if (index < 0) return false;
+  SetCurrentPreset(presets_.Ref(index));
+  preset_values_.reset();
+  return true;
+}
+
+bool EverythingEq::RenamePreset(std::string_view name, std::string* error) {
+  SyncUiState();
+  const int index = presets_.Find(CurrentPreset());
+  if (index < presets_.num_factory()) {
+    if (error) *error = "Only user presets can be renamed.";
+    return false;
+  }
+  const int renamed = presets_.Rename(index, name, error);
+  if (renamed < 0) return false;
+  SetCurrentPreset(presets_.Ref(renamed));
+  preset_values_.reset();
+  return true;
 }
 
 void EverythingEq::InitParams() {
@@ -168,8 +324,9 @@ void EverythingEq::InitParams() {
 void EverythingEq::MakeFactoryPresets() {
   for (const Preset& preset : FactoryPresets()) {
     iplug::IByteChunk chunk;
-    chunk.PutStr(
-        eeq::SerializeState(ValuesFromEngineParams(preset.params)).c_str());
+    chunk.PutStr(eeq::SerializeState(ValuesFromEngineParams(preset.params),
+                                     {preset.name, false})
+                     .c_str());
     MakePresetFromChunk(preset.name.c_str(), chunk);
   }
 }
@@ -182,6 +339,7 @@ ParamValues EverythingEq::CurrentValues() const {
 
 void EverythingEq::OnParamChange(int param_index) {
   params_dirty_ = true;
+  param_epoch_.fetch_add(1, std::memory_order_relaxed);
   if (param_index == GlobalParamId(GlobalField::kLookahead)) UpdateLatency();
 }
 
@@ -194,7 +352,7 @@ void EverythingEq::UpdateLatency() {
 }
 
 bool EverythingEq::SerializeState(iplug::IByteChunk& chunk) const {
-  chunk.PutStr(eeq::SerializeState(CurrentValues()).c_str());
+  chunk.PutStr(eeq::SerializeState(CurrentValues(), CurrentPreset()).c_str());
   return true;
 }
 
@@ -203,8 +361,12 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
   WDL_String text;
   const int end_pos = chunk.GetStr(text, start_pos);
   if (end_pos < 0) return -1;
-  const std::optional<ParamValues> values = DeserializeState(text.Get());
+  PresetRef preset;
+  const std::optional<ParamValues> values =
+      DeserializeState(text.Get(), &preset);
   if (!values) return -1;
+  SetCurrentPreset(preset);
+  state_restored_ = true;
   ENTER_PARAMS_MUTEX
   for (int id = 0; id < kNumParams; ++id) GetParam(id)->Set((*values)[id]);
   OnParamReset(iplug::kPresetRecall);
@@ -214,6 +376,7 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
 
 void EverythingEq::OnIdle() {
 #if IPLUG_EDITOR
+  SyncUiState();
   if (!editor_) return;
   EditorIdleData data;
   for (int i = 0; i < kNumMeterChannels; ++i) {
@@ -231,6 +394,7 @@ void EverythingEq::OnIdle() {
 void EverythingEq::OnUIClose() {
 #if IPLUG_EDITOR
   editor_open_ = false;
+  undo_.EndAllGestures();
   editor_.reset();  // Its controls are owned and deleted by IGraphics.
 #endif
 }

@@ -178,7 +178,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Lookahead | 0 – 10 ms | 0 ms | not automatable |
 * Inactive parameters keep their values when a band's type changes.
 * State is saved through the host's plugin state as versioned JSON keyed by stable parameter names (`band3.x`, `group1.attack_ms`, …), with migration for older versions; unknown keys are ignored and missing ones get defaults.
-* Presets are JSON files (`.eeqpreset`) holding a name and the parameters in physical units (Hz, dB, ms), so they read and diff well. Factory presets ship inside the plugin (one per use case in §2, with touch-wah as Peak, Vowel and sidechain variants, plus Init and a basic 4-band EQ) and appear in the host's preset menu. User presets are saved to `~/Library/Application Support/Everything EQ/Presets` (macOS) or `%APPDATA%\Everything EQ\Presets` (Windows).
+* Presets are JSON files (`.eeqpreset`) holding a name and the parameters in physical units (Hz, dB, ms), so they read and diff well. Factory presets ship inside the plugin (one per use case in §2, with touch-wah as Peak, Vowel and sidechain variants, plus Init and a basic 4-band EQ) and appear in the host's preset menu. User presets are saved to `~/Library/Application Support/Everything EQ/Presets` (macOS) or `%LOCALAPPDATA%\Everything EQ\Presets` (Windows). The plugin state remembers which preset the settings came from.
 
 ---
 
@@ -190,7 +190,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 
 ```text
 +--------------------------------------------------------------------------------------------------+
-| [B1: HP] [B2: Peak*] [B3: Tilt] [B4: F-M] [B5: Vowel] [B6: --] [B7: --] [B8: --]                | <- TOP BAND RIBBON
+| [B1: HP] [B2: Peak*] [B3: Tilt] [B4: F-M] [B5: Vowel] [B6: --]...  | [<][>][ Init *  v ][UNDO][REDO] | <- RIBBON, PRESET BAR
 +-----------------------------------------------------------------------+--------------------------+
 |  TYPE: [ Vowel Formant v ]   DYN GRP: [ Grp 1 v ]   TAP: [ Main v ]   |  DYNAMICS GROUP          |
 |  X (Morph): [ AH (2.0) ]     Y (Gain): [ -3.0 dB ]  Z (Tract): [1.0x] |  [G1*] [G2] [G3] [G4]    |
@@ -213,7 +213,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 |     20Hz     50Hz     100Hz    200Hz    500Hz    1kHz    5kHz  | [0.0]|  [██]  Knee:    4.0 dB   |
 +----------------------------------------------------------------+------+  [██] <--Thresh Handle   |
 |  ANALYZER: [Pre+Post v]  Tilt: [4.5dB]  | SCALE: [100%] [Δ] [BYPASS]  |  [██]  Mode: [Above v]   |
-|  OUTPUT: [Stereo v]  LOOKAHEAD: [0.0 ms]  PRESET: [Init v] [UNDO][REDO]|--------------------------|
+|  OUTPUT: [Stereo v]  LOOKAHEAD: [0.0 ms]                              |--------------------------|
 +-----------------------------------------------------------------------+  BALLISTICS & ROUTING    |
                                                                         |  Attack: [  3.5 ms ]     |
                                                                         |  Hold:   [  0.0 ms ]     |
@@ -225,7 +225,7 @@ Window target: **`960 x 560 px`** (scalable 75%–200%), single-screen utilitari
 * **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. LP and HP nodes sit on the curve at the cutoff (Q in dB, doubled at 24 dB/oct) and drag Q vertically, as in Logic's Channel EQ. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node. A selected Band Shelf also shows handles at its two edges; dragging one moves that edge while the other stays put (the wheel on its node changes the width).
 * **Group meters:** each group tab has a strip along its bottom: the group's live $D_m$ in blue (grey, with a dimmed label, while no active band has the group and a nonzero DynRange), and below it, in yellow, the gain the group's bands apply right now, growing from the center (left for a cut, right for a boost; full width = 24 dB). The applied gain is the largest deviation of those bands' combined response from their static response (a silent band counts as −60 dB). The detector scope repeats it as a number beside D.
 * **Level meters:** a vertical input meter at the left edge of the EQ graph and the output meter at its right (the `(M)` column), one bar per channel. Scale −60 to +6 dBFS (float signals can exceed full scale), segmented: green below −12 dBFS, yellow from −12 to 0, red above 0, with a peak-hold tick. Above each meter, a numeric readout of the recent peak (the meter's name sits below it); once a peak exceeds 0 dBFS the readout latches in red, showing the highest peak, until it is clicked or the host transport starts. Inactive channels (e.g. R on a mono track) are drawn empty.
-* **Presets & editing:** an in-plugin preset menu (factory presets plus user presets saved as files) alongside the host's own preset handling, and undo/redo of parameter edits made in the plugin UI. No A/B comparison or band copy/paste in v1.
+* **Presets & editing:** the preset bar above the dynamics panel works alongside the host's own preset handling. Arrows step through the factory presets and then the user presets; the name shows the current preset, with `*` once the settings differ from it (comparing only what a preset stores), and opens the menu: factory presets, user presets, Save (the current user preset), Save As..., Rename... (names are typed in place; saving over another user preset asks first) and Show Presets Folder. User presets are plain files, so they can be copied between machines and hosts. Loading a preset is one undo step. UNDO / REDO (and Command-Z / Shift-Command-Z when the host passes keys to the plugin) undo edits made in the plugin UI; a drag is one step, host automation isn't recorded, and the history is cleared when the host restores a state (project load, its own preset menu). No A/B comparison or band copy/paste in v1.
 * **Graphics:** IGraphics with the NanoVG backend.
 
 ---

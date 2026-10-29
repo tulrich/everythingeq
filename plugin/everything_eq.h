@@ -4,6 +4,10 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "IControls.h"
@@ -12,6 +16,8 @@
 #include "dsp/engine/engine.h"
 #include "model/lookahead_gate.h"
 #include "model/param_table.h"
+#include "model/preset_library.h"
+#include "model/undo_history.h"
 #include "plugin/ui/editor_model.h"
 
 namespace eeq {
@@ -39,6 +45,22 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   void BeginEdit(int param_id) override;
   void SetEdit(int param_id, double normalized) override;
   void EndEdit(int param_id) override;
+  const PresetLibrary& Presets() const override { return presets_; }
+  void RefreshPresets() override;
+  PresetRef CurrentPreset() const override;
+  bool PresetModified() override;
+  bool LoadPreset(int index, std::string* error) override;
+  bool SavePreset(std::string_view name, std::string* error) override;
+  bool RenamePreset(std::string_view name, std::string* error) override;
+  bool CanUndo() const override { return undo_.CanUndo(); }
+  bool CanRedo() const override { return undo_.CanRedo(); }
+  void Undo() override;
+  void Redo() override;
+
+  // Edits from the UI (controls and EditorModel) are recorded for undo.
+  void BeginInformHostOfParamChangeFromUI(int param_index) override;
+  void SendParameterValueFromUI(int param_index, double normalized) override;
+  void EndInformHostOfParamChangeFromUI(int param_index) override;
 
   void OnIdle() override;
   void OnUIClose() override;
@@ -63,6 +85,14 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   void InitParams();
   void MakeFactoryPresets();
   ParamValues CurrentValues() const;
+  // Moves every parameter to `values` as edits from the UI (one undo step).
+  void ApplyValues(const ParamValues& values);
+  // Applies undo/redo changes (not recorded).
+  void ApplyChanges(const std::vector<ParamChange>& changes);
+  void SetCurrentPreset(const PresetRef& ref);
+  // UI thread: applies a pending host state restore to the undo history and
+  // the preset snapshot.
+  void SyncUiState();
   void UpdateLatency();
   void UpdateConnections();
   void AccumulatePeak(int meter_channel, const iplug::sample* data,
@@ -93,7 +123,22 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   SpscRing<DetectorFrame, 1024> detector_frames_;
   bool transport_was_running_ = false;
 
+  // The preset the settings came from; written by UnserializeState (any
+  // thread) and the UI.
+  mutable std::mutex preset_mutex_;
+  PresetRef current_preset_;
+  std::atomic<bool> state_restored_{false};
+  // Bumped on every parameter change (any thread).
+  std::atomic<unsigned> param_epoch_{0};
+
   // UI thread.
+  PresetLibrary presets_;
+  std::optional<ParamValues> preset_values_;  // The current preset's.
+  PresetRef preset_values_ref_;
+  unsigned modified_epoch_ = ~0u;
+  bool modified_ = false;
+  UndoHistory undo_;
+  bool applying_undo_ = false;
   int selected_band_ = 0;
   std::unique_ptr<Editor> editor_;
 };

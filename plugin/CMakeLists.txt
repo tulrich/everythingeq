@@ -41,6 +41,7 @@ iplug_add_plugin(${PROJECT_NAME}
     ui/eq_graph.h
     ui/level_meter.h
     ui/param_field.h
+    ui/preset_bar.h
     ui/theme.h
     resources/resource.h
   RESOURCES

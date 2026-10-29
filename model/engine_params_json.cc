@@ -82,7 +82,10 @@ void WriteEnum(json& j, const char* key,
                E default_value) {
   if (value == default_value) return;
   for (const auto& [name, v] : names) {
-    if (v == value) j[key] = name;
+    if (v == value) {
+      j[key] = name;  // The first (current) name, not a legacy alias.
+      return;
+    }
   }
 }
 

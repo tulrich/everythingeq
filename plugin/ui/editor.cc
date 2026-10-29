@@ -13,6 +13,7 @@
 #include "plugin/ui/eq_graph.h"
 #include "plugin/ui/level_meter.h"
 #include "plugin/ui/param_field.h"
+#include "plugin/ui/preset_bar.h"
 #include "plugin/ui/theme.h"
 
 namespace eeq {
@@ -128,13 +129,19 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
   graphics_.EnableTooltips(true);
   const ig::IRECT b = graphics_.GetBounds().GetPadded(-kMargin);
 
-  // Top band ribbon.
-  ribbon_ = new BandRibbon(b.GetFromTop(26.f), model_);
+  constexpr float kLeftWidth = 674.f;
+  constexpr float kColumnGap = 8.f;
+  // Top: the band ribbon, and the preset bar over the dynamics panel.
+  const ig::IRECT top = b.GetFromTop(26.f);
+  ribbon_ = new BandRibbon(top.GetFromLeft(kLeftWidth), model_);
   graphics_.AttachControl(ribbon_);
+  graphics_.AttachControl(new PresetBar(
+      top.GetReducedFromLeft(kLeftWidth + kColumnGap).GetVPadded(-2.f),
+      model_));
 
   const ig::IRECT body = b.GetReducedFromTop(34.f);
-  const ig::IRECT left = body.GetFromLeft(674.f);
-  const ig::IRECT right = body.GetReducedFromLeft(682.f);
+  const ig::IRECT left = body.GetFromLeft(kLeftWidth);
+  const ig::IRECT right = body.GetReducedFromLeft(kLeftWidth + kColumnGap);
 
   BuildBandEditor(left.GetFromTop(kBandRows * kRow + (kBandRows - 1) * kGap));
 

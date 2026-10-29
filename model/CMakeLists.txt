@@ -14,6 +14,7 @@ add_custom_command(
 add_library(eeq_model STATIC
   engine_params_json.cc
   param_table.cc
+  preset_library.cc
   presets.cc
   response_curves.cc
   slot_mapping.cc

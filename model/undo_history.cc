@@ -15,6 +15,12 @@ void UndoHistory::EndGesture() {
   }
 }
 
+void UndoHistory::EndAllGestures() {
+  if (gesture_depth_ == 0) return;
+  gesture_depth_ = 1;
+  EndGesture();
+}
+
 void UndoHistory::Record(int id, double before, double after) {
   if (gesture_depth_ == 0) {
     if (before != after) Commit({{id, before, after}});

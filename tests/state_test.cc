@@ -8,6 +8,7 @@
 #include <random>
 
 #include "model/param_table.h"
+#include "model/preset_library.h"
 #include "model/presets.h"
 #include "model/slot_mapping.h"
 #include "model/undo_history.h"
@@ -162,6 +163,107 @@ TEST_CASE("Preset files save, load and list", "[presets]") {
       &error));
 }
 
+TEST_CASE("Preset JSON keeps LP and HP slopes", "[presets]") {
+  for (const BandType type : {BandType::kLp, BandType::kHp}) {
+    for (const FilterSlope slope : {FilterSlope::k12, FilterSlope::k24}) {
+      Preset p{"x", {}};
+      p.params.bands[0].type = type;
+      p.params.bands[0].option = static_cast<int>(slope);
+      const std::optional<Preset> back = ParsePreset(PresetToJson(p));
+      REQUIRE(back.has_value());
+      REQUIRE(back->params.bands[0].type == type);
+      REQUIRE(back->params.bands[0].option == static_cast<int>(slope));
+    }
+  }
+}
+
+TEST_CASE("State carries the current preset reference", "[state]") {
+  const ParamValues v = RandomValues(7);
+  PresetRef ref;
+  REQUIRE(DeserializeState(SerializeState(v), &ref));
+  REQUIRE(ref.name.empty());
+
+  const std::string s = SerializeState(v, {"My Mix", true});
+  const std::optional<ParamValues> back = DeserializeState(s, &ref);
+  REQUIRE(back.has_value());
+  REQUIRE(*back == v);
+  REQUIRE(ref == PresetRef{"My Mix", true});
+
+  // A malformed reference is ignored rather than rejecting the state.
+  REQUIRE(DeserializeState(
+      R"({"format": "everythingeq-state", "version": 4, "params": {},
+          "preset": {"name": 3, "user": "yes"}})",
+      &ref));
+  REQUIRE(ref.name.empty());
+  REQUIRE_FALSE(ref.user);
+}
+
+TEST_CASE("Preset names and file names are cleaned up", "[presets]") {
+  REQUIRE(CleanPresetName("  Drums / Room\t ") == "Drums  Room");
+  REQUIRE(CleanPresetName("\n ") == "");
+  REQUIRE(CleanPresetName(std::string(100, 'x')).size() == 64);
+  // 63 ASCII bytes then a 2-byte character: not split.
+  REQUIRE(CleanPresetName(std::string(63, 'x') + "\xc3\xa9").size() == 63);
+  REQUIRE(PresetFileName("a:b?") == "a_b_" + std::string(kPresetExtension));
+  REQUIRE(PresetFileName(".hidden") ==
+          "_.hidden" + std::string(kPresetExtension));
+}
+
+TEST_CASE("Preset library lists, loads, saves and renames", "[presets]") {
+  const std::filesystem::path dir = TempDir("library");
+  PresetLibrary lib(dir);
+  const int nf = static_cast<int>(FactoryPresets().size());
+  REQUIRE(lib.num_factory() == nf);
+  REQUIRE(static_cast<int>(lib.entries().size()) == nf);
+  REQUIRE(lib.Find({FactoryPresets()[3].name, false}) == 3);
+  REQUIRE(lib.Find({FactoryPresets()[3].name, true}) == -1);
+
+  // Factory values load as host values.
+  const std::optional<ParamValues> f3 = lib.Load(3);
+  REQUIRE(f3.has_value());
+  REQUIRE(ValuesMatch(*f3, ValuesFromEngineParams(FactoryPresets()[3].params)));
+
+  // Saving a user preset round-trips its values, and user presets sort by
+  // name after the factory ones.
+  const ParamValues v = RandomValues(11);
+  const int zeta = lib.Save("Zeta", v);
+  REQUIRE(zeta == nf);
+  const int alpha = lib.Save("Alpha", *f3);
+  REQUIRE(alpha == nf);
+  REQUIRE(lib.Find({"Zeta", true}) == nf + 1);
+  const std::optional<ParamValues> back = lib.Load(nf + 1);
+  REQUIRE(back.has_value());
+  REQUIRE(ValuesMatch(*back, v));
+  REQUIRE_FALSE(ValuesMatch(*back, *f3));
+
+  // Saving under an existing name replaces it.
+  REQUIRE(lib.Save("Zeta", *f3) == nf + 1);
+  REQUIRE(static_cast<int>(lib.entries().size()) == nf + 2);
+  REQUIRE(ValuesMatch(*lib.Load(nf + 1), *f3));
+
+  // Rename moves the file; names must be unique among user presets.
+  std::string error;
+  REQUIRE(lib.Rename(nf + 1, "Alpha", &error) == -1);
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(lib.Rename(0, "X") == -1);  // Factory.
+  const int beta = lib.Rename(nf + 1, "Beta");
+  REQUIRE(beta == nf + 1);
+  REQUIRE(lib.Ref(beta) == PresetRef{"Beta", true});
+  REQUIRE(std::filesystem::exists(dir / PresetFileName("Beta")));
+  REQUIRE_FALSE(std::filesystem::exists(dir / PresetFileName("Zeta")));
+  // A change of case only keeps the file.
+  const int beta2 = lib.Rename(beta, "BETA");
+  REQUIRE(beta2 >= nf);
+  REQUIRE(lib.Load(beta2).has_value());
+
+  // A fresh library sees the same user presets.
+  PresetLibrary again(dir);
+  REQUIRE(again.entries().size() == lib.entries().size());
+  REQUIRE(again.Find({"Alpha", true}) >= nf);
+
+  REQUIRE_FALSE(lib.Save("  / ", v) >= 0);
+}
+
 TEST_CASE("Undo groups gestures and clears redo on new edits", "[undo]") {
   UndoHistory h;
   REQUIRE_FALSE(h.CanUndo());
@@ -194,6 +296,20 @@ TEST_CASE("Undo groups gestures and clears redo on new edits", "[undo]") {
   c = h.Undo();
   REQUIRE(c[0].id == 1);
   REQUIRE_FALSE(h.CanUndo());
+}
+
+TEST_CASE("Undo closes gestures whose end was lost", "[undo]") {
+  UndoHistory h;
+  h.BeginGesture();
+  h.BeginGesture();
+  h.Record(1, 0.0, 1.0);
+  h.EndGesture();
+  REQUIRE_FALSE(h.CanUndo());
+  h.EndAllGestures();
+  REQUIRE(h.CanUndo());
+  h.Record(2, 0.0, 1.0);  // Outside any gesture: a step of its own.
+  REQUIRE(h.Undo().size() == 1);
+  REQUIRE(h.Undo().size() == 1);
 }
 
 TEST_CASE("Undo ignores no-op edits and is bounded", "[undo]") {

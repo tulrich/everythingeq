@@ -24,6 +24,8 @@ class UndoHistory {
 
   void BeginGesture();
   void EndGesture();
+  // Closes any open gestures (e.g. one whose end was lost).
+  void EndAllGestures();
   void Record(int id, double before, double after);
 
   bool CanUndo() const { return !undo_.empty(); }
