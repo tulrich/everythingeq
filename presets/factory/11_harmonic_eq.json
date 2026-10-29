@@ -1,0 +1,118 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Harmonic EQ",
+  "params": {
+    "groups": [
+      {
+        "detect": "Pitch",
+        "attackMs": 10,
+        "releaseMs": 10
+      },
+      {
+        "thresholdDb": -40,
+        "kneeDb": 18,
+        "attackMs": 5,
+        "releaseMs": 150
+      }
+    ],
+    "bands": [
+      {
+        "type": "Peak",
+        "x": 27.5,
+        "y": 0,
+        "z": 2.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 55.0,
+        "y": 0,
+        "z": 4.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 82.5,
+        "y": 0,
+        "z": 6.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 110.0,
+        "y": 0,
+        "z": 8.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 137.5,
+        "y": 0,
+        "z": 10.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 165.0,
+        "y": 0,
+        "z": 12.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 192.5,
+        "y": 0,
+        "z": 14.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      },
+      {
+        "type": "Peak",
+        "x": 220.0,
+        "y": 0,
+        "z": 16.0,
+        "dynGroup": 1,
+        "dynTarget": "Gain",
+        "dynRange": 0,
+        "dynBGroup": 0,
+        "dynBTarget": "Freq",
+        "dynBRange": 8.0
+      }
+    ]
+  }
+}

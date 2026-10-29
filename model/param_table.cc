@@ -250,10 +250,10 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     bp.dyn_b_target = static_cast<DynTarget>(Int(at(BandField::kDynBTarget)));
     bp.dyn_b_range = SlotToPhysical(DynRangeMapping(bp.dyn_b_target),
                                     at(BandField::kDynBRange));
-    bp.dyn_b_group =
-        bp.dyn_b_range != 0.0 ? Int(at(BandField::kDynBGroup)) : -1;
-    // A band subscribes to its group only when it has a Dyn Range (D19).
-    bp.dyn_group = bp.dyn_range != 0.0 ? Int(at(BandField::kDynGroup)) : -1;
+    // The groups are kept without a Dyn Range (so presets keep them), but a
+    // band subscribes to a group only with one (D19, SubscribesTo).
+    bp.dyn_b_group = Int(at(BandField::kDynBGroup));
+    bp.dyn_group = Int(at(BandField::kDynGroup));
     bp.tap = static_cast<Tap>(Int(at(BandField::kTap)));
     bp.chan = mono_output ? Chan::kStereo
                           : static_cast<Chan>(Int(at(BandField::kChan)));

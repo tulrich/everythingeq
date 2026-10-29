@@ -155,4 +155,34 @@ TEST_CASE("Vocal Vowel Carve preset follows a sung vowel on the sidechain",
   REQUIRE(e.group(1).control(0) > 0.9);
 }
 
+TEST_CASE("Harmonic EQ preset puts band n on harmonic n", "[tracker]") {
+  const double fs = 48000.0;
+  const Preset* preset = nullptr;
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == "Harmonic EQ") preset = &p;
+  }
+  REQUIRE(preset != nullptr);
+  const double f0 = GENERATE(55.0, 98.0, 220.0);
+  CAPTURE(f0);
+  Engine e;
+  e.SetParams(preset->params);
+  e.Prepare(fs);
+  const std::vector<double> tone = Harmonic(f0, 0.4, fs);
+  const std::vector<float> x(tone.begin(), tone.end());
+  Stereo out(x.size());
+  const float* in[2] = {x.data(), x.data()};
+  float* o[2] = {out.l.data(), out.r.data()};
+  e.Process(in, nullptr, o, static_cast<int>(x.size()));
+  // Group 1 tracks pitch (Dyn B, Freq), group 2 the level (Dyn A, Gain).
+  REQUIRE(e.group(1).control(0) > 0.9);
+  for (int b = 0; b < kNumBands; ++b) {
+    const BandParams& bp = preset->params.bands[b];
+    const ResolvedBand rb =
+        ResolveBand(bp, e.group(1).control(0), e.group(0).control(0), 1.0);
+    CAPTURE(b, rb.x);
+    REQUIRE(std::abs(1200.0 * std::log2(rb.x / (f0 * (b + 1)))) < 10.0);
+    REQUIRE(rb.y == 0.0);  // Flat until a Dyn Range is set.
+  }
+}
+
 }  // namespace eeq::test

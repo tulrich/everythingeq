@@ -126,9 +126,17 @@ TEST_CASE("Dyn Range 0 means a band is static", "[state]") {
   for (int b = 0; b < kNumBands; ++b) {
     REQUIRE(v[BandParamId(b, BandField::kDynGroup)] == b / 2);
   }
-  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == -1);
-  v[BandParamId(2, BandField::kDynRange)] = 0.6;
+  // The group is kept, but the band doesn't subscribe without a range.
   REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == 1);
+  REQUIRE_FALSE(SubscribesTo(BuildEngineParams(v, false).bands[2], 1));
+  v[BandParamId(2, BandField::kDynRange)] = 0.6;
+  REQUIRE(SubscribesTo(BuildEngineParams(v, false).bands[2], 1));
+  // A preset's group survives without a range (e.g. a band set up for the
+  // user to turn up its Dyn Range).
+  v[BandParamId(2, BandField::kDynRange)] = kSlotDefault;
+  v[BandParamId(2, BandField::kDynGroup)] = 3;
+  const ParamValues kept = ValuesFromEngineParams(BuildEngineParams(v, false));
+  REQUIRE(kept[BandParamId(2, BandField::kDynGroup)] == 3);
   // And back: a static engine band gets its default group and no range.
   EngineParams p;
   p.bands[6].dyn_range = 12.0;

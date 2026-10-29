@@ -61,8 +61,10 @@ struct BandParams {
   double x = 1000.0;
   double y = 0.0;
   double z = 0.70710678118654752440;
-  int option = 0;      // Vowel: VowelWeighting; LP, HP: FilterSlope
-  int dyn_group = -1;  // -1 = static, else 0..kNumGroups-1
+  int option = 0;  // Vowel: VowelWeighting; LP, HP: FilterSlope
+  // -1 = none, else 0..kNumGroups-1; the band follows its group only with a
+  // nonzero dyn_range (see SubscribesTo).
+  int dyn_group = -1;
   DynTarget dyn_target = DynTarget::kGain;
   double dyn_range = 0.0;  // dB, octaves or morph index (per dyn_target)
   // 0..1: broadband gain opposing the band's dynamic gain (Dyn Target Gain
@@ -115,9 +117,11 @@ struct EngineParams {
 
 inline constexpr double kBpOffDb = -60.0;
 
-// Whether either of a band's dynamics assignments uses group g.
+// Whether either of a band's dynamics assignments uses group g (an
+// assignment with no range does nothing).
 inline bool SubscribesTo(const BandParams& bp, int g) {
-  return bp.dyn_group == g || bp.dyn_b_group == g;
+  return (bp.dyn_group == g && bp.dyn_range != 0.0) ||
+         (bp.dyn_b_group == g && bp.dyn_b_range != 0.0);
 }
 
 // Bands whose dynamic gain can be offset by Dyn Makeup.

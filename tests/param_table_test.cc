@@ -139,7 +139,7 @@ TEST_CASE("Host values survive engine params and back", "[params]") {
 
 TEST_CASE("Factory presets parse and are representable", "[params]") {
   const std::vector<Preset>& presets = FactoryPresets();
-  REQUIRE(presets.size() == 11);
+  REQUIRE(presets.size() == 12);
   REQUIRE(presets[0].name == "Init");
   REQUIRE(NearlyEqual(presets[0].params,
                       BuildEngineParams(DefaultParamValues(), false)));

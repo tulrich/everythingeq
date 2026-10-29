@@ -85,10 +85,9 @@ class EqGraph final : public iplug::igraphics::IControl {
     group_active_.fill(false);
     group_gain_db_.fill(0.f);
     for (const BandParams& bp : params_.bands) {
-      // BuildEngineParams leaves a band without a Dyn Range unsubscribed.
       if (bp.type == BandType::kOff || bp.bypass) continue;
-      for (int g : {bp.dyn_group, bp.dyn_b_group}) {
-        if (g < 0) continue;
+      for (int g = 0; g < kNumGroups; ++g) {
+        if (!SubscribesTo(bp, g)) continue;
         any_dynamic_ = true;
         group_active_[g] = true;
       }

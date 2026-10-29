@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include "model/param_table.h"
+
 namespace eeq {
 namespace {
 
@@ -172,6 +174,9 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
 
 EngineParams ParseEngineParams(const json& j) {
   EngineParams p;
+  for (int b = 0; b < kNumBands; ++b) {
+    p.bands[b].dyn_group = p.bands[b].dyn_b_group = DefaultDynGroup(b);
+  }
   ApplyEngineParamsJson(j, p);
   return p;
 }
@@ -218,7 +223,8 @@ json EngineParamsToJson(const EngineParams& p) {
 
   json bands = json::array();
   const BandParams bd{};
-  for (const BandParams& bp : p.bands) {
+  for (int b = 0; b < kNumBands; ++b) {
+    const BandParams& bp = p.bands[b];
     json j = json::object();
     if (bp.type != BandType::kOff) {
       WriteEnum(j, "type", kBandTypes, bp.type, bd.type);
@@ -233,11 +239,16 @@ json EngineParamsToJson(const EngineParams& p) {
         WriteEnum(j, "slope", kSlopes, static_cast<FilterSlope>(bp.option),
                   static_cast<FilterSlope>(bd.option));
       }
-      Write(j, "dynGroup", bp.dyn_group, bd.dyn_group);
+      // Groups are written when they differ from the band's default.
+      if (bp.dyn_group >= 0) {
+        Write(j, "dynGroup", bp.dyn_group, DefaultDynGroup(b));
+      }
       WriteEnum(j, "dynTarget", kDynTargets, bp.dyn_target, bd.dyn_target);
       Write(j, "dynRange", bp.dyn_range, bd.dyn_range);
       Write(j, "dynMakeup", bp.dyn_makeup, bd.dyn_makeup);
-      Write(j, "dynBGroup", bp.dyn_b_group, bd.dyn_b_group);
+      if (bp.dyn_b_group >= 0) {
+        Write(j, "dynBGroup", bp.dyn_b_group, DefaultDynGroup(b));
+      }
       WriteEnum(j, "dynBTarget", kDynTargets, bp.dyn_b_target, bd.dyn_b_target);
       Write(j, "dynBRange", bp.dyn_b_range, bd.dyn_b_range);
       WriteEnum(j, "tap", kTaps, bp.tap, bd.tap);
