@@ -30,6 +30,11 @@ namespace eeq {
 // Band Shelf).  A selected Band Shelf also shows handles at its edges (the
 // half-gain points); dragging one moves that edge and keeps the other fixed.
 // Double-clicking empty space adds a Peak band in the first free slot.
+//
+// Option-dragging a node sets its Dyn Range, and Cmd-dragging (Ctrl on
+// Windows) its Dyn B Range, along the target's axis: vertical for Gain,
+// horizontal for Freq and Morph.  The selected band shows where each
+// assignment takes it at full dynamics as a ring labeled A or B.
 class EqGraph final : public iplug::igraphics::IControl {
  public:
   static constexpr double kMinHz = 20.0;
@@ -141,6 +146,7 @@ class EqGraph final : public iplug::igraphics::IControl {
                         1.5f);
       }
     }
+    if (selected >= 0) DrawDynNodes(g, selected);
     for (int b = 0; b < kNumBands; ++b) {
       const std::optional<ig::IVec2> p = NodePosition(b);
       if (!p) continue;
@@ -173,6 +179,15 @@ class EqGraph final : public iplug::igraphics::IControl {
     drag_band_ = HitNode(x, y);
     if (drag_band_ < 0) return;
     model_.SelectBand(drag_band_);
+    drag_dyn_ = mod.A ? 0 : DynBModifier(mod) ? 1 : -1;
+    if (drag_dyn_ >= 0) {
+      const int id = DynRangeId(drag_band_, drag_dyn_);
+      drag_range_ =
+          SlotToPhysical(DynRangeMapping(DynTargetOf(drag_dyn_)), values_[id]);
+      model_.BeginEdit(id);
+      SetDirty(false);
+      return;
+    }
     // Drag relative to the node's own position, so it doesn't jump.
     const auto p = NodePosition(drag_band_);
     drag_x_ = p ? p->x : x;
@@ -187,6 +202,11 @@ class EqGraph final : public iplug::igraphics::IControl {
     const float gear = mod.S ? 0.1f : 1.f;
     drag_x_ += dx * gear;
     drag_y_ += dy * gear;
+    if (drag_dyn_ >= 0) {
+      DragDynRange(dx * gear, dy * gear);
+      Refresh();
+      return;
+    }
     if (drag_edge_ >= 0) {
       DragEdge();
       Refresh();
@@ -226,6 +246,8 @@ class EqGraph final : public iplug::igraphics::IControl {
     for (int id : DragParams(drag_band_)) model_.EndEdit(id);
     drag_band_ = -1;
     drag_edge_ = -1;
+    drag_dyn_ = -1;
+    SetDirty(false);
   }
 
   void OnMouseWheel(float x, float y, const iplug::igraphics::IMouseMod& mod,
@@ -263,6 +285,82 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
  private:
+  // Cmd on Mac (which iPlug reports as both buttons) or Ctrl.
+  static bool DynBModifier(const iplug::igraphics::IMouseMod& mod) {
+    return mod.C || (mod.L && mod.R);
+  }
+
+  // Dyn assignment `dyn` (0 = A, 1 = B) of the dragged band.
+  static int DynRangeId(int band, int dyn) {
+    return BandParamId(band,
+                       dyn == 0 ? BandField::kDynRange : BandField::kDynBRange);
+  }
+  DynTarget DynTargetOf(int dyn) const {
+    const BandParams& bp = params_.bands[drag_band_];
+    return dyn == 0 ? bp.dyn_target : bp.dyn_b_target;
+  }
+
+  // Moves the dragged Dyn Range with the pointer, in the units of the axis
+  // its target moves the node along.
+  void DragDynRange(float dx, float dy) {
+    const DynTarget target = DynTargetOf(drag_dyn_);
+    const double oct_per_px = std::log2(kMaxHz / kMinHz) / mRECT.W();
+    switch (target) {
+      case DynTarget::kGain:
+        drag_range_ -= dy * 2.0 * kRangeDb / mRECT.H();
+        break;
+      case DynTarget::kFreq:
+        drag_range_ += dx * oct_per_px;
+        break;
+      case DynTarget::kMorph:
+        if (params_.bands[drag_band_].type == BandType::kVowel) {
+          // As the node's own Morph drag: full width = full range.
+          const SlotMapping m = *SlotMappingFor(BandType::kVowel, Slot::kX);
+          drag_range_ += dx / mRECT.W() * (m.max - m.min);
+        } else {  // Width, octaves.
+          drag_range_ += dx * oct_per_px;
+        }
+        break;
+    }
+    const SlotMapping m = DynRangeMapping(target);
+    drag_range_ = std::clamp(drag_range_, m.min, m.max);
+    model_.SetEdit(DynRangeId(drag_band_, drag_dyn_),
+                   SlotFromPhysical(m, drag_range_));
+  }
+
+  // Where Dyn assignment `dyn` alone takes a band's node at full dynamics.
+  std::optional<iplug::igraphics::IVec2> DynNodePosition(int band,
+                                                         int dyn) const {
+    BandParams bp = params_.bands[band];
+    if ((dyn == 0 ? bp.dyn_range : bp.dyn_b_range) == 0.0) return std::nullopt;
+    const ResolvedBand rb =
+        ResolveBand(bp, dyn == 0 ? 1.0 : 0.0, dyn == 0 ? 0.0 : 1.0,
+                    params_.global.global_scale);
+    bp.x = rb.x, bp.y = rb.y, bp.z = rb.z;
+    return NodePosition(band, bp);
+  }
+
+  // Rings at the selected band's full-dynamics positions, joined to its
+  // node.
+  void DrawDynNodes(iplug::igraphics::IGraphics& g, int band) {
+    namespace ig = iplug::igraphics;
+    const std::optional<ig::IVec2> p = NodePosition(band);
+    if (!p || params_.bands[band].bypass) return;
+    const ig::IColor color = theme::BandColor(band);
+    for (int dyn = 0; dyn < 2; ++dyn) {
+      const std::optional<ig::IVec2> q = DynNodePosition(band, dyn);
+      if (!q || std::hypot(q->x - p->x, q->y - p->y) < 2.f) continue;
+      const bool dragging = drag_band_ == band && drag_dyn_ == dyn;
+      g.DrawLine(color.WithOpacity(0.5f), p->x, p->y, q->x, q->y);
+      g.FillCircle(theme::kBackground, q->x, q->y, kNodeRadius);
+      g.DrawCircle(color, q->x, q->y, kNodeRadius, nullptr,
+                   dragging ? 2.f : 1.25f);
+      g.DrawText(theme::Text(9.f, color, ig::EAlign::Center),
+                 dyn == 0 ? "A" : "B",
+                 ig::IRECT(q->x - 8, q->y - 6, q->x + 8, q->y + 6));
+    }
+  }
+
   // Where a band's frequency has moved to, for bands whose dynamics move it
   // away from their node (e.g. Dyn Target Freq following pitch).
   void ComputeLiveMarkers() {
@@ -369,6 +467,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   std::vector<int> DragParams(int band) const {
+    if (drag_dyn_ >= 0) return {DynRangeId(band, drag_dyn_)};
     if (drag_edge_ >= 0) {
       return {BandParamId(band, BandField::kX),
               BandParamId(band, BandField::kZ)};
@@ -441,8 +540,13 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   std::optional<iplug::igraphics::IVec2> NodePosition(int band) const {
+    return NodePosition(band, params_.bands[band]);
+  }
+
+  // The node of `band` with settings `bp` (e.g. moved by its dynamics).
+  std::optional<iplug::igraphics::IVec2> NodePosition(
+      int band, const BandParams& bp) const {
     if (freqs_.empty()) return std::nullopt;
-    const BandParams& bp = params_.bands[band];
     double hz = 1000.0;
     switch (bp.type) {
       case BandType::kOff:
@@ -459,22 +563,24 @@ class EqGraph final : public iplug::igraphics::IControl {
         break;
     }
     float y = DbToY(0.0);
-    const int y_id = BandParamId(band, BandField::kY);
     if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
       if (std::string(m->unit) == "dB") {
         y = DbToY(std::max(bp.y, -kRangeDb * 1.2));
       } else {
-        y = mRECT.B - static_cast<float>(values_[y_id]) * mRECT.H();
+        y = mRECT.B -
+            static_cast<float>(SlotFromPhysical(*m, bp.y)) * mRECT.H();
       }
     } else if (DragsQ(bp.type)) {
       y = DbToY(QDbScale(band) * std::log10(bp.z));
     } else {
-      // Filters: sit on the band's own curve at the cutoff.
+      // Filters: sit on the band's own curve at the (static) cutoff, which
+      // is about the same height wherever the cutoff is.
       const std::vector<float>& c = static_.band_db[band];
+      const double cutoff = params_.bands[band].x;
       const size_t i = std::min(
           c.size() - 1, static_cast<size_t>(std::lround(
-                            std::log(hz / kMinHz) / std::log(kMaxHz / kMinHz) *
-                            (c.size() - 1))));
+                            std::log(cutoff / kMinHz) /
+                            std::log(kMaxHz / kMinHz) * (c.size() - 1))));
       y = DbToY(c.empty() ? 0.0 : c[i]);
     }
     return iplug::igraphics::IVec2(FreqToX(std::clamp(hz, kMinHz, kMaxHz)), y);
@@ -587,6 +693,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::array<double, kNumBands> live_marker_hz_{};  // 0: no marker.
   int drag_band_ = -1;
   int drag_edge_ = -1;  // Band Shelf edge being dragged: 0 = low, 1 = high.
+  int drag_dyn_ = -1;   // Dyn Range being dragged: 0 = A, 1 = B.
+  double drag_range_ = 0.0;  // Its physical value.
   double drag_fixed_hz_ = 0.0;
   float drag_x_ = 0.f, drag_y_ = 0.f;
 };

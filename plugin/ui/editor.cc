@@ -341,7 +341,7 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   static const double kTilts[] = {0.0, 3.0, 4.5, 6.0};
   graphics_.AttachControl(
       new ChoiceField(row2.ReduceFromLeft(96.f), "TILT", 28.f,
-                      {"0 dB", "3 dB", "4.5 dB", "6 dB"}, 2,
+                      {"0 dB", "3 dB", "4.5 dB", "6 dB"}, 0,
                       [this](int i) { tilt_db_per_octave_ = kTilts[i]; }));
   status_ = new ig::ITextControl(
       row2, "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));

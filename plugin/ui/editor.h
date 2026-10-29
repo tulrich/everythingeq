@@ -82,7 +82,7 @@ class Editor {
   SpectrumAnalyzer pre_analyzer_;
   SpectrumAnalyzer post_analyzer_;
   int analyzer_mode_ = 3;  // EqGraph::AnalyzerMode::kPreAndPost.
-  double tilt_db_per_octave_ = 4.5;
+  double tilt_db_per_octave_ = 0.0;
   std::vector<float> samples_ = std::vector<float>(4096);
   std::vector<float> spectrum_pre_, spectrum_post_;
   std::chrono::steady_clock::time_point last_idle_ =
