@@ -179,9 +179,15 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
       - A compact routing matrix (bands × groups, cells showing target and range), possibly as an alternate view of the dynamics panel.
       - Patch-cable lines between group tabs and graph nodes while a modifier is held.
       - Dragging a group chip onto a node to create an assignment.
+      - A small patch bay (user idea, 2026-10-29): bands on one side, groups on the other, joined by curved wires drawn like patch cables (color = band, thickness or label = range, style = target; Dyn A and Dyn B as separate jacks). Drag from a band jack to a group jack to patch, drag off to unpatch. The same data could also be an 8 x 4 (or 16 x 4 with Dyn A/B rows) matrix, with lines or filled cells showing the connections; the wires read better at a glance, the matrix is more compact and easier to click.
 
       Wants real design effort (mockups, trying it on the Vocal Vowel Carve and drum band-shelf use cases) before any implementation. It also bears on the layout of the Dyn B row, which is a stopgap.
-    * Band Shelf is done (B5 default, edge handles, Morph target = width, state v3). Option is now generic (state v4: LP24_LR/HP24_LR folded into LP/HP with a Slope option); a Band Shelf transition slope could use it later.
+    * **Stack editing (user idea, 2026-10-29).** Holding a modifier shows all the bands as a faint stack of layers, one per band, in a sort of isometric projection over the band editor or graph. Any control you grab then moves the same control on every band in the stack, e.g. trim the Dyn Range of all eight Harmonic EQ bands at once. Changes are relative, so each band keeps its offset. Questions to settle:
+      - Which bands join: all of them, only active ones (not Off or bypassed), only those of the same type, or only those on the same group? A per-band include toggle could be shown in the stack.
+      - Whether the stack can be drawn legibly at 960 x 560, or whether a simpler cue does the job (all fields tinted, plus "x8" on the grabbed control).
+      - How values clamp at their range limits, and whether the whole move is one undo step (it should be).
+      - Related: the global SCALE multiplies every band's Dyn A and Dyn B range. That covers "overall amount" for gain-only setups, but in Harmonic EQ it also scales the pitch-following Freq range (+8 oct), which detunes the bands. Consider letting SCALE apply only to Gain targets, or giving each assignment an "exempt from Scale" flag.
+, edge handles, Morph target = width, state v3). Option is now generic (state v4: LP24_LR/HP24_LR folded into LP/HP with a Slope option); a Band Shelf transition slope could use it later.
 
 ## Phase 8 — Performance, QA & release
 1. **CPU budget:** worst case (8 bands × 4 cells, 4 groups, stereo, 48 kHz, 64-sample buffers) under 2% of one Apple M1 core. Profile and optimize (SIMD across stereo channels) only if the budget is missed.

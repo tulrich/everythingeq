@@ -9,6 +9,7 @@
 
 #include "IControl.h"
 #include "dsp/bands/band_design.h"
+#include "dsp/bands/band_processor.h"
 #include "dsp/bands/vowel.h"
 #include "model/response_curves.h"
 #include "model/slot_mapping.h"
@@ -99,6 +100,7 @@ class EqGraph final : public iplug::igraphics::IControl {
       ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_);
       ComputeGroupGains();
     }
+    ComputeLiveMarkers();
     SetDirty(false);
   }
 
@@ -126,6 +128,8 @@ class EqGraph final : public iplug::igraphics::IControl {
     } else {
       StrokeCurve(g, static_.total_db, theme::kText, 2.f);
     }
+
+    DrawLiveMarkers(g);
 
     if (selected >= 0) {
       for (int side = 0; side < 2; ++side) {
@@ -259,6 +263,54 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
  private:
+  // Where a band's frequency has moved to, for bands whose dynamics move it
+  // away from their node (e.g. Dyn Target Freq following pitch).
+  void ComputeLiveMarkers() {
+    live_marker_hz_.fill(0.0);
+    for (int b = 0; b < kNumBands; ++b) {
+      const BandParams& bp = params_.bands[b];
+      if (bp.type == BandType::kOff || bp.bypass) continue;
+      const auto m = SlotMappingFor(bp.type, Slot::kX);
+      if (!m || std::string(m->unit) != "Hz") continue;
+      auto control = [&](int group) {
+        return group >= 0 && group < kNumGroups
+                   ? std::clamp(live_[group], 0.0, 1.0)
+                   : 0.0;
+      };
+      const double hz =
+          ResolveBand(bp, control(bp.dyn_group), control(bp.dyn_b_group),
+                      params_.global.global_scale)
+              .x;
+      // Only once it is visibly apart from the node.
+      if (std::abs(std::log2(hz / bp.x)) > 0.03) live_marker_hz_[b] = hz;
+    }
+  }
+
+  // A thin line in the band's color at its live frequency, with a dot where
+  // it meets the live curve and the band number at the top.
+  void DrawLiveMarkers(iplug::igraphics::IGraphics& g) {
+    namespace ig = iplug::igraphics;
+    const std::vector<float>& total =
+        any_dynamic_ ? live_curves_.total_db : static_.total_db;
+    for (int b = 0; b < kNumBands; ++b) {
+      const double hz = live_marker_hz_[b];
+      if (hz < kMinHz || hz > kMaxHz) continue;
+      const ig::IColor color = theme::BandColor(b);
+      const float x = FreqToX(hz);
+      g.DrawLine(color.WithOpacity(0.5f), x, mRECT.T + 12.f, x, mRECT.B);
+      if (!total.empty()) {
+        const double u = std::log(hz / kMinHz) / std::log(kMaxHz / kMinHz);
+        const size_t i =
+            std::min(total.size() - 1,
+                     static_cast<size_t>(std::lround(u * (total.size() - 1))));
+        g.FillCircle(color, x, DbToY(total[i]), 3.f);
+      }
+      const std::string label = std::to_string(b + 1);
+      g.DrawText(theme::Text(9.f, color, ig::EAlign::Center), label.c_str(),
+                 ig::IRECT(x - 8.f, mRECT.T + 1.f, x + 8.f, mRECT.T + 12.f));
+    }
+  }
+
   void ComputeGroupGains() {
     // Silence (e.g. a BP band at its floor) counts as -60 dB, so opening it
     // reads +60 dB rather than an arbitrary huge number.
@@ -532,6 +584,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::array<bool, kNumGroups> group_active_{};
   std::array<float, kNumGroups> group_gain_db_{};
   bool any_dynamic_ = false;
+  std::array<double, kNumBands> live_marker_hz_{};  // 0: no marker.
   int drag_band_ = -1;
   int drag_edge_ = -1;  // Band Shelf edge being dragged: 0 = low, 1 = high.
   double drag_fixed_hz_ = 0.0;
