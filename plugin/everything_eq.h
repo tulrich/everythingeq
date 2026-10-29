@@ -139,6 +139,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   bool modified_ = false;
   UndoHistory undo_;
   bool applying_undo_ = false;
+  // Set while presets and undo apply values, which skip the UI detents.
+  bool exact_values_ = false;
   int selected_band_ = 0;
   std::unique_ptr<Editor> editor_;
 };

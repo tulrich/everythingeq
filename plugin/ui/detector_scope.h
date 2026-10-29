@@ -200,6 +200,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
     drag_id_ = GroupParamId(
         group_, s.alpha >= 0.5 ? GroupField::kRise : GroupField::kThreshold);
     drag_weight_ = s.alpha >= 0.5 ? s.alpha : 1.0 - s.alpha;
+    drag_plain_ = model_.Values()[drag_id_];
     model_.BeginEdit(drag_id_);
   }
 
@@ -212,10 +213,10 @@ class DetectorScope final : public iplug::igraphics::IControl {
     // by that over its weight in T_eff = (1 - a) * Threshold + a * Rise.
     const double ddb =
         -dy / trig.H() * (s.hi - s.lo) * (mod.S ? 0.1 : 1.0) / drag_weight_;
+    // Accumulate unsnapped, so small moves add up across the detents.
     const ParamSpec& spec = ParamTable()[drag_id_];
-    const double plain =
-        std::clamp(model_.Values()[drag_id_] + ddb, spec.min, spec.max);
-    model_.SetEdit(drag_id_, (plain - spec.min) / (spec.max - spec.min));
+    drag_plain_ = std::clamp(drag_plain_ + ddb, spec.min, spec.max);
+    model_.SetEdit(drag_id_, (drag_plain_ - spec.min) / (spec.max - spec.min));
   }
 
   void OnMouseUp(float x, float y,
@@ -281,6 +282,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
   const int& group_;
   int drag_id_ = -1;
   double drag_weight_ = 1.0;
+  double drag_plain_ = 0.0;  // The dragged value, unsnapped.
 };
 
 }  // namespace eeq

@@ -1,0 +1,23 @@
+diff --git a/IGraphics/Platforms/IGraphicsMac_view.mm b/IGraphics/Platforms/IGraphicsMac_view.mm
+index d4ae9e21e..cd9bbcfb5 100644
+--- a/IGraphics/Platforms/IGraphicsMac_view.mm
++++ b/IGraphics/Platforms/IGraphicsMac_view.mm
+@@ -1151,6 +1151,18 @@ - (void) controlTextDidEndEditing: (NSNotification*) aNotification
+   [self endUserInput ];
+ }
+ 
++// Escape cancels text entry (as on Windows) instead of committing it.
++- (BOOL) control: (NSControl*) control textView: (NSTextView*) textView doCommandBySelector: (SEL) commandSelector
++{
++  if (commandSelector == @selector(cancelOperation:))
++  {
++    [self endUserInput ];
++    mGraphics->SetAllControlsDirty();
++    return YES;
++  }
++  return NO;
++}
++
+ - (IPopupMenu*) createPopupMenu: (IPopupMenu&) menu : (NSRect) bounds;
+ {
+   IGRAPHICS_MENU_RCVR* pDummyView = [[[IGRAPHICS_MENU_RCVR alloc] initWithFrame:bounds] autorelease];

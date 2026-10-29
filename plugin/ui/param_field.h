@@ -160,19 +160,31 @@ class ParamField final : public iplug::igraphics::IControl {
                    const iplug::igraphics::IMouseMod& mod) override {
     if (!IsContinuous()) return;
     const double gearing = mod.S ? 2000.0 : 200.0;
-    SetValue(std::clamp(GetValue() - dy / gearing, 0.0, 1.0));
-    SetDirty(true);
+    Nudge(-dy / gearing);
   }
 
   void OnMouseWheel(float x, float y, const iplug::igraphics::IMouseMod& mod,
                     float d) override {
     if (!IsContinuous()) return;
     const double step = mod.S ? 0.001 : 0.01;
-    SetValue(std::clamp(GetValue() + d * step, 0.0, 1.0));
-    SetDirty(true);
+    Nudge(d * step);
   }
 
  private:
+  // Moves the value by `delta` (normalized) from where the last nudge left
+  // it, so that small moves add up across the parameter's detents (the
+  // plugin snaps what it receives).
+  void Nudge(double delta) {
+    const iplug::IParam* p = GetParam();
+    if (!p) return;
+    const double from =
+        p->GetNormalized() == nudged_to_ ? nudge_raw_ : p->GetNormalized();
+    nudge_raw_ = std::clamp(from + delta, 0.0, 1.0);
+    SetValue(nudge_raw_);
+    SetDirty(true);
+    nudged_to_ = p->GetNormalized();
+  }
+
   bool HasMenu() const {
     const iplug::IParam* p = GetParam();
     return !menu_labels_.empty() || (p && p->NDisplayTexts() > 0);
@@ -189,6 +201,8 @@ class ParamField final : public iplug::igraphics::IControl {
   Style style_;
   std::vector<std::string> menu_labels_;
   iplug::igraphics::IPopupMenu menu_;
+  double nudge_raw_ = 0.0;   // Unsnapped value of the last nudge,
+  double nudged_to_ = -1.0;  // and the parameter value it produced.
 };
 
 }  // namespace eeq

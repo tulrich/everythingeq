@@ -251,6 +251,44 @@ TEST_CASE("Slot display text parses back consistently", "[params]") {
           "-60.0 dB");
 }
 
+TEST_CASE("UI edits snap to each parameter's detents", "[params]") {
+  ParamValues v = DefaultParamValues();
+  auto snap = [&](int id, double value) {
+    return SnapParamValue(v, id, value);
+  };
+  auto Near = [](double a, double b) { return std::abs(a - b) < 1e-9; };
+  // Levels: 0.5 dB.
+  REQUIRE(Near(snap(GroupParamId(0, GroupField::kThreshold), -20.3), -20.5));
+  REQUIRE(Near(snap(GroupParamId(0, GroupField::kKnee), 6.2), 6.0));
+  // Times: 0.1 ms below 10 ms, 1 ms above.
+  const int attack = GroupParamId(0, GroupField::kAttack);
+  REQUIRE(Near(snap(attack, 2.34), 2.3));
+  REQUIRE(Near(snap(attack, 23.4), 23.0));
+  REQUIRE(Near(snap(GroupParamId(0, GroupField::kRmsWindow), 47.6), 48.0));
+  REQUIRE(Near(snap(GroupParamId(0, GroupField::kRelease), 120.4), 120.0));
+  // Output Gain keeps 0.1 dB.
+  REQUIRE(Near(snap(GlobalParamId(GlobalField::kOutputGain), 1.23), 1.2));
+  // Slots snap in their physical unit: a Peak's gain in dB, not its
+  // frequency.
+  v[BandParamId(2, BandField::kType)] = static_cast<double>(BandType::kPeak);
+  const SlotMapping gain = *SlotMappingFor(BandType::kPeak, Slot::kY);
+  const int y = BandParamId(2, BandField::kY);
+  REQUIRE(
+      Near(SlotToPhysical(gain, snap(y, SlotFromPhysical(gain, 3.3))), 3.5));
+  const int x = BandParamId(2, BandField::kX);
+  REQUIRE(snap(x, 0.4321) == 0.4321);
+  // Dyn Range snaps only for a Gain target.
+  const int range = BandParamId(2, BandField::kDynRange);
+  const SlotMapping db = DynRangeMapping(DynTarget::kGain);
+  REQUIRE(
+      Near(SlotToPhysical(db, snap(range, SlotFromPhysical(db, -7.8))), -8.0));
+  v[BandParamId(2, BandField::kDynTarget)] =
+      static_cast<double>(DynTarget::kFreq);
+  REQUIRE(snap(range, 0.6123) == 0.6123);
+  // Enums are left alone.
+  REQUIRE(snap(BandParamId(2, BandField::kType), 1.0) == 1.0);
+}
+
 TEST_CASE("The default band layout is transparent", "[params]") {
   const EngineParams p = BuildEngineParams(DefaultParamValues(), false);
   const Stereo x = Noise(48000, 0.5, 3);

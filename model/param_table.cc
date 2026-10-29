@@ -11,6 +11,15 @@
 namespace eeq {
 namespace {
 
+// UI detents (SnapParamValue).
+constexpr double kLevelDetentDb = 0.5;
+// Times ("ms") snap to their step below this and to 1 ms above.
+constexpr double kFineTimeLimitMs = 10.0;
+
+double SnapTo(double value, double detent) {
+  return std::round(value / detent) * detent;
+}
+
 ParamSpec Continuous(std::string key, std::string name, std::string group,
                      double min, double max, double def, std::string unit,
                      bool log = false, double step = 0.0) {
@@ -143,11 +152,11 @@ std::vector<ParamSpec> MakeTable() {
                                           1.0, 5000.0, 100.0, "ms", true, 1.0);
     at(GroupField::kThreshold) =
         Continuous(k + "threshold_db", n + "Threshold", g, -70.0, 0.0, -20.0,
-                   "dB", false, 0.1);
+                   "dB", false, kLevelDetentDb);
     at(GroupField::kRise) = Continuous(k + "rise_db", n + "Rise", g, 0.0, 30.0,
-                                       6.0, "dB", false, 0.1);
+                                       6.0, "dB", false, kLevelDetentDb);
     at(GroupField::kKnee) = Continuous(k + "knee_db", n + "Knee", g, 0.0, 30.0,
-                                       0.0, "dB", false, 0.1);
+                                       0.0, "dB", false, kLevelDetentDb);
     at(GroupField::kMode) =
         Enum(k + "mode", n + "Mode", g, 0, {"Above", "Below"});
     at(GroupField::kAlpha) =
@@ -379,6 +388,25 @@ std::optional<SlotMapping> MappingForSlotParam(const ParamValues& values,
 }
 
 }  // namespace
+
+double SnapParamValue(const ParamValues& values, int id, double value) {
+  const ParamSpec& s = ParamTable()[id];
+  if (s.kind == ParamKind::kContinuous) {
+    if (s.step <= 0.0) return value;
+    double detent = s.step;
+    if (s.unit == "ms" && value >= kFineTimeLimitMs) {
+      detent = std::max(detent, 1.0);
+    }
+    return std::clamp(SnapTo(value, detent), s.min, s.max);
+  }
+  if (s.kind != ParamKind::kSlot) return value;
+  const std::optional<SlotMapping> m = MappingForSlotParam(values, id);
+  if (!m) return value;
+  const std::string unit = m->unit;
+  if (unit != "dB" && unit != "phon") return value;
+  return SlotFromPhysical(*m,
+                          SnapTo(SlotToPhysical(*m, value), kLevelDetentDb));
+}
 
 std::string FormatParamValue(const ParamValues& values, int id, double value) {
   const ParamSpec& s = ParamTable()[id];

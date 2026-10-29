@@ -116,7 +116,8 @@ void EverythingEq::BeginEdit(int param_id) {
 void EverythingEq::SetEdit(int param_id, double normalized) {
   SendParameterValueFromUI(param_id, normalized);
   // Keep any controls bound to this parameter in sync.
-  SendParameterValueFromDelegate(param_id, normalized, true);
+  SendParameterValueFromDelegate(param_id, GetParam(param_id)->GetNormalized(),
+                                 true);
 }
 
 void EverythingEq::EndEdit(int param_id) {
@@ -130,7 +131,14 @@ void EverythingEq::BeginInformHostOfParamChangeFromUI(int param_index) {
 
 void EverythingEq::SendParameterValueFromUI(int param_index,
                                             double normalized) {
-  const double before = GetParam(param_index)->Value();
+  const iplug::IParam* p = GetParam(param_index);
+  const double before = p->Value();
+  if (!exact_values_) {
+    // UI edits land on the parameter's detents (controls keep their own
+    // unsnapped position while dragging).
+    normalized = p->ToNormalized(SnapParamValue(CurrentValues(), param_index,
+                                                p->FromNormalized(normalized)));
+  }
   iplug::Plugin::SendParameterValueFromUI(param_index, normalized);
   if (!applying_undo_) {
     undo_.Record(param_index, before, GetParam(param_index)->Value());
@@ -145,6 +153,7 @@ void EverythingEq::EndInformHostOfParamChangeFromUI(int param_index) {
 void EverythingEq::ApplyValues(const ParamValues& values) {
   undo_.EndAllGestures();
   undo_.BeginGesture();
+  exact_values_ = true;
   for (int id = 0; id < kNumParams; ++id) {
     const iplug::IParam* p = GetParam(id);
     if (p->Value() == values[id]) continue;
@@ -152,16 +161,19 @@ void EverythingEq::ApplyValues(const ParamValues& values) {
     SetEdit(id, p->ToNormalized(values[id]));
     EndEdit(id);
   }
+  exact_values_ = false;
   undo_.EndGesture();
 }
 
 void EverythingEq::ApplyChanges(const std::vector<ParamChange>& changes) {
   applying_undo_ = true;
+  exact_values_ = true;
   for (const ParamChange& c : changes) {
     BeginEdit(c.id);
     SetEdit(c.id, GetParam(c.id)->ToNormalized(c.value));
     EndEdit(c.id);
   }
+  exact_values_ = false;
   applying_undo_ = false;
 }
 

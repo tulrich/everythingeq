@@ -12,11 +12,10 @@
 
 namespace eeq {
 
-// The preset bar (ABOUT.md section 4): previous/next arrows, the current
-// preset's name (with "*" once the settings differ from it) opening the
-// preset menu, and Undo/Redo.  The menu lists the factory and user presets
-// and has Save, Save As, Rename and Show Presets Folder; names are typed in
-// place.
+// The preset bar (ABOUT.md section 4): the current preset's name (with "*" once
+// the settings differ from it) opening the preset menu, and Undo/Redo.  The
+// menu lists the factory and user presets and has Save, Save As, Rename and
+// Show Presets Folder; names are typed in place.
 class PresetBar final : public iplug::igraphics::IControl {
  public:
   PresetBar(const iplug::igraphics::IRECT& bounds, EditorModel& model)
@@ -24,19 +23,12 @@ class PresetBar final : public iplug::igraphics::IControl {
     SetTextEntryLength(64);
     SetTooltip(
         "Presets: factory presets and your own (saved as files, so they work "
-        "in any host). Arrows step through the list; * means the settings "
-        "have changed since the preset was loaded or saved.");
+        "in any host). * means the settings have changed since the preset was "
+        "loaded or saved.");
   }
 
   void Draw(iplug::igraphics::IGraphics& g) override {
     namespace ig = iplug::igraphics;
-    // Arrows.
-    for (const bool next : {false, true}) {
-      const ig::IRECT r = next ? NextRect() : PrevRect();
-      DrawBox(g, r, hover_ == (next ? kNext : kPrev));
-      const float x = r.MW(), y = r.MH(), d = next ? 3.f : -3.f;
-      g.FillTriangle(theme::kTextDim, x - d, y - 4.f, x - d, y + 4.f, x + d, y);
-    }
     // Name and menu affordance.
     const ig::IRECT box = NameRect();
     DrawBox(g, box, hover_ == kName);
@@ -95,12 +87,6 @@ class PresetBar final : public iplug::igraphics::IControl {
   void OnMouseDown(float x, float y,
                    const iplug::igraphics::IMouseMod& mod) override {
     switch (PartAt(x, y)) {
-      case kPrev:
-        Step(-1);
-        break;
-      case kNext:
-        Step(1);
-        break;
       case kName:
         OpenMenu();
         break;
@@ -158,7 +144,7 @@ class PresetBar final : public iplug::igraphics::IControl {
   }
 
  private:
-  enum Part { kNone, kPrev, kNext, kName, kUndo, kRedo };
+  enum Part { kNone, kName, kUndo, kRedo };
   // Menu actions other than loading preset i (>= 0).
   static constexpr int kNoAction = -1;
   static constexpr int kSave = -2;
@@ -166,16 +152,9 @@ class PresetBar final : public iplug::igraphics::IControl {
   static constexpr int kRename = -4;
   static constexpr int kShowFolder = -5;
 
-  static constexpr float kArrowWidth = 18.f;
   static constexpr float kButtonWidth = 38.f;
   static constexpr float kGap = 3.f;
 
-  iplug::igraphics::IRECT PrevRect() const {
-    return mRECT.GetFromLeft(kArrowWidth);
-  }
-  iplug::igraphics::IRECT NextRect() const {
-    return PrevRect().GetTranslated(kArrowWidth + kGap, 0.f);
-  }
   iplug::igraphics::IRECT RedoRect() const {
     return mRECT.GetFromRight(kButtonWidth);
   }
@@ -183,13 +162,11 @@ class PresetBar final : public iplug::igraphics::IControl {
     return RedoRect().GetTranslated(-(kButtonWidth + kGap), 0.f);
   }
   iplug::igraphics::IRECT NameRect() const {
-    return iplug::igraphics::IRECT(NextRect().R + kGap, mRECT.T,
-                                   UndoRect().L - 2.f * kGap, mRECT.B);
+    return iplug::igraphics::IRECT(mRECT.L, mRECT.T, UndoRect().L - 2.f * kGap,
+                                   mRECT.B);
   }
 
   Part PartAt(float x, float y) const {
-    if (PrevRect().Contains(x, y)) return kPrev;
-    if (NextRect().Contains(x, y)) return kNext;
     if (NameRect().Contains(x, y)) return kName;
     if (UndoRect().Contains(x, y)) return kUndo;
     if (RedoRect().Contains(x, y)) return kRedo;
@@ -200,16 +177,6 @@ class PresetBar final : public iplug::igraphics::IControl {
                       const iplug::igraphics::IRECT& r, bool hover) {
     g.FillRoundRect(hover ? theme::kPanelRaised : theme::kPanel, r, 3.f);
     g.DrawRoundRect(theme::kBorder, r, 3.f);
-  }
-
-  void Step(int delta) {
-    model_.RefreshPresets();
-    const int n = static_cast<int>(model_.Presets().entries().size());
-    if (n == 0) return;
-    const int current = model_.Presets().Find(model_.CurrentPreset());
-    const int next =
-        current < 0 ? (delta > 0 ? 0 : n - 1) : (current + delta + n) % n;
-    Load(next);
   }
 
   void Load(int index) {

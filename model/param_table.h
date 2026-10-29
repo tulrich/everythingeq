@@ -130,6 +130,13 @@ EngineParams BuildEngineParams(const ParamValues& values, bool mono_output);
 // doesn't use get their defaults.
 ParamValues ValuesFromEngineParams(const EngineParams& params);
 
+// The detent nearest a parameter value (host units), for edits made in the
+// plugin UI: levels (dB, phon) in 0.5 dB steps, times in 0.1 ms steps below
+// 10 ms and 1 ms steps above, and other continuous parameters in their
+// ParamSpec step.  Slots snap in their physical unit for the current band
+// type.  Values without detents are returned unchanged.
+double SnapParamValue(const ParamValues& values, int id, double value);
+
 // Display text for a parameter value, using the current band type for slots.
 std::string FormatParamValue(const ParamValues& values, int id, double value);
 
