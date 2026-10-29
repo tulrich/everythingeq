@@ -160,7 +160,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.
 10. UI polish (user wish list, 2026-10-27; not started):
     * Output Gain as a vertical slider beside the EQ graph, like Logic's stock EQ.
-    * 0.5 dB detents on most dB parameters (0.1 dB steps are too fine to land on), with slower mouse response on those so a specific detent is easy to dial in.
+    * 0.5 dB detents on most dB parameters (0.1 dB steps are too fine to land on), with slower mouse response on those so a specific detent is easy to dial in. Detents done (ABOUT.md §4, Detents); the slower mouse response is still open.
     * Dials for most parameters.
     * Icons for band types, and elsewhere where they help.
     * Band ribbon: one click toggles a band on/off; Control-click (or click and hold) opens the type menu.

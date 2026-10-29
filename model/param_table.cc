@@ -191,7 +191,7 @@ std::vector<ParamSpec> MakeTable() {
   at(GlobalField::kBypass) = Bool("global.bypass", "Bypass", g, false);
   at(GlobalField::kOutputGain) =
       Continuous("global.output_gain_db", "Output Gain", g, -24.0, 24.0, 0.0,
-                 "dB", false, 0.1);
+                 "dB", false, kLevelDetentDb);
   at(GlobalField::kLookahead) =
       Continuous("global.lookahead_ms", "Lookahead", g, 0.0, kMaxLookaheadMs,
                  0.0, "ms", false, 0.1);

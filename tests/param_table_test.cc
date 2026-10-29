@@ -266,8 +266,7 @@ TEST_CASE("UI edits snap to each parameter's detents", "[params]") {
   REQUIRE(Near(snap(attack, 23.4), 23.0));
   REQUIRE(Near(snap(GroupParamId(0, GroupField::kRmsWindow), 47.6), 48.0));
   REQUIRE(Near(snap(GroupParamId(0, GroupField::kRelease), 120.4), 120.0));
-  // Output Gain keeps 0.1 dB.
-  REQUIRE(Near(snap(GlobalParamId(GlobalField::kOutputGain), 1.23), 1.2));
+  REQUIRE(Near(snap(GlobalParamId(GlobalField::kOutputGain), 1.23), 1.0));
   // Slots snap in their physical unit: a Peak's gain in dB, not its
   // frequency.
   v[BandParamId(2, BandField::kType)] = static_cast<double>(BandType::kPeak);
