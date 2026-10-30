@@ -158,11 +158,12 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 7. Graph node rules from ABOUT.md §4 (F-M pinned at 1 kHz, Vowel drags Morph/Gain, no node for K-Weight).
 8. Global footer: Output Mode, Lookahead, Scale, Δ, Bypass. The preset bar (factory + user, save/rename) and Undo/Redo sit above the dynamics panel (done).
 9. Listen exclusivity (D13): enabling SC Listen clears band Solos and vice versa; only one group's SC Listen at a time. Split output modes greyed in mono → mono.
-10. UI polish (user wish list, 2026-10-27; not started):
-    * Output Gain as a vertical slider beside the EQ graph, like Logic's stock EQ.
-    * 0.5 dB detents on most dB parameters (0.1 dB steps are too fine to land on), with slower mouse response on those so a specific detent is easy to dial in. Detents done (ABOUT.md §4, Detents); the slower mouse response is still open.
+10. UI polish (user wish list, 2026-10-27). Plan agreed 2026-10-30: (1) quick wins, (2) an HTML mockup of the layout, routing matrix and assignment cards, iterated with the user, (3) build the chosen layout, (4) band multi-select and copy/paste, (5) dials if they earn their place in the mockup.
+    * **Responsive layout (user decision, 2026-10-30).** A bigger default is fine, but as the window shrinks the UI drops or slides away panels, down to a minimum size that shows only the EQ graph, small, with draggable nodes.
+    * Output Gain as a vertical slider beside the EQ graph, like Logic's stock EQ. Done (fader right of the output meter).
+    * 0.5 dB detents on most dB parameters (0.1 dB steps are too fine to land on), with slower mouse response on those so a specific detent is easy to dial in. Done (ABOUT.md §4, Detents).
     * Dials for most parameters.
-    * Icons for band types, and elsewhere where they help.
+    * Icons for band types, and elsewhere where they help. Band type icons in the ribbon done.
     * Band ribbon: one click toggles a band on/off; Control-click (or click and hold) opens the type menu.
     * EQ graph modifiers: Command-drag on a node adjusts Gain only; other modifiers adjust other band params (to be assigned).
     * **Design challenge: make band ↔ group associations obvious at a glance.** Today the routing is invisible unless you open each band's Dyn rows and each group's panel. One easy mistake: a vowel-boost patch did nothing because its Level group was still on External Sidechain. The display should answer these without clicking:
@@ -187,7 +188,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
       - Whether the stack can be drawn legibly at 960 x 560, or whether a simpler cue does the job (all fields tinted, plus "x8" on the grabbed control).
       - How values clamp at their range limits, and whether the whole move is one undo step (it should be).
       - Copying settings between bands (user idea, 2026-10-29): select some of a band's controls (lasso them, or Shift-click / drag-select in the conventional way), then in the stack view Option-drag the selection onto other layers to copy those values there, e.g. B1's dynamics settings onto B2 and B3. Simpler fallbacks: band copy/paste of all settings or chosen sections (Type & shape, Dyn A, Dyn B, routing) from the ribbon's context menu, and Option-drag of one ribbon cell onto another. Copying should be one undo step. (ABOUT.md D15 left band copy/paste out of v1; revisit.)
-      - Related: the global SCALE multiplies every band's Dyn A and Dyn B range. That covers "overall amount" for gain-only setups, but in Harmonic EQ it also scales the pitch-following Freq range (+8 oct), which detunes the bands. Consider letting SCALE apply only to Gain targets, or giving each assignment an "exempt from Scale" flag.
+      - Related: the global SCALE multiplies every band's Dyn A and Dyn B range. That covers "overall amount" for gain-only setups, but in Harmonic EQ it also scales the pitch-following Freq range (+8 oct), which detunes the bands. Decided (2026-10-30): keep SCALE as is (the effect can be interesting) and warn instead; the footer shows "SCALE detunes tracking" (done).
 , edge handles, Morph target = width, state v3). Option is now generic (state v4: LP24_LR/HP24_LR folded into LP/HP with a Slope option); a Band Shelf transition slope could use it later.
 
 ## Phase 8 — Performance, QA & release

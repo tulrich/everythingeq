@@ -11,6 +11,7 @@
 #include "plugin/ui/band_ribbon.h"
 #include "plugin/ui/choice_field.h"
 #include "plugin/ui/eq_graph.h"
+#include "plugin/ui/fader.h"
 #include "plugin/ui/level_meter.h"
 #include "plugin/ui/param_field.h"
 #include "plugin/ui/preset_bar.h"
@@ -145,11 +146,17 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
 
   BuildBandEditor(left.GetFromTop(kBandRows * kRow + (kBandRows - 1) * kGap));
 
-  // Graph with the input meter at its left edge and the output meter at its
-  // right (ABOUT.md section 4).
-  const ig::IRECT graph_area = left.GetReducedFromTop(kBandRows * (kRow + kGap))
-                                   .GetReducedFromBottom(56.f);
+  // Graph with the input meter at its left edge, and the output meter and
+  // Output Gain fader at its right (ABOUT.md section 4).
+  ig::IRECT graph_area = left.GetReducedFromTop(kBandRows * (kRow + kGap))
+                             .GetReducedFromBottom(56.f);
   constexpr float kMeterWidth = 32.f;
+  constexpr float kFaderWidth = 26.f;
+  auto* fader = new Fader(graph_area.ReduceFromRight(kFaderWidth),
+                          GlobalParamId(GlobalField::kOutputGain), "Gain");
+  fader->SetTooltip(
+      "Output Gain. Drag (Shift = fine); double-click or Option-click for "
+      "0 dB.");
   input_meter_ = new LevelMeter(graph_area.GetFromLeft(kMeterWidth), "In", 2);
   output_meter_ =
       new LevelMeter(graph_area.GetFromRight(kMeterWidth), "Out", 2);
@@ -157,6 +164,7 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
   graphics_.AttachControl(graph_);
   graphics_.AttachControl(input_meter_);
   graphics_.AttachControl(output_meter_);
+  graphics_.AttachControl(fader);
   // The selected band's live dynamic offset, over the graph's corner.
   const ig::IRECT graph_rect = graph_->GetRECT();
   now_readout_ = new ig::ITextControl(
@@ -319,7 +327,15 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   field(0, GlobalField::kOutputMode, "OUTPUT", 46.f);
   field(1, GlobalField::kLookahead, "LOOKAHEAD", 64.f);
   field(2, GlobalField::kGlobalScale, "SCALE", 40.f);
-  field(3, GlobalField::kOutputGain, "OUT GAIN", 56.f);
+  scale_warning_ =
+      new ig::ITextControl(row1.SubRectHorizontal(4, 3).GetHPadded(-3.f), "",
+                           theme::Text(9.f, theme::kWarn, ig::EAlign::Near));
+  scale_warning_->SetTooltip(
+      "SCALE multiplies every Dyn Range, including Freq and Morph ranges "
+      "that follow a Pitch or Vowel group, so those bands no longer land on "
+      "the tracked pitch or vowel. That can be interesting; set SCALE to "
+      "100% for exact tracking.");
+  graphics_.AttachControl(scale_warning_);
 
   ig::IRECT row2 = r.GetPadded(-4.f).GetFromBottom(18.f).GetHPadded(-3.f);
   graphics_.AttachControl(new ParamField(
@@ -346,6 +362,26 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   status_ = new ig::ITextControl(
       row2, "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));
   graphics_.AttachControl(status_);
+}
+
+bool Editor::ScaleDetunesTracking(const ParamValues& v) {
+  if (v[GlobalParamId(GlobalField::kGlobalScale)] == 100.0) return false;
+  const EngineParams p = BuildEngineParams(v, false);
+  auto tracking = [&](int group, DynTarget target, double range) {
+    if (group < 0 || group >= kNumGroups || range == 0.0 ||
+        target == DynTarget::kGain) {
+      return false;
+    }
+    return p.groups[group].detect != DetectMode::kLevel;
+  };
+  for (const BandParams& bp : p.bands) {
+    if (bp.type == BandType::kOff || bp.bypass) continue;
+    if (tracking(bp.dyn_group, bp.dyn_target, bp.dyn_range) ||
+        tracking(bp.dyn_b_group, bp.dyn_b_target, bp.dyn_b_range)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Editor::SelectGroup(int group) {
@@ -428,6 +464,7 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
       f.control->SetLabel(label);
     }
     if (f.control->IsDisabled() == enabled) f.control->SetDisabled(!enabled);
+    f.control->SetDetents(LevelDetentCount(v, BandParamId(band, f.field)));
   }
 
   // NOW: the band's current dynamic offset in its target's unit.
@@ -489,6 +526,7 @@ void Editor::UpdateDynamicsPanel(const ParamValues& v) {
         break;
     }
     if (f.control->IsDisabled() == enabled) f.control->SetDisabled(!enabled);
+    f.control->SetDetents(LevelDetentCount(v, GroupParamId(g, f.field)));
   }
 }
 
@@ -547,6 +585,8 @@ void Editor::Idle(const EditorIdleData& data) {
   graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_);
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
+  scale_warning_->SetStr(ScaleDetunesTracking(v) ? "SCALE detunes tracking"
+                                                 : "");
 
   char buf[160];
   std::snprintf(

@@ -39,6 +39,7 @@ iplug_add_plugin(${PROJECT_NAME}
     ui/editor.h
     ui/editor_model.h
     ui/eq_graph.h
+    ui/fader.h
     ui/level_meter.h
     ui/param_field.h
     ui/preset_bar.h

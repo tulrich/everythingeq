@@ -286,6 +286,11 @@ TEST_CASE("UI edits snap to each parameter's detents", "[params]") {
   REQUIRE(snap(range, 0.6123) == 0.6123);
   // Enums are left alone.
   REQUIRE(snap(BandParamId(2, BandField::kType), 1.0) == 1.0);
+  // Detent counts let controls move one detent at a time.
+  REQUIRE(LevelDetentCount(v, GroupParamId(0, GroupField::kThreshold)) == 140);
+  REQUIRE(LevelDetentCount(v, y) == 120);    // Peak gain, +-30 dB.
+  REQUIRE(LevelDetentCount(v, range) == 0);  // Freq target.
+  REQUIRE(LevelDetentCount(v, GroupParamId(0, GroupField::kAttack)) == 0);
 }
 
 TEST_CASE("The default band layout is transparent", "[params]") {

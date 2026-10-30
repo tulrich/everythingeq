@@ -45,6 +45,11 @@ class ParamField final : public iplug::igraphics::IControl {
     }
   }
 
+  // A continuous parameter with this many detents across its range moves
+  // one detent per wheel notch and a few pixels per detent when dragged
+  // (0: the default speeds).
+  void SetDetents(int count) { detents_ = count; }
+
   void SetLabel(const std::string& label) {
     if (label != label_) {
       label_ = label;
@@ -159,14 +164,17 @@ class ParamField final : public iplug::igraphics::IControl {
   void OnMouseDrag(float x, float y, float dx, float dy,
                    const iplug::igraphics::IMouseMod& mod) override {
     if (!IsContinuous()) return;
-    const double gearing = mod.S ? 2000.0 : 200.0;
-    Nudge(-dy / gearing);
+    // Pixels for the full range.
+    const double range_px =
+        detents_ > 0 ? std::clamp(detents_ * kPixelsPerDetent, 200.0, 640.0)
+                     : 200.0;
+    Nudge(-dy / (mod.S ? 10.0 * range_px : range_px));
   }
 
   void OnMouseWheel(float x, float y, const iplug::igraphics::IMouseMod& mod,
                     float d) override {
     if (!IsContinuous()) return;
-    const double step = mod.S ? 0.001 : 0.01;
+    const double step = detents_ > 0 ? 1.0 / detents_ : mod.S ? 0.001 : 0.01;
     Nudge(d * step);
   }
 
@@ -201,6 +209,9 @@ class ParamField final : public iplug::igraphics::IControl {
   Style style_;
   std::vector<std::string> menu_labels_;
   iplug::igraphics::IPopupMenu menu_;
+  static constexpr double kPixelsPerDetent = 4.0;
+
+  int detents_ = 0;
   double nudge_raw_ = 0.0;   // Unsnapped value of the last nudge,
   double nudged_to_ = -1.0;  // and the parameter value it produced.
 };

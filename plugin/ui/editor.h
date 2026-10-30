@@ -48,6 +48,9 @@ class Editor {
   void BuildFooter(const iplug::igraphics::IRECT& r);
   void UpdateBandEditor(const ParamValues& v);
   void UpdateDynamicsPanel(const ParamValues& v);
+  // SCALE is not 100% and some active band follows a Pitch or Vowel group
+  // through a Freq or Morph target, so it no longer lands on what's tracked.
+  static bool ScaleDetunesTracking(const ParamValues& v);
 
   iplug::igraphics::IGraphics& graphics_;
   EditorModel& model_;
@@ -76,6 +79,7 @@ class Editor {
 
   iplug::igraphics::ITextControl* now_readout_ = nullptr;
   iplug::igraphics::ITextControl* status_ = nullptr;
+  iplug::igraphics::ITextControl* scale_warning_ = nullptr;
   std::string status_text_;
 
   DetectorHistory history_;

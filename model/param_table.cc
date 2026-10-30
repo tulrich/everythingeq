@@ -408,6 +408,19 @@ double SnapParamValue(const ParamValues& values, int id, double value) {
                           SnapTo(SlotToPhysical(*m, value), kLevelDetentDb));
 }
 
+int LevelDetentCount(const ParamValues& values, int id) {
+  const ParamSpec& s = ParamTable()[id];
+  double span = 0.0;
+  if (s.kind == ParamKind::kContinuous && s.unit == "dB") {
+    span = s.max - s.min;
+  } else if (const std::optional<SlotMapping> m =
+                 MappingForSlotParam(values, id)) {
+    const std::string unit = m->unit;
+    if (unit == "dB" || unit == "phon") span = m->max - m->min;
+  }
+  return static_cast<int>(std::lround(span / kLevelDetentDb));
+}
+
 std::string FormatParamValue(const ParamValues& values, int id, double value) {
   const ParamSpec& s = ParamTable()[id];
   char buf[48];

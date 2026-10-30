@@ -137,6 +137,10 @@ ParamValues ValuesFromEngineParams(const EngineParams& params);
 // type.  Values without detents are returned unchanged.
 double SnapParamValue(const ParamValues& values, int id, double value);
 
+// For levels (dB, phon), the number of 0.5 dB detents across the range (so
+// UI controls can move one detent at a time); 0 for other parameters.
+int LevelDetentCount(const ParamValues& values, int id);
+
 // Display text for a parameter value, using the current band type for slots.
 std::string FormatParamValue(const ParamValues& values, int id, double value);
 
