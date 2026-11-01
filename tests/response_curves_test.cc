@@ -87,4 +87,33 @@ TEST_CASE("Group controls move dynamic bands", "[curves]") {
   REQUIRE(std::abs(curves.band_db[0][0] - 9.0) < 0.05);
 }
 
+TEST_CASE("Scale is a gain scale", "[curves]") {
+  EngineParams p;
+  p.bands[0] = {BandType::kPeak, 1000.0, 6.0, 1.0};
+  p.bands[0].dyn_group = 0;
+  p.bands[0].dyn_range = 4.0;
+  p.bands[1] = {BandType::kPeak, 4000.0, 0.0, 1.0};
+  p.bands[1].dyn_group = 0;
+  p.bands[1].dyn_target = DynTarget::kFreq;
+  p.bands[1].dyn_range = 1.0;
+  p.global.global_scale = 0.5;
+  GroupControls controls{};
+  controls[0] = 1.0;
+  // Static gain and the Gain range both halve: (6 + 4) / 2.
+  const ResolvedBand gain = ResolveBand(p.bands[0], 1.0, 0.0, 0.5);
+  REQUIRE(std::abs(gain.y - 5.0) < 1e-9);
+  // Freq ranges are not scaled, so tracking stays in tune.
+  const ResolvedBand freq = ResolveBand(p.bands[1], 1.0, 0.0, 0.5);
+  REQUIRE(std::abs(freq.x - 8000.0) < 1e-6);
+  // A filter has no gain to scale.
+  BandParams hp = {BandType::kHp, 100.0, 0.0, 0.707};
+  REQUIRE(ResolveBand(hp, 0.0, 0.0, 0.0).y == 0.0);
+  // Zero Scale flattens the chain.
+  p.global.global_scale = 0.0;
+  const std::vector<double> freqs = {1000.0};
+  ChainResponse curves;
+  ComputeChainResponse(p, controls, kFs, freqs, curves);
+  REQUIRE(std::abs(curves.total_db[0]) < 1e-3);
+}
+
 }  // namespace eeq::test

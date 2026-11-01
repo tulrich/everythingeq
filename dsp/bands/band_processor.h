@@ -62,15 +62,19 @@ struct ResolvedBand {
   double makeup_db = 0.0;  // Broadband gain from Dyn Makeup.
 };
 
+// What Global Scale multiplies a band's static gain (Y) by: global_scale
+// for types with a gain, 1 for the rest.
+double GainScaleFor(BandType type, double global_scale);
+
 // The band's design for resolved parameters, including Dyn Makeup.
 BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
                               double sample_rate);
 
 // Applies dynamics control values (D in [0, 1]) for the band's two
 // assignments (Dyn A: dyn_group/target/range; Dyn B: dyn_b_*) to its static
-// parameters (ABOUT.md section 3.B, step 5): x/y/z + D * DynRange *
-// global_scale per assignment.  Shared by the engine and the UI's response
-// curves.
+// parameters (ABOUT.md section 3.B, step 5): x/y/z + D * DynRange per
+// assignment.  global_scale multiplies the static gain and Gain-target ranges
+// only.  Shared by the engine and the UI's response curves.
 ResolvedBand ResolveBand(const BandParams& bp, double control_a,
                          double control_b, double global_scale);
 // Dyn A only.

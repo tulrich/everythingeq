@@ -326,16 +326,14 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   };
   field(0, GlobalField::kOutputMode, "OUTPUT", 46.f);
   field(1, GlobalField::kLookahead, "LOOKAHEAD", 64.f);
-  field(2, GlobalField::kGlobalScale, "SCALE", 40.f);
-  scale_warning_ =
-      new ig::ITextControl(row1.SubRectHorizontal(4, 3).GetHPadded(-3.f), "",
-                           theme::Text(9.f, theme::kWarn, ig::EAlign::Near));
-  scale_warning_->SetTooltip(
-      "SCALE multiplies every Dyn Range, including Freq and Morph ranges "
-      "that follow a Pitch or Vowel group, so those bands no longer land on "
-      "the tracked pitch or vowel. That can be interesting; set SCALE to "
-      "100% for exact tracking.");
-  graphics_.AttachControl(scale_warning_);
+  ParamField* scale =
+      new ParamField(row1.SubRectHorizontal(4, 2).GetHPadded(-3.f),
+                     GlobalParamId(GlobalField::kGlobalScale), "SCALE", 40.f);
+  scale->SetTooltip(
+      "Scales every band's gain, static and dynamic: 0% is flat, 50% is half "
+      "the curve in dB, negative inverts it. Freq and Morph aren't scaled, "
+      "so pitch and vowel tracking stay in tune.");
+  graphics_.AttachControl(scale);
 
   ig::IRECT row2 = r.GetPadded(-4.f).GetFromBottom(18.f).GetHPadded(-3.f);
   graphics_.AttachControl(new ParamField(
@@ -362,26 +360,6 @@ void Editor::BuildFooter(const ig::IRECT& r) {
   status_ = new ig::ITextControl(
       row2, "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));
   graphics_.AttachControl(status_);
-}
-
-bool Editor::ScaleDetunesTracking(const ParamValues& v) {
-  if (v[GlobalParamId(GlobalField::kGlobalScale)] == 100.0) return false;
-  const EngineParams p = BuildEngineParams(v, false);
-  auto tracking = [&](int group, DynTarget target, double range) {
-    if (group < 0 || group >= kNumGroups || range == 0.0 ||
-        target == DynTarget::kGain) {
-      return false;
-    }
-    return p.groups[group].detect != DetectMode::kLevel;
-  };
-  for (const BandParams& bp : p.bands) {
-    if (bp.type == BandType::kOff || bp.bypass) continue;
-    if (tracking(bp.dyn_group, bp.dyn_target, bp.dyn_range) ||
-        tracking(bp.dyn_b_group, bp.dyn_b_target, bp.dyn_b_range)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 void Editor::SelectGroup(int group) {
@@ -470,15 +448,21 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   // NOW: the band's current dynamic offset in its target's unit.
   std::string now;
   if ((range != 0.0 || range_b != 0.0) && !off) {
-    const double scale = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
+    // Global Scale applies to Gain targets only.
+    const double global = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
+    auto scale = [&](DynTarget t) {
+      return t == DynTarget::kGain ? global : 1.0;
+    };
     const GroupControls live = model_.LiveControls();
     now = "B" + std::to_string(band + 1) + " NOW";
     if (range != 0.0) {
-      now += "  " + FormatSlotValue(range_mapping, live[group] * range * scale);
+      now += "  " + FormatSlotValue(range_mapping,
+                                    live[group] * range * scale(target));
     }
     if (range_b != 0.0) {
-      now += "  B: " +
-             FormatSlotValue(range_b_mapping, live[group_b] * range_b * scale);
+      now +=
+          "  B: " + FormatSlotValue(range_b_mapping,
+                                    live[group_b] * range_b * scale(target_b));
     }
   }
   now_readout_->SetStr(now.c_str());
@@ -585,8 +569,6 @@ void Editor::Idle(const EditorIdleData& data) {
   graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_);
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
-  scale_warning_->SetStr(ScaleDetunesTracking(v) ? "SCALE detunes tracking"
-                                                 : "");
 
   char buf[160];
   std::snprintf(

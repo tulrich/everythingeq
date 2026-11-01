@@ -43,6 +43,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   static constexpr float kNodeRadius = 6.f;
   static constexpr float kEdgeHalfW = 2.5f;
   static constexpr float kEdgeHalfH = 7.f;
+  // Below this |Global Scale|, dragging a node doesn't change its gain.
+  static constexpr double kMinDragGainScale = 0.05;
 
   EqGraph(const iplug::igraphics::IRECT& bounds, EditorModel& model)
       : IControl(bounds), model_(model) {}
@@ -230,11 +232,17 @@ class EqGraph final : public iplug::igraphics::IControl {
           SlotFromPhysical(
               q, std::pow(10.0, YToDb(drag_y_) / QDbScale(drag_band_))));
     } else if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
-      if (std::string(m->unit) == "dB") {
-        model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_)));
-      } else {  // Phon: full height = full range.
-        model_.SetEdit(
-            y_id, std::clamp(values_[y_id] - dy * gear / mRECT.H(), 0.0, 1.0));
+      // The node is drawn at the scaled gain; near zero Scale it can't
+      // move the curve, so leave the gain alone.
+      const double k = GainScale(drag_band_);
+      if (std::abs(k) >= kMinDragGainScale) {
+        if (std::string(m->unit) == "dB") {
+          model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_) / k));
+        } else {  // Phon: full height = full range.
+          model_.SetEdit(
+              y_id,
+              std::clamp(values_[y_id] - dy * gear / mRECT.H() / k, 0.0, 1.0));
+        }
       }
     }
     Refresh();
@@ -276,8 +284,10 @@ class EqGraph final : public iplug::igraphics::IControl {
                                           ParamTable()[type_id].max);
       model_.SetValueGesture(BandParamId(b, BandField::kX),
                              SlotFromPhysical(freq, XToFreq(x)));
+      const double k = params_.global.global_scale;
+      const double db = std::abs(k) >= kMinDragGainScale ? YToDb(y) / k : 0.0;
       model_.SetValueGesture(BandParamId(b, BandField::kY),
-                             SlotFromPhysical(gain, YToDb(y)));
+                             SlotFromPhysical(gain, db));
       model_.SelectBand(b);
       Refresh();
       return;
@@ -539,8 +549,16 @@ class EqGraph final : public iplug::igraphics::IControl {
     return -1;
   }
 
+  // Where the band's node sits: its static settings with Global Scale
+  // applied, so the node stays on the drawn curve.
   std::optional<iplug::igraphics::IVec2> NodePosition(int band) const {
-    return NodePosition(band, params_.bands[band]);
+    BandParams bp = params_.bands[band];
+    bp.y *= GainScale(band);
+    return NodePosition(band, bp);
+  }
+
+  double GainScale(int band) const {
+    return GainScaleFor(params_.bands[band].type, params_.global.global_scale);
   }
 
   // The node of `band` with settings `bp` (e.g. moved by its dynamics).

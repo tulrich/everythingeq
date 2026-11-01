@@ -37,6 +37,10 @@ bool HasFreq(BandType t) {
 
 }  // namespace
 
+double GainScaleFor(BandType type, double global_scale) {
+  return HasGain(type) ? global_scale : 1.0;
+}
+
 namespace {
 
 // Adds one assignment's modulation; returns its gain change in dB.
@@ -71,13 +75,20 @@ double ApplyModulation(BandType type, DynTarget target, double mod,
 
 ResolvedBand ResolveBand(const BandParams& bp, double control_a,
                          double control_b, double global_scale) {
+  // Global Scale is a gain scale: it multiplies the static gain and the
+  // Gain-target ranges, but leaves Freq and Morph alone so pitch and vowel
+  // tracking stay in tune.
+  auto scaled = [&](DynTarget target, double range) {
+    return target == DynTarget::kGain ? range * global_scale : range;
+  };
   ResolvedBand rb;
   rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
+  rb.y *= GainScaleFor(bp.type, global_scale);
   const double gain_mod =
       ApplyModulation(bp.type, bp.dyn_target,
-                      control_a * bp.dyn_range * global_scale, rb) +
+                      control_a * scaled(bp.dyn_target, bp.dyn_range), rb) +
       ApplyModulation(bp.type, bp.dyn_b_target,
-                      control_b * bp.dyn_b_range * global_scale, rb);
+                      control_b * scaled(bp.dyn_b_target, bp.dyn_b_range), rb);
   if (gain_mod != 0.0 && HasDynMakeup(bp.type)) {
     rb.makeup_db = -gain_mod * bp.dyn_makeup;
   }
