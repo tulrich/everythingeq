@@ -87,7 +87,7 @@ TEST_CASE("Parameter specs are well formed", "[params]") {
 }
 
 TEST_CASE("Slot mappings round-trip and center on their defaults", "[params]") {
-  for (int t = 0; t <= static_cast<int>(BandType::kKWeight); ++t) {
+  for (int t = 0; t <= static_cast<int>(BandType::kPultecHigh); ++t) {
     for (Slot slot : {Slot::kX, Slot::kY, Slot::kZ}) {
       const auto m = SlotMappingFor(static_cast<BandType>(t), slot);
       if (!m) continue;

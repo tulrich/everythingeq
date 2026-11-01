@@ -348,4 +348,55 @@ TEST_CASE("Changing band type crossfades without a jump", "[bands]") {
   REQUIRE(around < 2.5 * steady);
 }
 
+TEST_CASE("Pultec Low boosts below, attenuates above", "[bands]") {
+  const double fs = 48000.0;
+  auto db = [&](double boost, double atten, double f) {
+    return MagDb(BandResponse(
+        DesignBand(BandType::kPultecLow, 60.0, boost, atten, 0, fs), f, fs));
+  };
+  // Boost alone: a shelf with its half-gain point at the frequency.
+  REQUIRE(std::abs(db(10.0, 0.0, 6.0) - 10.0) < 0.6);
+  REQUIRE(std::abs(db(10.0, 0.0, 60.0) - 5.0) < 1.0);
+  REQUIRE(std::abs(db(10.0, 0.0, 2000.0)) < 0.2);
+  // Attenuation alone: a broad shelf centered five times higher.
+  REQUIRE(std::abs(db(0.0, 10.0, 6.0) + 10.0) < 0.3);
+  REQUIRE(std::abs(db(0.0, 10.0, 300.0) + 5.0) < 1.0);
+  // Both: the bump below the frequency and the dip above it.
+  REQUIRE(db(8.0, 4.0, 25.0) > 3.5);
+  double dip = 0.0;
+  for (double f = 80.0; f <= 250.0; f *= 1.05)
+    dip = std::min(dip, db(8.0, 4.0, f));
+  REQUIRE(dip < -2.5);
+  REQUIRE(std::abs(db(8.0, 4.0, 5000.0)) < 0.5);
+}
+
+TEST_CASE("Pultec High boosts and attenuates at its own frequencies",
+          "[bands]") {
+  const double fs = 48000.0;
+  auto db = [&](double boost, double atten, int sel, double f) {
+    return MagDb(BandResponse(
+        DesignBand(BandType::kPultecHigh, 10000.0, boost, atten, sel, fs), f,
+        fs));
+  };
+  REQUIRE(std::abs(db(6.0, 0.0, 0, 10000.0) - 6.0) < 0.3);
+  REQUIRE(std::abs(db(6.0, 0.0, 0, 300.0)) < 0.5);
+  // The attenuation shelf sits at the Atten Sel frequency: half its depth
+  // there, the full depth an octave or two above.
+  const int k20k = static_cast<int>(PultecAtten::k20k);
+  const int k5k = static_cast<int>(PultecAtten::k5k);
+  REQUIRE(db(0.0, 8.0, k5k, 5000.0) < db(0.0, 8.0, k20k, 5000.0) - 2.0);
+  REQUIRE(std::abs(db(0.0, 8.0, k5k, 5000.0) + 4.0) < 1.0);
+  REQUIRE(std::abs(db(0.0, 8.0, k20k, 200.0)) < 0.3);
+}
+
+TEST_CASE("Global Scale scales the Pultec attenuation too", "[bands]") {
+  BandParams bp;
+  bp.type = BandType::kPultecLow;
+  bp.x = 60.0, bp.y = 8.0, bp.z = 4.0;
+  const ResolvedBand rb = ResolveBand(bp, 0.0, 0.0, 0.5);
+  REQUIRE(rb.y == 4.0);
+  REQUIRE(rb.z == 2.0);
+  REQUIRE(rb.x == 60.0);
+}
+
 }  // namespace eeq::test

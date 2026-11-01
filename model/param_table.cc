@@ -109,10 +109,11 @@ std::vector<ParamSpec> MakeTable() {
     auto at = [&](BandField f) -> ParamSpec& { return t[BandParamId(b, f)]; };
     const DefaultBand& d = kDefaultBands[b];
     at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, d.bypass);
-    at(BandField::kType) = Enum(
-        k + "type", n + "Type", g, static_cast<int>(d.type),
-        {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP", "HP",
-         "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel", "K-Weight"});
+    at(BandField::kType) =
+        Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
+             {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP",
+              "HP", "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel",
+              "K-Weight", "Pultec Low", "Pultec High"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
@@ -251,7 +252,9 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     bp.x = PhysicalSlot(bp.type, Slot::kX, at(BandField::kX), defaults.x);
     bp.y = PhysicalSlot(bp.type, Slot::kY, at(BandField::kY), defaults.y);
     bp.z = PhysicalSlot(bp.type, Slot::kZ, at(BandField::kZ), defaults.z);
-    bp.option = Int(at(BandField::kOption));
+    // Clamp to the type's choices (the parameter spans the longest list).
+    bp.option = std::clamp(Int(at(BandField::kOption)), 0,
+                           std::max(0, OptionCount(bp.type) - 1));
     bp.dyn_target = static_cast<DynTarget>(Int(at(BandField::kDynTarget)));
     bp.dyn_range = SlotToPhysical(DynRangeMapping(bp.dyn_target),
                                   at(BandField::kDynRange));

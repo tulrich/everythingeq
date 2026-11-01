@@ -2,7 +2,9 @@
 
 #include "model/state.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -23,6 +25,14 @@ ParamValues RandomValues(uint32_t seed) {
   for (int i = 0; i < kNumParams; ++i) {
     const ParamSpec& s = ParamTable()[i];
     v[i] = SanitizeParamValue(i, s.min + unit(rng) * (s.max - s.min));
+  }
+  // Options beyond the band type's choices don't survive a save (they are
+  // clamped), so keep them in range.
+  for (int b = 0; b < kNumBands; ++b) {
+    const auto type =
+        static_cast<BandType>(std::lround(v[BandParamId(b, BandField::kType)]));
+    double& option = v[BandParamId(b, BandField::kOption)];
+    option = std::min(option, std::max(0.0, OptionCount(type) - 1.0));
   }
   return v;
 }

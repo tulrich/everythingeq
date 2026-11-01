@@ -21,6 +21,11 @@ constexpr SlotMapping kMorph{0.0, 2.0, 4.0, false, "Morph", ""};
 constexpr SlotMapping kFormantGain{-30.0,          0.0, 30.0, false,
                                    "Formant Gain", "dB"};
 constexpr SlotMapping kTract{0.70, 1.0, 1.40, true, "Tract", "x"};
+constexpr SlotMapping kPultecLowFreq{20.0, 60.0, 200.0, true, "Freq", "Hz"};
+constexpr SlotMapping kPultecHighFreq{2000.0, 8000.0, 20000.0,
+                                      true,   "Freq", "Hz"};
+constexpr SlotMapping kBoost{0.0, 4.0, 18.0, false, "Boost", "dB"};
+constexpr SlotMapping kAtten{0.0, 2.0, 18.0, false, "Atten", "dB"};
 
 double Lerp(double a, double b, double t, bool log) {
   return log ? a * std::pow(b / a, t) : a + (b - a) * t;
@@ -65,6 +70,13 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kMorph;
       if (slot == Slot::kY) return kFormantGain;
       return kTract;
+    case BandType::kPultecLow:
+    case BandType::kPultecHigh:
+      if (slot == Slot::kX) {
+        return type == BandType::kPultecLow ? kPultecLowFreq : kPultecHighFreq;
+      }
+      if (slot == Slot::kY) return kBoost;
+      return kAtten;
     case BandType::kOff:
     case BandType::kKWeight:
       return std::nullopt;
@@ -79,6 +91,8 @@ const char* OptionName(BandType type) {
     case BandType::kLp:
     case BandType::kHp:
       return "Slope";
+    case BandType::kPultecHigh:
+      return "Atten Sel";
     default:
       return "";
   }
@@ -91,8 +105,23 @@ std::vector<std::string> OptionLabels(BandType type) {
     case BandType::kLp:
     case BandType::kHp:
       return {"12 dB/oct", "24 dB/oct"};  // FilterSlope
+    case BandType::kPultecHigh:
+      return {"5 kHz", "10 kHz", "20 kHz"};  // PultecAtten
     default:
       return {};
+  }
+}
+
+int OptionCount(BandType type) {
+  switch (type) {
+    case BandType::kVowel:
+    case BandType::kLp:
+    case BandType::kHp:
+      return 2;
+    case BandType::kPultecHigh:
+      return 3;
+    default:
+      return 0;
   }
 }
 

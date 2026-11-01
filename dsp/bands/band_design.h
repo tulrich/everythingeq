@@ -35,6 +35,11 @@ inline constexpr double kMaxGainDb = 30.0;
 inline constexpr double kMaxTiltDb = 24.0;
 inline constexpr double kMaxPhonDelta = 40.0;
 inline constexpr double kTiltShelfQ = 0.6;  // Monotonic at every width.
+// Pultec shapes (DesignBand).
+inline constexpr double kPultecBoostQ = 0.9;
+inline constexpr double kPultecAttenQ = 0.45;
+inline constexpr double kPultecLowAttenRatio = 5.0;
+inline constexpr double kPultecHighBoostQ = 0.7;
 inline constexpr int kTiltCells = 4;
 inline constexpr double kMinWidthOct = 0.1;
 inline constexpr double kMaxWidthOct = 10.0;

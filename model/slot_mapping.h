@@ -38,6 +38,8 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot);
 // fewer), or "" and none if the type has no option.
 const char* OptionName(BandType type);
 std::vector<std::string> OptionLabels(BandType type);
+// The number of OptionLabels (doesn't allocate; safe on the audio thread).
+int OptionCount(BandType type);
 
 // Mapping for DynRange under a Dyn Target.
 SlotMapping DynRangeMapping(DynTarget target);

@@ -65,6 +65,35 @@ BandDesign DesignVowel(double morph, double gain_db, double scale, int option,
   return d;
 }
 
+// Pultec EQP-1A style low section.  The boost is the LC network: a resonant
+// second-order shelf whose half-gain point is the selected frequency.  The
+// attenuation is the RC network: a much broader shelf centered five times
+// higher.  With both up, the boost wins at the bottom and the attenuation
+// above it, giving the bump below the frequency and the dip above it.
+// Shaped after published EQP-1A curves, not fitted to measurements.
+BandDesign DesignPultecLow(double hz, double boost_db, double atten_db,
+                           double fs) {
+  const double f = ClampF(hz);
+  return MakeSerial(
+      {DesignSvf(SvfShape::kLowShelf, f, kPultecBoostQ, ClampGain(boost_db),
+                 fs),
+       DesignSvf(SvfShape::kLowShelf, ClampF(f * kPultecLowAttenRatio),
+                 kPultecAttenQ, -ClampGain(atten_db), fs)});
+}
+
+// The high section: a broad boost bell and a gentle attenuation shelf at
+// 5, 10 or 20 kHz (the "atten sel" switch), e.g. boost 10 kHz and cut
+// 20 kHz for the classic air lift.
+BandDesign DesignPultecHigh(double hz, double boost_db, double atten_db,
+                            int option, double fs) {
+  static const double kAttenHz[] = {5000.0, 10000.0, 20000.0};
+  const double atten_hz = kAttenHz[std::clamp(option, 0, 2)];
+  return MakeSerial({DesignSvf(SvfShape::kBell, ClampF(hz), kPultecHighBoostQ,
+                               ClampGain(boost_db), fs),
+                     DesignSvf(SvfShape::kHighShelf, ClampF(atten_hz),
+                               kPultecAttenQ, -ClampGain(atten_db), fs)});
+}
+
 }  // namespace
 
 BandDesign DesignShelfTilt(double hz, double tilt_db, double fs) {
@@ -150,6 +179,10 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return DesignVowel(x, y, z, option, fs);
     case BandType::kKWeight:
       return DesignKWeighting(fs);
+    case BandType::kPultecLow:
+      return DesignPultecLow(x, y, z, fs);
+    case BandType::kPultecHigh:
+      return DesignPultecHigh(x, y, z, option, fs);
   }
   return {};
 }
@@ -208,7 +241,11 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
     }
     case BandType::kLowShelf:
     case BandType::kLp:
+    case BandType::kPultecLow:
       add(SvfShape::kLowPass, ClampF(x), kButterworthQ);
+      break;
+    case BandType::kPultecHigh:
+      add(SvfShape::kBandPass, ClampF(x), kPultecHighBoostQ);
       break;
     case BandType::kHighShelf:
     case BandType::kHp:

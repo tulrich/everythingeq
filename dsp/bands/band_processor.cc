@@ -17,6 +17,8 @@ bool HasGain(BandType t) {
     case BandType::kTilt:
     case BandType::kFletcherMunson:
     case BandType::kVowel:
+    case BandType::kPultecLow:
+    case BandType::kPultecHigh:
       return true;
     default:
       return false;
@@ -84,6 +86,10 @@ ResolvedBand ResolveBand(const BandParams& bp, double control_a,
   ResolvedBand rb;
   rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;
   rb.y *= GainScaleFor(bp.type, global_scale);
+  // The Pultec attenuation is a gain too.
+  if (bp.type == BandType::kPultecLow || bp.type == BandType::kPultecHigh) {
+    rb.z *= global_scale;
+  }
   const double gain_mod =
       ApplyModulation(bp.type, bp.dyn_target,
                       control_a * scaled(bp.dyn_target, bp.dyn_range), rb) +

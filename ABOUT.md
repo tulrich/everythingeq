@@ -56,6 +56,8 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * *Fletcher-Munson Contour:* 3x SVF cascade (Sub-Low Shelf < 100 Hz, Ear-Canal Presence Bell at 2.5–4 kHz, High-Air Shelf > 10 kHz) scaled proportionally by a single Phon Delta macro parameter, anchored to 0 dB at 1 kHz to prevent runaway volume jumps. This approximates the ISO 226:2003 equal-loudness difference curves, fitted offline (`tools/fmfit`, within ~0.15 dB at a 20-phon delta). Per ISO 226 the presence cell comes out as a small **cut** for positive phon deltas (about −1.2 dB at 2.6 kHz for 20 phon): at lower levels the ear is relatively *more* sensitive there.
   * *Vowel Formant:* 3x peaking SVF cells (see §3.C).
   * *K-Weighting Utility:* 2x fixed SVF stages (+4 dB high-shelf at ~1.68 kHz + 2nd-order RLB high-pass at 38 Hz), matching ITU-R BS.1770 within tolerance at all supported sample rates.
+  * *Pultec Low (EQP-1A style):* 2x Low Shelf cells. The boost (the LC network) is a resonant shelf (Q 0.9) whose half-gain point is the selected frequency (20–200 Hz); the attenuation (the RC network) is a much broader shelf (Q 0.45) centered five times higher. With both up, the boost wins at the bottom and the attenuation above it: e.g. at 60 Hz, boost 8 dB and atten 4 dB give about +4 dB below 30 Hz and a dip of about −3.5 dB near 120 Hz. Equal boost and attenuation cancel at the very bottom, leaving mostly the dip. Shaped after published EQP-1A curves, not fitted to measurements.
+  * *Pultec High:* a broad boost bell (Q 0.7, 2–20 kHz) plus a gentle attenuation High Shelf (Q 0.45) at 5, 10 or 20 kHz (the Option, "Atten Sel"), e.g. boost 10 kHz and attenuate at 20 kHz for the classic air lift.
 * **Efficiency & Nyquist Hygiene:**
   * Recalculate transcendental filter coefficients ($\tan$, $10^{\text{dB}/40}$) at a **control sub-block rate** (every 16 samples) with an epsilon dirty-check (`|ΔdB| > 0.005 dB`, or an equivalent relative frequency change), linearly interpolating $g$, $k$ and the output-mix weights across the sub-block when they are moving.
   * Use lightweight algebraic Q-prewarping near Nyquist to avoid high-shelf/bell cramping at 44.1/48 kHz without introducing oversampling latency.
@@ -150,12 +152,14 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Fletcher-Munson | – | Phon Delta | – | – |
 | Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Weighting: Natural / Flat |
 | K-Weight | – | – | – | – |
+| Pultec Low | Freq (20–200 Hz) | Boost (0–18 dB) | Atten (0–18 dB) | – |
+| Pultec High | Boost Freq (2–20 kHz) | Boost (0–18 dB) | Atten (0–18 dB) | Atten Sel: 5 / 10 / 20 kHz |
 
-* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Width 2 oct, Morph 2 (AH), Tract 1.0×, DynRange 0. Dynamic modulation is clamped to the same ranges as the static value.
+* **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Width 2 oct, Morph 2 (AH), Tract 1.0×, DynRange 0. The Pultec types have their own: 60 Hz (Low) or 8 kHz (High), Boost 4 dB, Atten 2 dB. Global Scale scales both Boost and Atten, and a Gain target moves the Boost. Dynamic modulation is clamped to the same ranges as the static value.
 
 | Parameter | Range | Default | Skew / notes |
 | :--- | :--- | :--- | :--- |
-| Type | Off + 12 types | Off | LP/HP slope is the Option |
+| Type | Off + 14 types | Off | LP/HP slope and Pultec High Atten Sel are the Option |
 | Freq (X) | 20 Hz – 20 kHz | 1 kHz | log |
 | Gain (Y) | ±30 dB (BP: −60 … +30) | 0 dB | linear |
 | Q (Z) | 0.1 – 40 | 0.707 | log |
