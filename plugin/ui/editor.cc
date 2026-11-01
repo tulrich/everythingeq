@@ -457,19 +457,33 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
           ig::IRECT(in.l, y, in.r, std::min(in.b, y + 40.f)));
     c.connect->SetDisabled(off);
     if (!compact) {
-      Place(c.group, u, ig::IRECT(in.l, y, in.r, y + 20.f));
-      Place(c.target, u, ig::IRECT(in.l, y + 24.f, in.r, y + 42.f));
-      const float dial_t = y + 46.f;
-      const float dial_h = std::max(0.f, in.b - dial_t + 4.f);
-      const ig::IRECT dial(in.l, dial_t, in.l + std::min(56.f, dial_h + 10.f),
-                           in.b + 4.f);
-      Place(c.range_dial, u, dial);
+      Place(c.group, u, ig::IRECT(in.l, y, in.r, y + kRow));
+      Place(c.target, u, ig::IRECT(in.l, y + kPitch, in.r, y + kPitch + kRow));
+      const float rest_t = y + 2.f * kPitch;
+      const float dial_h = in.b + 4.f - rest_t;
       Place(c.target_menu, false);
-      Place(c.range_field, false);
-      if (u && makeup_slot == slot) {
-        Place(makeup, true, ig::IRECT(dial.R + 4.f, in.b - kRow, in.r, in.b));
+      if (dial_h >= 54.f) {
+        // Range as a dial, Makeup beside it.
+        const ig::IRECT dial(in.l, rest_t, in.l + 56.f, in.b + 4.f);
+        Place(c.range_dial, u, dial);
+        Place(c.range_field, false);
+        if (u && makeup_slot == slot) {
+          Place(makeup, true, ig::IRECT(dial.R + 4.f, in.b - kRow, in.r, in.b));
+        }
+      } else {
+        // Too short for a dial: Range and Makeup as fields.
+        c.range_field->SetLabelWidth(46.f);
+        c.range_field->SetLabel("RANGE");
+        Place(c.range_dial, false);
+        Place(c.range_field, u, ig::IRECT(in.l, rest_t, in.r, rest_t + kRow));
+        if (u && makeup_slot == slot) {
+          Place(makeup, true,
+                ig::IRECT(in.l, rest_t + kPitch, in.r, rest_t + kPitch + kRow));
+        }
       }
     } else {
+      c.range_field->SetLabelWidth(0.f);
+      c.range_field->SetLabel("");
       Place(c.group, u, ig::IRECT(in.l, y, in.r, y + kRow));
       const ig::IRECT row(in.l, y + kPitch, in.r, y + kPitch + kRow);
       Place(c.target_menu, u, row.GetGridCell(0, 1, 2).GetHPadded(-1.f));

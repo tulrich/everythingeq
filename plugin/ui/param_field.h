@@ -60,6 +60,13 @@ class ParamField final : public iplug::igraphics::IControl {
     }
   }
 
+  void SetLabelWidth(float width) {
+    if (width != label_width_) {
+      label_width_ = width;
+      SetDirty(false);
+    }
+  }
+
   void SetLabel(const std::string& label) {
     if (label != label_) {
       label_ = label;
@@ -115,8 +122,35 @@ class ParamField final : public iplug::igraphics::IControl {
       g.FillTriangle(fade(theme::kTextDim), x - 3.f, y - 1.5f, x + 3.f,
                      y - 1.5f, x, y + 2.f);
     }
-    g.DrawText(theme::Text(11.f, fade(theme::kText)), value.Get(),
-               box.GetPadded(-6.f).GetReducedFromRight(is_enum ? 8.f : 0.f));
+    const ig::IRECT text_rect =
+        box.GetPadded(-6.f).GetReducedFromRight(is_enum ? 8.f : 0.f);
+    const ig::IText text = theme::Text(11.f, fade(theme::kText));
+    g.DrawText(text, Fit(g, text, value.Get(), text_rect.W()).c_str(),
+               text_rect);
+  }
+
+  // `s`, shortened with an ellipsis to fit `width` (text isn't clipped).
+  static std::string Fit(iplug::igraphics::IGraphics& g,
+                         const iplug::igraphics::IText& text,
+                         const std::string& s, float width) {
+    iplug::igraphics::IRECT r;
+    if (width <= 0.f || g.MeasureText(text, s.c_str(), r) <= width) return s;
+    std::string cut = s;
+    while (!cut.empty()) {
+      cut.pop_back();
+      // Don't split a UTF-8 sequence.
+      while (!cut.empty() &&
+             (static_cast<unsigned char>(cut.back()) & 0xC0) == 0x80) {
+        cut.pop_back();
+      }
+      if (!cut.empty() &&
+          (static_cast<unsigned char>(cut.back()) & 0xC0) == 0xC0) {
+        cut.pop_back();
+      }
+      const std::string t = cut + "\xe2\x80\xa6";
+      if (g.MeasureText(text, t.c_str(), r) <= width) return t;
+    }
+    return "";
   }
 
   void OnMouseDown(float x, float y,
@@ -219,7 +253,8 @@ class ParamField final : public iplug::igraphics::IControl {
                mRECT.GetFromBottom(13.f));
     const ig::IRECT knob =
         mRECT.GetReducedFromTop(12.f).GetReducedFromBottom(14.f);
-    const float r = std::max(4.f, std::min(knob.W(), knob.H()) / 2.f - 2.f);
+    const float r = std::clamp(std::min(knob.W(), knob.H()) / 2.f - 2.f, 4.f,
+                               kMaxDialRadius);
     const float cx = knob.MW(), cy = knob.MH();
     constexpr float kA0 = -135.f, kSweep = 270.f;
     const float v = static_cast<float>(GetValue());
@@ -295,6 +330,7 @@ class ParamField final : public iplug::igraphics::IControl {
   std::vector<std::string> menu_labels_;
   iplug::igraphics::IPopupMenu menu_;
   static constexpr double kPixelsPerDetent = 4.0;
+  static constexpr float kMaxDialRadius = 24.f;
 
   int detents_ = 0;
   double nudge_raw_ = 0.0;   // Unsnapped value of the last nudge,
