@@ -364,12 +364,12 @@ void Editor::Layout() {
   Place(input_meter_, L.show_meters, ToIRECT(L.in_meter));
   Place(output_meter_, L.show_meters, ToIRECT(L.out_meter));
   Place(fader_, L.show_meters, ToIRECT(L.fader));
-  const bool small =
+  const bool graph_only_tiers =
       L.tier == LayoutTier::kSmall || L.tier == LayoutTier::kMinimum;
-  Place(now_readout_, !small,
+  Place(now_readout_, !graph_only_tiers,
         ig::IRECT(L.graph.l + 6.f, L.graph.t + 4.f,
                   std::min(L.graph.r, L.graph.l + 260.f), L.graph.t + 18.f));
-  Place(mini_label_, small,
+  Place(mini_label_, graph_only_tiers,
         ig::IRECT(L.graph.l + 6.f, L.graph.t + 5.f,
                   std::min(L.graph.r - 6.f, L.graph.l + 340.f),
                   L.graph.t + 23.f));

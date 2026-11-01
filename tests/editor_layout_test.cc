@@ -77,10 +77,10 @@ TEST_CASE("Tiers drop features as the window shrinks", "[layout]") {
   REQUIRE(compact.show_strip);
   REQUIRE(!compact.show_footer);
   REQUIRE(ComputeEditorLayout(720, 440, true).show_panel);
-  const EditorLayout small = ComputeEditorLayout(520, 320, false);
-  REQUIRE(small.show_top);
-  REQUIRE(!small.show_strip);
-  REQUIRE(!small.show_meters);
+  const EditorLayout small_tier = ComputeEditorLayout(520, 320, false);
+  REQUIRE(small_tier.show_top);
+  REQUIRE(!small_tier.show_strip);
+  REQUIRE(!small_tier.show_meters);
   const EditorLayout minimum = ComputeEditorLayout(360, 220, false);
   REQUIRE(!minimum.show_top);
   REQUIRE(minimum.graph.w() > 340.f);
