@@ -43,7 +43,9 @@ iplug_add_plugin(${PROJECT_NAME}
     ui/level_meter.h
     ui/param_field.h
     ui/preset_bar.h
+    ui/routing_map.h
     ui/theme.h
+    ui/widgets.h
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf

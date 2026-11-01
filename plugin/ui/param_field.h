@@ -17,13 +17,15 @@ namespace eeq {
 // click to toggle (drawn as a button).  Integer parameters whose choices
 // depend on context get a menu from SetMenuLabels().  Option-click resets to
 // the default.
+// The dial style draws a continuous parameter as a labeled knob (same
+// gestures); the segments style shows an enum's choices side by side.
 // Disabled fields are drawn at the inactive opacity and ignore the mouse.
 //
 // The bound parameter can change (e.g. when another band is selected), see
 // Rebind().
 class ParamField final : public iplug::igraphics::IControl {
  public:
-  enum class Style { kField, kToggle };
+  enum class Style { kField, kToggle, kDial, kSegments };
 
   ParamField(const iplug::igraphics::IRECT& bounds, int param_id,
              std::string label, float label_width = 70.f,
@@ -49,6 +51,14 @@ class ParamField final : public iplug::igraphics::IControl {
   // one detent per wheel notch and a few pixels per detent when dragged
   // (0: the default speeds).
   void SetDetents(int count) { detents_ = count; }
+
+  // Accent color of the dial arc and selected segment.
+  void SetColor(const iplug::igraphics::IColor& color) {
+    if (color_ != color) {
+      color_ = color;
+      SetDirty(false);
+    }
+  }
 
   void SetLabel(const std::string& label) {
     if (label != label_) {
@@ -77,6 +87,8 @@ class ParamField final : public iplug::igraphics::IControl {
     WDL_String value;
     if (p) p->GetDisplayWithLabel(value);
 
+    if (style_ == Style::kDial) return DrawDial(g, fade, value.Get());
+    if (style_ == Style::kSegments) return DrawSegments(g, fade);
     if (style_ == Style::kToggle) {
       const bool on = GetValue() >= 0.5;
       const ig::IColor on_color = label_ == "BYP" ? theme::kWarn : theme::kOn;
@@ -116,6 +128,17 @@ class ParamField final : public iplug::igraphics::IControl {
       SetDirty(true);
       return;
     }
+    if (style_ == Style::kSegments) {
+      const int n = p->NDisplayTexts();
+      const iplug::igraphics::IRECT box =
+          mRECT.GetReducedFromLeft(label_width_);
+      if (n <= 0 || box.W() <= 0.f) return;
+      const int i =
+          std::clamp(static_cast<int>((x - box.L) / box.W() * n), 0, n - 1);
+      SetValue(p->ToNormalized(i));
+      SetDirty(true);
+      return;
+    }
     if (style_ == Style::kToggle || p->Type() == iplug::IParam::kTypeBool) {
       SetValue(GetValue() >= 0.5 ? 0.0 : 1.0);
       SetDirty(true);
@@ -135,7 +158,7 @@ class ParamField final : public iplug::igraphics::IControl {
       return;
     }
     if (p->NDisplayTexts() > 0) {
-      PromptUserInput(mRECT.GetReducedFromLeft(label_width_));
+      PromptUserInput(EntryRect());
     }
   }
 
@@ -156,8 +179,9 @@ class ParamField final : public iplug::igraphics::IControl {
   void OnMouseDblClick(float x, float y,
                        const iplug::igraphics::IMouseMod& mod) override {
     const iplug::IParam* p = GetParam();
-    if (p && !HasMenu() && style_ == Style::kField) {
-      PromptUserInput(mRECT.GetReducedFromLeft(label_width_));
+    if (p && !HasMenu() &&
+        (style_ == Style::kField || style_ == Style::kDial)) {
+      PromptUserInput(EntryRect());
     }
   }
 
@@ -179,6 +203,66 @@ class ParamField final : public iplug::igraphics::IControl {
   }
 
  private:
+  iplug::igraphics::IRECT EntryRect() const {
+    return style_ == Style::kDial ? mRECT.GetFromBottom(14.f)
+                                  : mRECT.GetReducedFromLeft(label_width_);
+  }
+
+  template <typename Fade>
+  void DrawDial(iplug::igraphics::IGraphics& g, const Fade& fade,
+                const char* value) {
+    namespace ig = iplug::igraphics;
+    const iplug::IParam* p = GetParam();
+    g.DrawText(theme::Text(9.f, fade(theme::kTextDim), ig::EAlign::Center),
+               label_.c_str(), mRECT.GetFromTop(11.f));
+    g.DrawText(theme::Text(10.f, fade(theme::kText), ig::EAlign::Center), value,
+               mRECT.GetFromBottom(13.f));
+    const ig::IRECT knob =
+        mRECT.GetReducedFromTop(12.f).GetReducedFromBottom(14.f);
+    const float r = std::max(4.f, std::min(knob.W(), knob.H()) / 2.f - 2.f);
+    const float cx = knob.MW(), cy = knob.MH();
+    constexpr float kA0 = -135.f, kSweep = 270.f;
+    const float v = static_cast<float>(GetValue());
+    const float d = p ? static_cast<float>(p->GetDefault(true)) : 0.f;
+    const float a = kA0 + kSweep * v, a_def = kA0 + kSweep * d;
+    g.DrawArc(fade(theme::kPanelRaised), cx, cy, r, kA0, kA0 + kSweep, nullptr,
+              3.f);
+    if (std::abs(a - a_def) > 0.5f) {
+      g.DrawArc(fade(color_), cx, cy, r, std::min(a, a_def), std::max(a, a_def),
+                nullptr, 3.f);
+    }
+    g.FillCircle(fade(mMouseIsOver && !IsDisabled() ? theme::kPanelRaised
+                                                    : theme::kPanel),
+                 cx, cy, r - 4.f);
+    const ig::IVec2 p0 = theme::Polar(cx, cy, (r - 4.f) * 0.3f, a);
+    const ig::IVec2 p1 = theme::Polar(cx, cy, r - 5.f, a);
+    g.DrawLine(fade(theme::kText), p0.x, p0.y, p1.x, p1.y, nullptr, 2.f);
+  }
+
+  template <typename Fade>
+  void DrawSegments(iplug::igraphics::IGraphics& g, const Fade& fade) {
+    namespace ig = iplug::igraphics;
+    const iplug::IParam* p = GetParam();
+    if (!p) return;
+    if (label_width_ > 0.f) {
+      g.DrawText(theme::Text(10.f, fade(theme::kTextDim)), label_.c_str(),
+                 mRECT.GetFromLeft(label_width_));
+    }
+    const ig::IRECT box = mRECT.GetReducedFromLeft(label_width_);
+    const int n = p->NDisplayTexts();
+    const int current = static_cast<int>(std::lround(p->Value()));
+    for (int i = 0; i < n; ++i) {
+      const ig::IRECT seg = box.SubRectHorizontal(n, i).GetHPadded(-1.f);
+      const bool on = i == current;
+      g.FillRoundRect(fade(on ? color_ : theme::kPanel), seg, 3.f);
+      if (!on) g.DrawRoundRect(fade(theme::kBorder), seg, 3.f);
+      g.DrawText(
+          theme::Text(10.f, fade(on ? theme::kBackground : theme::kTextDim),
+                      ig::EAlign::Center),
+          p->GetDisplayTextAtIdx(i), seg);
+    }
+  }
+
   // Moves the value by `delta` (normalized) from where the last nudge left
   // it, so that small moves add up across the parameter's detents (the
   // plugin snaps what it receives).
@@ -200,11 +284,12 @@ class ParamField final : public iplug::igraphics::IControl {
 
   bool IsContinuous() const {
     const iplug::IParam* p = GetParam();
-    return p && style_ == Style::kField && p->NDisplayTexts() == 0 &&
-           p->Type() == iplug::IParam::kTypeDouble;
+    return p && (style_ == Style::kField || style_ == Style::kDial) &&
+           p->NDisplayTexts() == 0 && p->Type() == iplug::IParam::kTypeDouble;
   }
 
   std::string label_;
+  iplug::igraphics::IColor color_ = theme::kAccent;
   float label_width_;
   Style style_;
   std::vector<std::string> menu_labels_;

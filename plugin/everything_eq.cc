@@ -49,12 +49,19 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
 
 #if IPLUG_EDITOR
   mMakeGraphicsFunc = [&]() {
-    return ig::MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS,
-                            GetScaleForScreen(PLUG_WIDTH, PLUG_HEIGHT));
+    // Reopen at the size the window had last.
+    return ig::MakeGraphics(*this, editor_width_, editor_height_, PLUG_FPS,
+                            GetScaleForScreen(editor_width_, editor_height_));
   };
 
   mLayoutFunc = [&](ig::IGraphics* graphics) {
-    graphics->AttachCornerResizer(ig::EUIResizerMode::Scale, false);
+    if (editor_) {  // A resize: lay the existing controls out again.
+      editor_width_ = graphics->Width();
+      editor_height_ = graphics->Height();
+      editor_->Layout();
+      return;
+    }
+    graphics->AttachCornerResizer(ig::EUIResizerMode::Size, true);
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
     // Command-Z / Shift-Command-Z (Control on Windows), when the host passes
     // the keys on.

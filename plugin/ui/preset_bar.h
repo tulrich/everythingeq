@@ -18,6 +18,8 @@ namespace eeq {
 // Show Presets Folder; names are typed in place.
 class PresetBar final : public iplug::igraphics::IControl {
  public:
+  // Undo/Redo buttons beside the name (hidden in the small layouts).
+  void SetShowUndo(bool show) { show_undo_ = show; }
   PresetBar(const iplug::igraphics::IRECT& bounds, EditorModel& model)
       : IControl(bounds), model_(model), menu_("") {
     SetTextEntryLength(64);
@@ -43,6 +45,7 @@ class PresetBar final : public iplug::igraphics::IControl {
         box.GetPadded(-6.f).GetReducedFromRight(8.f));
     // Undo / Redo.
     for (const bool redo : {false, true}) {
+      if (!show_undo_) break;
       const ig::IRECT r = redo ? RedoRect() : UndoRect();
       const bool enabled = redo ? can_redo_ : can_undo_;
       DrawBox(g, r, enabled && hover_ == (redo ? kRedo : kUndo));
@@ -144,6 +147,7 @@ class PresetBar final : public iplug::igraphics::IControl {
   }
 
  private:
+  bool show_undo_ = true;
   enum Part { kNone, kName, kUndo, kRedo };
   // Menu actions other than loading preset i (>= 0).
   static constexpr int kNoAction = -1;
@@ -156,12 +160,16 @@ class PresetBar final : public iplug::igraphics::IControl {
   static constexpr float kGap = 3.f;
 
   iplug::igraphics::IRECT RedoRect() const {
+    if (!show_undo_)
+      return iplug::igraphics::IRECT(mRECT.R, mRECT.T, mRECT.R, mRECT.B);
     return mRECT.GetFromRight(kButtonWidth);
   }
   iplug::igraphics::IRECT UndoRect() const {
+    if (!show_undo_) return RedoRect();
     return RedoRect().GetTranslated(-(kButtonWidth + kGap), 0.f);
   }
   iplug::igraphics::IRECT NameRect() const {
+    if (!show_undo_) return mRECT;
     return iplug::igraphics::IRECT(mRECT.L, mRECT.T, UndoRect().L - 2.f * kGap,
                                    mRECT.B);
   }

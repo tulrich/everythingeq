@@ -36,11 +36,17 @@
 #define PLUG_DOES_MPE 0
 #define PLUG_DOES_STATE_CHUNKS 1
 #define PLUG_HAS_UI 1
-#define PLUG_WIDTH 960
-#define PLUG_HEIGHT 560
+// Default size; the window is resizable down to the graph alone
+// (model/editor_layout.h).
+#define PLUG_WIDTH 1200
+#define PLUG_HEIGHT 720
+#define PLUG_MIN_WIDTH 360
+#define PLUG_MIN_HEIGHT 220
+#define PLUG_MAX_WIDTH 2000
+#define PLUG_MAX_HEIGHT 1300
 #define PLUG_FPS 60
 #define PLUG_SHARED_RESOURCES 0
-#define PLUG_HOST_RESIZE 0
+#define PLUG_HOST_RESIZE 1
 
 #define AUV2_ENTRY EverythingEQ_Entry
 #define AUV2_ENTRY_STR "EverythingEQ_Entry"

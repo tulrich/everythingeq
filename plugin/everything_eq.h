@@ -143,6 +143,9 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   bool exact_values_ = false;
   int selected_band_ = 0;
   std::unique_ptr<Editor> editor_;
+  // The editor window's size, kept across close and reopen.
+  int editor_width_ = PLUG_WIDTH;
+  int editor_height_ = PLUG_HEIGHT;
 };
 
 }  // namespace eeq

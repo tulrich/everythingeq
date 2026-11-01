@@ -6,6 +6,7 @@
 #include <cmath>
 #include <complex>
 #include <string>
+#include <vector>
 
 #include "IControl.h"
 #include "model/response_curves.h"
@@ -16,14 +17,20 @@
 namespace eeq {
 
 // The top band ribbon (ABOUT.md section 4): one cell per band slot showing
-// its number, an icon of its type's curve and a short type name; click to
-// select.  Off bands read "--", bypassed bands are dimmed and struck through.
+// its number, an icon of its type's curve and a short type name (dropped as
+// the cells narrow); click to select, click the selected band for its type
+// menu.  The dot at the right of each cell toggles the band's bypass (when
+// shown).  Off bands read "--", bypassed bands are dimmed and struck through.
 class BandRibbon final : public iplug::igraphics::IControl {
  public:
   BandRibbon(const iplug::igraphics::IRECT& bounds, EditorModel& model)
-      : IControl(bounds), model_(model) {
-    SetTooltip("Bands: click to select.");
+      : IControl(bounds), model_(model), menu_("") {
+    SetTooltip(
+        "Bands: click to select; click the selected band to change its type. "
+        "The dot turns a band on or off (bypass).");
   }
+
+  void SetShowPower(bool show) { show_power_ = show; }
 
   void Draw(iplug::igraphics::IGraphics& g) override {
     namespace ig = iplug::igraphics;
@@ -44,18 +51,35 @@ class BandRibbon final : public iplug::igraphics::IControl {
       const float a = off || bypassed ? 0.35f : 1.f;
       g.FillRect(color.WithOpacity(a), cell.GetFromLeft(4.f).GetVPadded(-4.f));
       ig::IRECT content = cell.GetReducedFromLeft(7.f);
+      if (show_power_) {
+        const ig::IRECT power = PowerRect(b);
+        content.R = power.L - 2.f;
+        if (hover_power_ == b) {
+          g.FillRoundRect(theme::kText.WithOpacity(0.1f), power, 3.f);
+        }
+        g.DrawLine(theme::kGrid, power.L, power.T + 3.f, power.L,
+                   power.B - 3.f);
+        const float cx = power.MW(), cy = power.MH();
+        if (!off && !bypassed) g.FillCircle(color, cx, cy, 5.f);
+        g.DrawCircle(off        ? theme::kBorder
+                     : bypassed ? theme::kTextDim
+                                : color,
+                     cx, cy, 4.f, nullptr, 2.f);
+      }
       const ig::IColor text_color =
           off || bypassed ? theme::kTextDim : theme::kText;
       const std::string number = std::to_string(b + 1);
       g.DrawText(theme::Text(10.f, theme::kTextDim), number.c_str(),
                  content.ReduceFromLeft(9.f));
-      if (!off) {
+      if (!off && content.W() >= kIconWidth + 2.f) {
         DrawIcon(g, static_cast<BandType>(type),
                  content.ReduceFromLeft(kIconWidth).GetVPadded(-6.f),
                  color.WithOpacity(a));
         content.ReduceFromLeft(4.f);
       }
-      g.DrawText(theme::Text(10.f, text_color), ShortName(type), content);
+      if (content.W() >= 34.f || off) {
+        g.DrawText(theme::Text(10.f, text_color), ShortName(type), content);
+      }
       if (bypassed && !off) {
         g.DrawLine(theme::kTextDim, cell.L + 10.f, cell.MH(), cell.R - 6.f,
                    cell.MH());
@@ -66,12 +90,44 @@ class BandRibbon final : public iplug::igraphics::IControl {
   void OnMouseDown(float x, float y,
                    const iplug::igraphics::IMouseMod& mod) override {
     for (int b = 0; b < kNumBands; ++b) {
-      if (Cell(b).Contains(x, y)) {
+      if (!Cell(b).Contains(x, y)) continue;
+      const ParamValues v = model_.Values();
+      const int type =
+          static_cast<int>(std::lround(v[BandParamId(b, BandField::kType)]));
+      if (show_power_ && PowerRect(b).Contains(x, y)) {
+        if (type != 0) {
+          const int id = BandParamId(b, BandField::kBypass);
+          model_.SetValueGesture(id, v[id] >= 0.5 ? 0.0 : 1.0);
+        }
+      } else if (b == model_.SelectedBand()) {
+        OpenTypeMenu(b, type);
+      } else {
         model_.SelectBand(b);
-        SetDirty(false);
-        return;
       }
+      SetDirty(false);
+      return;
     }
+  }
+
+  void OnMouseOver(float x, float y,
+                   const iplug::igraphics::IMouseMod& mod) override {
+    IControl::OnMouseOver(x, y, mod);
+    hover_power_ = -1;
+    for (int b = 0; b < kNumBands && show_power_; ++b) {
+      if (PowerRect(b).Contains(x, y)) hover_power_ = b;
+    }
+  }
+  void OnMouseOut() override {
+    IControl::OnMouseOut();
+    hover_power_ = -1;
+  }
+
+  void OnPopupMenuSelection(iplug::igraphics::IPopupMenu* menu, int) override {
+    if (!menu || menu_band_ < 0) return;
+    const int chosen = menu->GetChosenItemIdx();
+    if (chosen < 0) return;
+    const int id = BandParamId(menu_band_, BandField::kType);
+    model_.SetValueGesture(id, chosen / ParamTable()[id].max);
   }
 
   bool IsDirty() override { return true; }  // Cheap; follows param changes.
@@ -139,8 +195,30 @@ class BandRibbon final : public iplug::igraphics::IControl {
   iplug::igraphics::IRECT Cell(int band) const {
     return mRECT.SubRectHorizontal(kNumBands, band).GetHPadded(-2.f);
   }
+  iplug::igraphics::IRECT PowerRect(int band) const {
+    return Cell(band).GetFromRight(kPowerWidth);
+  }
 
+  void OpenTypeMenu(int band, int current) {
+    const std::vector<std::string>& labels =
+        ParamTable()[BandParamId(band, BandField::kType)].enum_labels;
+    menu_.Clear();
+    for (size_t i = 0; i < labels.size(); ++i) {
+      menu_.AddItem(labels[i].c_str(), -1,
+                    static_cast<int>(i) == current
+                        ? iplug::igraphics::IPopupMenu::Item::kChecked
+                        : iplug::igraphics::IPopupMenu::Item::kNoFlags);
+    }
+    menu_band_ = band;
+    GetUI()->CreatePopupMenu(*this, menu_, Cell(band));
+  }
+
+  static constexpr float kPowerWidth = 22.f;
   EditorModel& model_;
+  iplug::igraphics::IPopupMenu menu_;
+  int menu_band_ = -1;
+  bool show_power_ = true;
+  int hover_power_ = -1;
 };
 
 }  // namespace eeq
