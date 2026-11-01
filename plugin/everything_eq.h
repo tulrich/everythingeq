@@ -33,6 +33,10 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   explicit EverythingEq(const iplug::InstanceInfo& info);
   ~EverythingEq() override;
 
+  void SetValuesGesture(const ParamValues& values) override {
+    ApplyValues(values);
+  }
+
   // EditorModel.
   ParamValues Values() const override { return CurrentValues(); }
   double SampleRate() const override { return GetSampleRate(); }

@@ -53,6 +53,11 @@ class Editor {
   // Lays the controls out for the window's current size.
   void Layout();
 
+  // Band copy/paste (also Command-C / Command-V): copies the edited band,
+  // pastes onto the selected bands.  Return whether they did anything.
+  bool CopySelectedBand();
+  bool PasteToSelection();
+
   int selected_group() const { return selected_group_; }
   void SelectGroup(int group);
   // Called by the model when the selected band changes.
@@ -92,6 +97,7 @@ class Editor {
   void LayoutPanel(const ParamValues& v, bool force);
   void LayoutFooter();
   void ToggleSection(int section);
+  void PasteBands(int section, const std::vector<int>& bands);
   void Connect(int slot);
 
   void UpdateBandEditor(const ParamValues& v);

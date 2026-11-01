@@ -66,6 +66,10 @@ class EditorModel {
   virtual void Undo() = 0;
   virtual void Redo() = 0;
 
+  // Moves every parameter to `values` (host values) as one undo step, with
+  // exact values (no detents).
+  virtual void SetValuesGesture(const ParamValues& values) = 0;
+
   // Sets a plain value as a single complete gesture.
   void SetValueGesture(int param_id, double normalized) {
     BeginEdit(param_id);

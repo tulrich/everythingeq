@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -21,13 +22,44 @@ namespace eeq {
 // the cells narrow); click to select, click the selected band for its type
 // menu.  The dot at the right of each cell toggles the band's bypass (when
 // shown).  Off bands read "--", bypassed bands are dimmed and struck through.
+//
+// Shift-click selects a range of bands and Command-click adds or removes
+// one; the selection is where pastes land and what a power dot toggles.
+// Right-click (or Control-click) a band for Copy, Paste and the rest.
 class BandRibbon final : public iplug::igraphics::IControl {
  public:
-  BandRibbon(const iplug::igraphics::IRECT& bounds, EditorModel& model)
-      : IControl(bounds), model_(model), menu_("") {
+  struct Actions {
+    std::function<void(int)> copy;  // Copy this band.
+    std::function<bool()> can_paste;
+    // Paste a section (BandSection) onto these bands.
+    std::function<void(int, const std::vector<int>&)> paste;
+  };
+
+  BandRibbon(const iplug::igraphics::IRECT& bounds, EditorModel& model,
+             Actions actions)
+      : IControl(bounds),
+        model_(model),
+        actions_(std::move(actions)),
+        menu_(""),
+        context_menu_("") {
     SetTooltip(
-        "Bands: click to select; click the selected band to change its type. "
-        "The dot turns a band on or off (bypass).");
+        "Bands: click to select, click the selected band to change its type. "
+        "Shift-click selects a range, Command-click adds a band; right-click "
+        "for Copy and Paste. The dot turns a band on or off (bypass).");
+  }
+
+  // The selected bands, in order (the edited band and any added to it).
+  std::vector<int> Selection() const {
+    std::vector<int> bands;
+    const int primary = model_.SelectedBand();
+    for (int b = 0; b < kNumBands; ++b) {
+      if (b == primary || extra_[b]) bands.push_back(b);
+    }
+    return bands;
+  }
+  void SelectAll() {
+    extra_.fill(true);
+    SetDirty(false);
   }
 
   void SetShowPower(bool show) { show_power_ = show; }
@@ -43,10 +75,13 @@ class BandRibbon final : public iplug::igraphics::IControl {
       const bool off = type == 0;
       const bool bypassed = v[BandParamId(b, BandField::kBypass)] >= 0.5;
       const bool is_selected = b == selected;
-      g.FillRoundRect(is_selected ? theme::kPanelRaised : theme::kPanel, cell,
+      const bool in_selection = is_selected || extra_[b];
+      g.FillRoundRect(in_selection ? theme::kPanelRaised : theme::kPanel, cell,
                       3.f);
-      g.DrawRoundRect(is_selected ? theme::kAccent : theme::kBorder, cell, 3.f,
-                      nullptr, is_selected ? 1.5f : 1.f);
+      g.DrawRoundRect(is_selected    ? theme::kAccent
+                      : in_selection ? theme::kAccent.WithOpacity(0.5f)
+                                     : theme::kBorder,
+                      cell, 3.f, nullptr, in_selection ? 1.5f : 1.f);
       const ig::IColor color = theme::BandColor(b);
       const float a = off || bypassed ? 0.35f : 1.f;
       g.FillRect(color.WithOpacity(a), cell.GetFromLeft(4.f).GetVPadded(-4.f));
@@ -94,14 +129,25 @@ class BandRibbon final : public iplug::igraphics::IControl {
       const ParamValues v = model_.Values();
       const int type =
           static_cast<int>(std::lround(v[BandParamId(b, BandField::kType)]));
-      if (show_power_ && PowerRect(b).Contains(x, y)) {
-        if (type != 0) {
-          const int id = BandParamId(b, BandField::kBypass);
-          model_.SetValueGesture(id, v[id] >= 0.5 ? 0.0 : 1.0);
+      const int primary = model_.SelectedBand();
+      // On the Mac, iPlug reports Command-click as left+right and
+      // Control-click as mod.C.
+      const bool context = (mod.R && !mod.L) || mod.C;
+      const bool toggle = mod.L && mod.R;
+      if (context) {
+        OpenContextMenu(b);
+      } else if (show_power_ && PowerRect(b).Contains(x, y)) {
+        TogglePower(b, v);
+      } else if (mod.S) {
+        for (int i = std::min(b, primary); i <= std::max(b, primary); ++i) {
+          extra_[i] = true;
         }
-      } else if (b == model_.SelectedBand()) {
+      } else if (toggle) {
+        if (b != primary) extra_[b] = !extra_[b];
+      } else if (b == primary) {
         OpenTypeMenu(b, type);
       } else {
+        extra_.fill(false);
         model_.SelectBand(b);
       }
       SetDirty(false);
@@ -126,6 +172,7 @@ class BandRibbon final : public iplug::igraphics::IControl {
     if (!menu || menu_band_ < 0) return;
     const int chosen = menu->GetChosenItemIdx();
     if (chosen < 0) return;
+    if (menu == &context_menu_) return OnContextChoice(chosen);
     const int id = BandParamId(menu_band_, BandField::kType);
     model_.SetValueGesture(id, chosen / ParamTable()[id].max);
   }
@@ -214,9 +261,100 @@ class BandRibbon final : public iplug::igraphics::IControl {
     GetUI()->CreatePopupMenu(*this, menu_, Cell(band));
   }
 
+  // The bands a context action on `band` applies to: the selection if the
+  // band is in it, else just the band.
+  std::vector<int> TargetsFor(int band) const {
+    const std::vector<int> sel = Selection();
+    for (int b : sel) {
+      if (b == band) return sel;
+    }
+    return {band};
+  }
+
+  // Bypass every target to the opposite of the clicked band's state.
+  void TogglePower(int band, const ParamValues& v) {
+    if (std::lround(v[BandParamId(band, BandField::kType)]) == 0) return;
+    const bool bypass = v[BandParamId(band, BandField::kBypass)] < 0.5;
+    ParamValues next = v;
+    for (int b : TargetsFor(band)) {
+      if (std::lround(v[BandParamId(b, BandField::kType)]) == 0) continue;
+      next[BandParamId(b, BandField::kBypass)] = bypass ? 1.0 : 0.0;
+    }
+    model_.SetValuesGesture(next);
+  }
+
+  enum ContextItem {
+    kCopy,
+    kPasteAll,
+    kPasteShape,
+    kPasteDynamics,
+    kSep1,
+    kBypassItem,
+    kTurnOff,
+    kSep2,
+    kSelectAll,
+  };
+
+  void OpenContextMenu(int band) {
+    namespace ig = iplug::igraphics;
+    const std::vector<int> targets = TargetsFor(band);
+    const std::string where = targets.size() > 1
+                                  ? std::to_string(targets.size()) + " Bands"
+                                  : "Band " + std::to_string(band + 1);
+    const int paste_flags = actions_.can_paste && actions_.can_paste()
+                                ? ig::IPopupMenu::Item::kNoFlags
+                                : ig::IPopupMenu::Item::kDisabled;
+    context_menu_.Clear();
+    context_menu_.AddItem(("Copy Band " + std::to_string(band + 1)).c_str());
+    context_menu_.AddItem(("Paste to " + where).c_str(), -1, paste_flags);
+    context_menu_.AddItem(("Paste Shape to " + where).c_str(), -1, paste_flags);
+    context_menu_.AddItem(("Paste Dynamics to " + where).c_str(), -1,
+                          paste_flags);
+    context_menu_.AddSeparator();
+    context_menu_.AddItem(("Bypass " + where).c_str());
+    context_menu_.AddItem(("Turn Off " + where).c_str());
+    context_menu_.AddSeparator();
+    context_menu_.AddItem("Select All Bands");
+    menu_band_ = band;
+    GetUI()->CreatePopupMenu(*this, context_menu_, Cell(band));
+  }
+
+  void OnContextChoice(int item) {
+    const std::vector<int> targets = TargetsFor(menu_band_);
+    const ParamValues v = model_.Values();
+    ParamValues next = v;
+    switch (item) {
+      case kCopy:
+        if (actions_.copy) actions_.copy(menu_band_);
+        break;
+      case kPasteAll:
+      case kPasteShape:
+      case kPasteDynamics:
+        if (actions_.paste) actions_.paste(item - kPasteAll, targets);
+        break;
+      case kBypassItem:
+        for (int b : targets) next[BandParamId(b, BandField::kBypass)] = 1.0;
+        model_.SetValuesGesture(next);
+        break;
+      case kTurnOff:
+        for (int b : targets) next[BandParamId(b, BandField::kType)] = 0.0;
+        model_.SetValuesGesture(next);
+        break;
+      case kSelectAll:
+        SelectAll();
+        break;
+      default:
+        break;
+    }
+    SetDirty(false);
+  }
+
   static constexpr float kPowerWidth = 22.f;
   EditorModel& model_;
+  Actions actions_;
+  std::array<bool, kNumBands> extra_{};
   iplug::igraphics::IPopupMenu menu_;
+  iplug::igraphics::IPopupMenu context_menu_;
   int menu_band_ = -1;
   bool show_power_ = true;
   int hover_power_ = -1;

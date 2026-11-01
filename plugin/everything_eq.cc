@@ -67,10 +67,21 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
     // the keys on.
     graphics->SetKeyHandlerFunc(
         [this](const iplug::IKeyPress& key, bool is_up) {
-          const bool z = key.VK == 'Z' || std::tolower(key.utf8[0]) == 'z';
-          if (!key.C || key.A || !z) return false;
-          if (!is_up) key.S ? Redo() : Undo();
-          return true;
+          const char c = static_cast<char>(std::tolower(key.utf8[0]));
+          if (!key.C || key.A) return false;
+          if (key.VK == 'Z' || c == 'z') {
+            if (!is_up) key.S ? Redo() : Undo();
+            return true;
+          }
+          // Command-C / Command-V: copy the edited band, paste onto the
+          // selected bands.
+          if (editor_ && (key.VK == 'C' || c == 'c')) {
+            return is_up || editor_->CopySelectedBand();
+          }
+          if (editor_ && (key.VK == 'V' || c == 'v')) {
+            return is_up || editor_->PasteToSelection();
+          }
+          return false;
         });
     editor_ = std::make_unique<Editor>(*graphics, *this);
     editor_open_ = true;

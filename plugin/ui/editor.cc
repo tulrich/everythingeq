@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "IControls.h"
+#include "model/band_clipboard.h"
 #include "model/slot_mapping.h"
 #include "plugin/ui/band_ribbon.h"
 #include "plugin/ui/choice_field.h"
@@ -38,6 +39,13 @@ constexpr int kSegments = static_cast<int>(ParamField::Style::kSegments);
 const ig::IColor kDockedPanel(255, 34, 37, 42);
 
 int Int(double v) { return static_cast<int>(std::lround(v)); }
+
+// The band clipboard, shared by every instance in the process so a band can
+// be copied from one Everything EQ to another.
+std::optional<BandClip>& Clipboard() {
+  static std::optional<BandClip> clip;
+  return clip;
+}
 
 std::string Upper(std::string s) {
   for (char& c : s) c = static_cast<char>(std::toupper(c));
@@ -81,7 +89,15 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
 }
 
 void Editor::BuildTop() {
-  ribbon_ = new BandRibbon(ig::IRECT(), model_);
+  BandRibbon::Actions actions;
+  actions.copy = [this](int band) {
+    Clipboard() = CopyBand(model_.Values(), band);
+  };
+  actions.can_paste = [] { return Clipboard().has_value(); };
+  actions.paste = [this](int section, const std::vector<int>& bands) {
+    PasteBands(section, bands);
+  };
+  ribbon_ = new BandRibbon(ig::IRECT(), model_, std::move(actions));
   graphics_.AttachControl(ribbon_);
   preset_bar_ = new PresetBar(ig::IRECT(), model_);
   graphics_.AttachControl(preset_bar_);
@@ -580,6 +596,26 @@ void Editor::LayoutPanel(const ParamValues& v, bool force) {
       Place(c, show, show ? ToIRECT(ps.cells[k]) : ig::IRECT());
     }
   }
+}
+
+bool Editor::CopySelectedBand() {
+  Clipboard() = CopyBand(model_.Values(), std::max(0, model_.SelectedBand()));
+  return true;
+}
+
+bool Editor::PasteToSelection() {
+  if (!Clipboard()) return false;
+  PasteBands(static_cast<int>(BandSection::kAll), ribbon_->Selection());
+  return true;
+}
+
+void Editor::PasteBands(int section, const std::vector<int>& bands) {
+  if (!Clipboard() || bands.empty()) return;
+  ParamValues v = model_.Values();
+  for (int b : bands) {
+    PasteBand(*Clipboard(), static_cast<BandSection>(section), b, v);
+  }
+  model_.SetValuesGesture(v);  // One undo step.
 }
 
 void Editor::SelectGroup(int group) {

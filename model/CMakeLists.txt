@@ -12,6 +12,7 @@ add_custom_command(
   COMMENT "Embedding factory presets")
 
 add_library(eeq_model STATIC
+  band_clipboard.cc
   editor_layout.cc
   engine_params_json.cc
   param_table.cc
