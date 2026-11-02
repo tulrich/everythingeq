@@ -68,11 +68,11 @@ class Editor {
   struct Card {
     CardPanel* panel = nullptr;
     ParamField* group = nullptr;
-    ParamField* target = nullptr;       // Segments (full tier).
-    ParamField* target_menu = nullptr;  // Menu (compact tier).
-    ParamField* range_dial = nullptr;   // Full tier.
-    ParamField* range_field = nullptr;  // Compact tier.
-    ParamField* makeup = nullptr;
+    ParamField* target_menu = nullptr;
+    ParamField* range_dial = nullptr;   // Full tier, when tall enough.
+    ParamField* range_field = nullptr;  // Otherwise.
+    ParamField* makeup = nullptr;       // Card A only, placed in either.
+    ParamField* makeup_dial = nullptr;
     TextButton* disconnect = nullptr;
     TextButton* connect = nullptr;
   };

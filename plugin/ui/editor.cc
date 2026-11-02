@@ -33,7 +33,6 @@ constexpr float kGap = 4.f;
 constexpr int kField = static_cast<int>(ParamField::Style::kField);
 constexpr int kToggle = static_cast<int>(ParamField::Style::kToggle);
 constexpr int kDial = static_cast<int>(ParamField::Style::kDial);
-constexpr int kSegments = static_cast<int>(ParamField::Style::kSegments);
 
 // The docked panel's color over the background (kPanel at 60%), which the
 // routing map uses to break lines where they cross.
@@ -168,13 +167,11 @@ void Editor::BuildStrip() {
     c.group = AddBandField(a ? BandField::kDynGroup : BandField::kDynBGroup, "",
                            0.f, kField);
     c.group->SetTooltip("The dynamics group this assignment follows.");
-    c.target = AddBandField(a ? BandField::kDynTarget : BandField::kDynBTarget,
-                            "", 0.f, kSegments);
-    c.target->SetTooltip(
-        "What the group moves: Gain (dB), Freq (octaves) or Morph (Vowel "
-        "morph; width for Band Shelf and Tilt).");
     c.target_menu = AddBandField(
         a ? BandField::kDynTarget : BandField::kDynBTarget, "", 0.f, kField);
+    c.target_menu->SetTooltip(
+        "What the group moves: Gain (dB), Freq (octaves) or Morph (Vowel "
+        "morph; width for Band Shelf and Tilt).");
     c.range_dial = AddBandField(
         a ? BandField::kDynRange : BandField::kDynBRange, "RANGE", 0.f, kDial);
     c.range_dial->SetTooltip(
@@ -184,9 +181,12 @@ void Editor::BuildStrip() {
         a ? BandField::kDynRange : BandField::kDynBRange, "", 0.f, kField);
     if (a) {
       c.makeup = AddBandField(BandField::kDynMakeup, "MAKEUP", 46.f, kField);
-      c.makeup->SetTooltip(
-          "Broadband gain that offsets the band's dynamic gain change (0% = "
-          "none, 100% = full).");
+      c.makeup_dial = AddBandField(BandField::kDynMakeup, "MAKEUP", 0.f, kDial);
+      for (ParamField* m : {c.makeup, c.makeup_dial}) {
+        m->SetTooltip(
+            "Broadband gain that offsets the band's dynamic gain change (0% "
+            "= none, 100% = full).");
+      }
     }
     c.disconnect = new TextButton(
         ig::IRECT(), "\xc3\x97",
@@ -358,6 +358,9 @@ void Editor::Layout() {
   const ig::IRECT b = graphics_.GetBounds();
   layout_ = ComputeEditorLayout(b.W(), b.H(), drawer_open_);
   const EditorLayout& L = layout_;
+  // The background was attached at the first size; keep it covering the
+  // window, or a larger window shows uncleared areas between the panels.
+  Place(graphics_.GetBackgroundControl(), true, b);
 
   Place(ribbon_, L.show_top, ToIRECT(L.ribbon));
   ribbon_->SetShowPower(L.ribbon_power);
@@ -463,11 +466,14 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   card_state_ = state;
 
   ParamField* makeup = cards_[0].makeup;
+  ParamField* makeup_dial = cards_[0].makeup_dial;
   Place(makeup, false);
+  Place(makeup_dial, false);
   for (int slot = 0; slot < 2; ++slot) {
     Card& c = cards_[slot];
     const Rect& r = layout_.strip.cards[slot];
     const bool u = show && used[slot];
+    const bool has_makeup = u && makeup_slot == slot;
     Place(c.panel, show, ToIRECT(r));
     const Rect in = {r.l + 7.f, r.t + 7.f, r.r - 7.f, r.b - 7.f};
     Place(c.disconnect, u,
@@ -477,26 +483,25 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
           ig::IRECT(in.l, y, in.r, std::min(in.b, y + 40.f)));
     c.connect->SetDisabled(off);
     if (!compact) {
-      Place(c.group, u, ig::IRECT(in.l, y, in.r, y + kRow));
-      Place(c.target, u, ig::IRECT(in.l, y + kPitch, in.r, y + kPitch + kRow));
-      const float rest_t = y + 2.f * kPitch;
-      const float dial_h = in.b + 4.f - rest_t;
-      Place(c.target_menu, false);
-      if (dial_h >= 54.f) {
-        // Range as a dial, Makeup beside it.
-        const ig::IRECT dial(in.l, rest_t, in.l + 56.f, in.b + 4.f);
-        Place(c.range_dial, u, dial);
+      // Group and target share a row; Range and Makeup below, as dials
+      // when they fit.
+      const float split = in.l + (in.r - in.l) * 0.55f;
+      Place(c.group, u, ig::IRECT(in.l, y, split - 2.f, y + kRow));
+      Place(c.target_menu, u, ig::IRECT(split + 2.f, y, in.r, y + kRow));
+      const float rest_t = y + kPitch + 2.f;
+      if (in.b + 4.f - rest_t >= 54.f) {
+        const float mid = (in.l + in.r) / 2.f;
+        Place(c.range_dial, u, ig::IRECT(in.l, rest_t, mid, in.b + 4.f));
         Place(c.range_field, false);
-        if (u && makeup_slot == slot) {
-          Place(makeup, true, ig::IRECT(dial.R + 4.f, in.b - kRow, in.r, in.b));
+        if (has_makeup) {
+          Place(makeup_dial, true, ig::IRECT(mid, rest_t, in.r, in.b + 4.f));
         }
       } else {
-        // Too short for a dial: Range and Makeup as fields.
         c.range_field->SetLabelWidth(46.f);
         c.range_field->SetLabel("RANGE");
         Place(c.range_dial, false);
         Place(c.range_field, u, ig::IRECT(in.l, rest_t, in.r, rest_t + kRow));
-        if (u && makeup_slot == slot) {
+        if (has_makeup) {
           Place(makeup, true,
                 ig::IRECT(in.l, rest_t + kPitch, in.r, rest_t + kPitch + kRow));
         }
@@ -508,7 +513,6 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
       const ig::IRECT row(in.l, y + kPitch, in.r, y + kPitch + kRow);
       Place(c.target_menu, u, row.GetGridCell(0, 1, 2).GetHPadded(-1.f));
       Place(c.range_field, u, row.GetGridCell(1, 1, 2).GetHPadded(-1.f));
-      Place(c.target, false);
       Place(c.range_dial, false);
     }
   }

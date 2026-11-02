@@ -456,12 +456,18 @@ class EqGraph final : public iplug::igraphics::IControl {
     const double u = std::clamp((x - mRECT.L) / mRECT.W(), 0.f, 1.f);
     return kMinHz * std::pow(kMaxHz / kMinHz, u);
   }
+  // Responses (curves, nodes) are drawn raised by the Output Gain, so the
+  // curve shows the whole plug-in's gain; the grid isn't.
   float DbToY(double db) const {
-    const double u = std::clamp(db, -kRangeDb * 1.2, kRangeDb * 1.2) / kRangeDb;
-    return mRECT.MH() - static_cast<float>(u) * 0.5f * mRECT.H();
+    return GridY(db + params_.global.output_gain_db);
   }
   double YToDb(float y) const {
-    return (mRECT.MH() - y) / (0.5 * mRECT.H()) * kRangeDb;
+    return (mRECT.MH() - y) / (0.5 * mRECT.H()) * kRangeDb -
+           params_.global.output_gain_db;
+  }
+  float GridY(double db) const {
+    const double u = std::clamp(db, -kRangeDb * 1.2, kRangeDb * 1.2) / kRangeDb;
+    return mRECT.MH() - static_cast<float>(u) * 0.5f * mRECT.H();
   }
 
   // LP and HP nodes drag Q vertically (as in Logic's Channel EQ): the node
@@ -657,7 +663,7 @@ class EqGraph final : public iplug::igraphics::IControl {
       g.DrawText(label, buf, ig::IRECT(x + 2, mRECT.B - 14, x + 40, mRECT.B));
     }
     for (int db = -18; db <= 18; db += 6) {
-      const float y = DbToY(db);
+      const float y = GridY(db);
       g.DrawLine(db == 0 ? theme::kGridStrong : theme::kGrid, mRECT.L, y,
                  mRECT.R, y);
       char buf[16];

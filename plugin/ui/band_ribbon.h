@@ -7,6 +7,7 @@
 #include <complex>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "IControl.h"
@@ -214,17 +215,36 @@ class BandRibbon final : public iplug::igraphics::IControl {
                        float thickness = 1.25f) {
     const std::array<float, kIconPoints>& c = IconCurve(type);
     g.DrawLine(theme::kGrid, r.L, r.MH(), r.R, r.MH());
+    // The curve, clipped to the icon: an LP or HP leaves through the bottom
+    // instead of running along it.
+    auto point = [&](int i) {
+      return std::pair<float, float>(r.L + r.W() * i / (kIconPoints - 1),
+                                     static_cast<float>(c[i] / kIconRangeDb));
+    };
+    auto y_of = [&](float u) { return r.MH() - u * 0.5f * r.H(); };
     g.PathClear();
-    for (int i = 0; i < kIconPoints; ++i) {
-      const float x = r.L + r.W() * i / (kIconPoints - 1);
-      const float u =
-          static_cast<float>(std::clamp(c[i] / kIconRangeDb, -1.0, 1.0));
-      const float y = r.MH() - u * 0.5f * r.H();
-      if (i == 0) {
-        g.PathMoveTo(x, y);
-      } else {
-        g.PathLineTo(x, y);
+    bool pen = false;
+    for (int i = 1; i < kIconPoints; ++i) {
+      auto [x0, u0] = point(i - 1);
+      auto [x1, u1] = point(i);
+      // Clip the segment to |u| <= 1.
+      float t0 = 0.f, t1 = 1.f;
+      for (const float bound : {-1.f, 1.f}) {
+        const float d0 = bound > 0.f ? bound - u0 : u0 - bound;
+        const float d1 = bound > 0.f ? bound - u1 : u1 - bound;
+        if (d0 < 0.f && d1 < 0.f) t1 = -1.f;  // Wholly outside.
+        if (d0 < 0.f && d1 >= 0.f) t0 = std::max(t0, d0 / (d0 - d1));
+        if (d0 >= 0.f && d1 < 0.f) t1 = std::min(t1, d0 / (d0 - d1));
       }
+      if (t0 > t1) {
+        pen = false;
+        continue;
+      }
+      const float xa = x0 + (x1 - x0) * t0, ua = u0 + (u1 - u0) * t0;
+      const float xb = x0 + (x1 - x0) * t1, ub = u0 + (u1 - u0) * t1;
+      if (!pen || t0 > 0.f) g.PathMoveTo(xa, y_of(ua));
+      g.PathLineTo(xb, y_of(ub));
+      pen = t1 >= 1.f;
     }
     g.PathStroke(color, thickness);
   }

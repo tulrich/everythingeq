@@ -1,0 +1,140 @@
+--- a/IGraphics/IGraphics.h
++++ b/IGraphics/IGraphics.h
+@@ -811,6 +811,12 @@
+    * @param x Where the X position will be stored
+    * @param y Where the Y position will be stored */
+   virtual void GetMouseLocation(float& x, float&y) const = 0;
++
++  /** Get the mouse position in screen coordinates, in points with y increasing downwards. Drag resizing uses it so that the size follows the mouse even when the host moves the view as it resizes the window.
++   * @param x The screen X coordinate
++   * @param y The screen Y coordinate
++   * @return \c true if the platform supports it */
++  virtual bool GetMouseScreenLocation(float& x, float& y) const { return false; }
+   
+   /** Call to hide/show the mouse cursor
+    * @param hide Should the cursor be hidden or shown
+@@ -1271,7 +1277,7 @@
+   void DoCreatePopupMenu(IControl& control, IPopupMenu& menu, const IRECT& bounds, int valIdx, bool isContext);
+   
+   /** Called by ICornerResizer when drag resize commences */
+-  void StartDragResize() { mResizingInProcess = true; }
++  void StartDragResize();
+   
+   /** Called when drag resize ends */
+   void EndDragResize();
+@@ -1869,6 +1875,11 @@
+   bool mShowControlBounds = false;
+   bool mShowAreaDrawn = false;
+   bool mResizingInProcess = false;
++  bool mDragResizeFromScreen = false;
++  float mDragResizeScreenX = 0.f;
++  float mDragResizeScreenY = 0.f;
++  int mDragResizeStartW = 0;
++  int mDragResizeStartH = 0;
+   bool mLayoutOnResize = false;
+   bool mEnableMultiTouch = false;
+   EUIResizerMode mGUISizeMode = EUIResizerMode::Scale;
+--- a/IGraphics/IGraphics.cpp
++++ b/IGraphics/IGraphics.cpp
+@@ -1514,6 +1514,14 @@
+   ForAllControls(&IControl::OnGUIIdle);
+ }
+ 
++void IGraphics::StartDragResize()
++{
++  mResizingInProcess = true;
++  mDragResizeStartW = Width();
++  mDragResizeStartH = Height();
++  mDragResizeFromScreen = GetMouseScreenLocation(mDragResizeScreenX, mDragResizeScreenY);
++}
++
+ void IGraphics::OnDragResize(float x, float y)
+ {
+   if(mGUISizeMode == EUIResizerMode::Scale)
+@@ -1525,7 +1533,19 @@
+   }
+   else
+   {
+-    Resize(static_cast<int>(x), static_cast<int>(y), GetDrawScale());
++    float sx, sy;
++    if (mDragResizeFromScreen && GetMouseScreenLocation(sx, sy))
++    {
++      // Measure the drag on the screen: the host may move the view as the
++      // window grows (e.g. keeping the window's bottom edge in place), which
++      // would move the mouse in view coordinates and feed back into the size.
++      const float scale = GetDrawScale();
++      Resize(mDragResizeStartW + static_cast<int>(std::round((sx - mDragResizeScreenX) / scale)),
++             mDragResizeStartH + static_cast<int>(std::round((sy - mDragResizeScreenY) / scale)),
++             scale);
++    }
++    else
++      Resize(static_cast<int>(x), static_cast<int>(y), GetDrawScale());
+   }
+ }
+ 
+--- a/IGraphics/Platforms/IGraphicsMac.h
++++ b/IGraphics/Platforms/IGraphicsMac.h
+@@ -42,6 +42,7 @@
+   ECursor SetMouseCursor(ECursor cursorType) override;
+   
+   void GetMouseLocation(float& x, float&y) const override;
++  bool GetMouseScreenLocation(float& x, float& y) const override;
+ 
+   void DoCursorLock(float x, float y, float& prevX, float& prevY);
+     
+--- a/IGraphics/Platforms/IGraphicsMac.mm
++++ b/IGraphics/Platforms/IGraphicsMac.mm
+@@ -287,6 +287,14 @@
+   
+   // Convert to IGraphics coordinates
+   ScreenToPoint(x, y);
++}
++
++bool IGraphicsMac::GetMouseScreenLocation(float& x, float& y) const
++{
++  const NSPoint mouse = [NSEvent mouseLocation];
++  x = mouse.x;
++  y = -mouse.y; // Screen coordinates increase upwards.
++  return true;
+ }
+ 
+ EMsgBoxResult IGraphicsMac::ShowMessageBox(const char* str, const char* title, EMsgBoxType type, IMsgBoxCompletionHandlerFunc completionHandler)
+--- a/IGraphics/Platforms/IGraphicsMac_view.mm
++++ b/IGraphics/Platforms/IGraphicsMac_view.mm
+@@ -630,6 +630,24 @@
+   return YES;
+ }
+ 
++// The host resized the view (e.g. the user dragged the edge of the plug-in
++// window): resize the UI to match.  Our own resizes arrive here too, from
++// PlatformResize(), after the UI has its new size, so they don't recurse.
++- (void) setFrameSize: (NSSize) newSize
++{
++  [super setFrameSize: newSize];
++
++  if (!mGraphics || mGraphics->GetResizerMode() != EUIResizerMode::Size)
++    return;
++
++  const float scale = mGraphics->GetDrawScale();
++  const int w = static_cast<int>(std::round(newSize.width / scale));
++  const int h = static_cast<int>(std::round(newSize.height / scale));
++
++  if (w != mGraphics->Width() || h != mGraphics->Height())
++    mGraphics->Resize(w, h, mGraphics->GetDrawScale(), false);
++}
++
+ - (void) viewDidMoveToWindow
+ {
+   NSWindow* pWindow = [self window];
+@@ -643,6 +661,11 @@
+ 
+     if (mGraphics)
+       mGraphics->SetScreenScale(newScale);
++
++    // A resizable UI follows its container, so hosts that resize the
++    // plug-in's container (rather than the view) resize the UI too.
++    if (mGraphics && mGraphics->GetResizerMode() == EUIResizerMode::Size)
++      self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+     
+     #if defined IGRAPHICS_METAL || defined IGRAPHICS_GLES2 || defined IGRAPHICS_GLES3
+     [[NSNotificationCenter defaultCenter] addObserver:self
