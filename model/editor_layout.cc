@@ -16,6 +16,7 @@ constexpr float kLegendHeight = 11.f;
 constexpr float kHeaderHeight = 18.f;
 constexpr float kWarningHeight = 12.f;
 constexpr float kScopeHeight = 54.f;
+constexpr float kMaxScopeHeight = 140.f;
 constexpr float kSectionHeader = 13.f;
 constexpr float kFieldHeight = 18.f;
 constexpr float kFieldPitch = 21.f;
@@ -52,13 +53,13 @@ StripLayout ComputeStrip(const Rect& r, bool full) {
 }  // namespace
 
 LayoutTier TierFor(float width, float height) {
-  const int w = width >= 900.f   ? 3
-                : width >= 640.f ? 2
-                : width >= 460.f ? 1
+  const int w = width >= 880.f   ? 3
+                : width >= 600.f ? 2
+                : width >= 420.f ? 1
                                  : 0;
-  const int h = height >= 520.f   ? 3
+  const int h = height >= 480.f   ? 3
                 : height >= 380.f ? 2
-                : height >= 280.f ? 1
+                : height >= 260.f ? 1
                                   : 0;
   return static_cast<LayoutTier>(std::min(w, h));
 }
@@ -78,60 +79,54 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
   }
 
   L.show_top = true;
-  const float top_h = full ? 34.f : compact ? 30.f : 26.f;
+  const float top_h = full ? 30.f : compact ? 28.f : 26.f;
   const float body_t = kPad + top_h + kPad;
   const float body_b = height - kPad;
   L.ribbon_power = tier >= 2;
   L.preset_undo = tier >= 2;
 
-  // Left column: graph, strip and footer.  Right: the dynamics panel or the
-  // drawer tab.
-  Rect left;
+  // Signal flow runs left to right: the dynamics panel (docked, or a drawer
+  // behind a tab) on the left, the EQ column on the right.
+  Rect eq;
   if (full) {
-    const float panel_w = width >= 1100.f ? 330.f : 290.f;
-    left = {kPad, body_t, width - kPad - panel_w - kPad, body_b};
-    L.ribbon = {kPad, kPad, left.r, kPad + top_h};
-    L.preset = {left.r + kPad, kPad, width - kPad, kPad + top_h};
+    const float panel_w = std::clamp(width * 0.3f, 290.f, 360.f);
     L.show_panel = true;
-    L.panel = {L.preset.l, body_t, L.preset.r, body_b};
+    L.panel = {kPad, body_t, kPad + panel_w, body_b};
+    L.preset = {kPad, kPad, L.panel.r, kPad + top_h};
+    eq = {L.panel.r + kPad, body_t, width - kPad, body_b};
   } else if (compact) {
-    left = {kPad, body_t, width - kPad - kDrawerTabWidth - 6.f, body_b};
-    const float preset_w = 190.f;
-    L.ribbon = {kPad, kPad, width - kPad - preset_w - kGap, kPad + top_h};
-    L.preset = {L.ribbon.r + kGap, kPad, width - kPad, kPad + top_h};
     L.show_drawer_tab = true;
-    L.drawer_tab = {left.r + 6.f, body_t, left.r + 6.f + kDrawerTabWidth,
-                    body_b};
+    L.drawer_tab = {kPad, body_t, kPad + kDrawerTabWidth, body_b};
     L.show_panel = drawer_open;
     L.panel_overlay = true;
-    const float panel_w = std::min(300.f, width - 80.f);
-    L.panel = {L.drawer_tab.l - 6.f - panel_w, body_t, L.drawer_tab.l - 6.f,
+    const float panel_w = std::min(320.f, width - 80.f);
+    L.panel = {L.drawer_tab.r + 6.f, body_t, L.drawer_tab.r + 6.f + panel_w,
                body_b};
+    L.preset = {kPad, kPad, kPad + 190.f, kPad + top_h};
+    eq = {L.drawer_tab.r + 6.f, body_t, width - kPad, body_b};
   } else {
-    left = {kPad, body_t, width - kPad, body_b};
-    const float preset_w = 150.f;
-    L.ribbon = {kPad, kPad, width - kPad - preset_w - kGap, kPad + top_h};
-    L.preset = {L.ribbon.r + kGap, kPad, width - kPad, kPad + top_h};
+    L.preset = {kPad, kPad, kPad + 150.f, kPad + top_h};
+    eq = {kPad, body_t, width - kPad, body_b};
   }
 
-  float graph_b = left.b;
+  float graph_b = eq.b;
   if (full) {
     L.show_footer = true;
-    L.footer = {left.l, left.b - kFooterHeight, left.r, left.b};
+    L.footer = {eq.l, eq.b - kFooterHeight, eq.r, eq.b};
     graph_b = L.footer.t - kPad;
   }
   if (tier >= 2) {
     L.show_strip = true;
-    const float strip_h = full ? (width >= 1100.f ? 132.f : 118.f) : 92.f;
-    const Rect strip = {left.l, graph_b - strip_h, left.r, graph_b};
+    const float strip_h = full ? (height >= 700.f ? 128.f : 116.f) : 92.f;
+    const Rect strip = {eq.l, graph_b - strip_h, eq.r, graph_b};
     L.strip = ComputeStrip(strip, full);
     graph_b = strip.t - kPad;
   }
-  Rect graph_area = {left.l, left.t, left.r, graph_b};
+  Rect graph_area = {eq.l, eq.t, eq.r, graph_b};
   if (tier >= 2) {
     L.show_meters = true;
-    const float meter_w = full ? 30.f : 22.f;
-    const float fader_w = full ? 26.f : 20.f;
+    const float meter_w = full ? 28.f : 22.f;
+    const float fader_w = full ? 24.f : 20.f;
     L.in_meter = {graph_area.l, graph_area.t, graph_area.l + meter_w,
                   graph_area.b};
     L.fader = {graph_area.r - fader_w, graph_area.t, graph_area.r,
@@ -142,10 +137,16 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
     graph_area.r = L.out_meter.l - kGap;
   }
   L.graph = graph_area;
+  // The ribbon spans the graph, so each band's cell sits over its curve's
+  // part of the window (beside the preset name when they'd collide).
+  L.ribbon = {std::max(L.graph.l, L.preset.r + kPad), kPad, L.graph.r,
+              kPad + top_h};
   return L;
 }
 
-float MapHeight(float block) { return kMapHeaderHeight + 6.f + 8.f * block; }
+float MapHeight(float row) {
+  return kMapTopHeight + kNumMapGroups * row + kMapBottomHeight;
+}
 
 PanelLayout ComputePanelLayout(const Rect& panel,
                                const std::vector<PanelSection>& sections,
@@ -156,9 +157,10 @@ PanelLayout ComputePanelLayout(const Rect& panel,
   float y = inner.t;
   P.title = Box(inner.l, y, inner.w(), kTitleHeight);
   y += kTitleHeight + 2.f;
-  P.map_block = std::clamp((inner.h() * 0.5f - kMapHeaderHeight - 6.f) / 8.f,
-                           kMapMinBlock, kMapMaxBlock);
-  P.map = Box(inner.l, y, inner.w(), MapHeight(P.map_block));
+  P.map_row = std::clamp(
+      (inner.h() * 0.4f - kMapTopHeight - kMapBottomHeight) / kNumMapGroups,
+      kMapMinRow, kMapMaxRow);
+  P.map = Box(inner.l, y, inner.w(), MapHeight(P.map_row));
   y = P.map.b + kGap;
 
   // Everything below the map, given whether the legend is shown and which
@@ -210,8 +212,10 @@ PanelLayout ComputePanelLayout(const Rect& panel,
   }
   P.show_scope = spare >= kScopeHeight + 8.f;
   if (P.show_scope) {
-    P.scope = Box(inner.l, y, inner.w(), kScopeHeight);
-    y += kScopeHeight + 6.f;
+    // The scope takes what room is spare, within reason.
+    const float scope_h = std::min(spare - 8.f, kMaxScopeHeight);
+    P.scope = Box(inner.l, y, inner.w(), scope_h);
+    y += scope_h + 6.f;
   }
 
   const float sections_t = y;

@@ -330,7 +330,7 @@ class ParamField final : public iplug::igraphics::IControl {
   std::vector<std::string> menu_labels_;
   iplug::igraphics::IPopupMenu menu_;
   static constexpr double kPixelsPerDetent = 4.0;
-  static constexpr float kMaxDialRadius = 24.f;
+  static constexpr float kMaxDialRadius = 17.f;
 
   int detents_ = 0;
   double nudge_raw_ = 0.0;   // Unsnapped value of the last nudge,

@@ -193,49 +193,49 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 ## 4. UI Wireframe & Layout Specification
 
-Window: **`1200 x 720 px`** by default, resizable from the corner (or the host's window frame) between `360 x 220` and `2000 x 1300`, and reopened at its last size. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
+Window: **`1000 x 580 px`** by default, resizable from the grip in the bottom-right corner between `360 x 220` and `2000 x 1300`, and reopened at its last size. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
 
-**Responsive tiers** (`model/editor_layout.h`; a window is in the smaller of its width tier (900 / 640 / 460 px) and height tier (520 / 380 / 280 px)):
+The layout reads left to right like the signal: the dynamics (routing and groups) on the left, the EQ (ribbon over the graph, meters, band strip, footer) on the right.
+
+**Responsive tiers** (`model/editor_layout.h`; a window is in the smaller of its width tier (880 / 600 / 420 px) and height tier (480 / 380 / 260 px)):
 
 | Tier | Shows |
 | :--- | :--- |
-| Full (≥ 900 × 520) | Everything: ribbon and preset bar, graph with input meter, output meter and Output Gain fader, the band strip, the footer, and the dynamics panel docked at the right. |
-| Compact (≥ 640 × 380) | No footer; the dynamics panel becomes a drawer over the graph, opened from a tab at the right edge that shows each group's shape and live D. The band strip loses Tap/Chan and its cards turn into menus and fields. |
-| Small (≥ 460 × 280) | Ribbon (number and icon), preset name and the graph, with a label for the selected band. |
+| Full (≥ 880 × 480) | Everything: preset bar and the dynamics panel docked at the left; ribbon, graph with input meter, output meter and Output Gain fader, the band strip and the footer at the right. |
+| Compact (≥ 600 × 380) | No footer; the dynamics panel becomes a drawer over the EQ, opened from a tab at the left edge that shows each group's shape and live D. The band strip loses Tap/Chan and its cards turn into menus and fields. |
+| Small (≥ 420 × 260) | Preset name, ribbon and the graph, with a label for the selected band. |
 | Minimum | The graph alone; its nodes still drag. |
 
 **Legend:** `(M)` beside the graph = output level meter with peak readout, then the Output Gain fader; `NOW` = the selected band's current dynamic offset in its target's unit; `(g)` = may be greyed (35%) depending on other settings (e.g. SC Hz/Q under K-Weight); `*` = selected; `[Δ]` = delta listen; `SCALE` = Global_Scale, a gain scale for the whole EQ (graph nodes sit on the scaled curve; dragging a node edits the unscaled gain); analyzer `Tilt` = display-only slope (dB/oct) for the spectrum analyzer (default 0); `▸` = a folded section.
 
 ```text
-+------------------------------------------------------------------------------+-----------------------------+
-| [1 /‾ HP ○][2 _/ Lo Shelf ●][3 ∩ Peak ●] ... [8 -- ○]                        | [ Init *       v][UNDO][REDO]| <- RIBBON, PRESET BAR
-+------------------------------------------------------------------------------+-----------------------------+
-| In | +18 dB  .        .          .          .         .        | Out | Gain  | ROUTING                     |
-| [] |  B5 NOW  A +2.0  B: -3.4 dB                                | []  | [+1.5]| INPUT    ==●=========●====  |
-| [] | +12 dB  .    (2)   .          .    _    .         .        | []  |  ||   | BAND SUM =====●=========●=  |
-| [] |         .   /   \  .          .   / \   .         .   (3)  | []  |  ||   | SC·NONE  - - - - - - - - -  |
-| [] |   0 dB -----*-------*--------*-------*----------*-/------- | []  | [==]  |        [●G1][■G2][▲G3][◆G4] |
-| [] |  -6 dB  .           \____/           \________/            | []  |  ||   |        Level Vowel Level Lvl|
-| [] |   20Hz    50Hz   100Hz   200Hz  500Hz  1kHz  5kHz  10kHz   | []  |  ||   | 3 Peak  A ◀━━━╯ G−6         |
-+------------------------------------------------------------------------------+ 5 Vowel A ◀━━━━━━╯ M+4      |
-| ● Band 5         FREQ      GAIN       Q     | DYN A    now +2.0 ×| DYN B   ×  |         B ◁━━━━━━━━━╯ G−9   |
-| [ Vowel      v]   (◔)       (◑)      (◕)    | [Group 2       v]  | [Group 3 v]| 6 BShlf A ◀━╯ G−4           |
-| [TAP Main][CH St]  AH 2.0   +9.0 dB  1.00x  | [Gain|Freq|Morph]  | [G|F|M]    |-----------------------------|
-| [WEIGHT Flat  v]                            | (◑) RANGE  MAKEUP  | (◑) RANGE  | ■ G2  Vowel · External SC D 50%|
-| [BYP] [SOLO]                                |     +4.0   [ 0 % ] |    -9 dB   | ▾ BALLISTICS                |
-+------------------------------------------------------------------------------+ Attack [10 ms] Hold  [0 ms](g)|
-| OUTPUT [Stereo v]  LOOKAHEAD [0.0 ms]  SCALE [100%]                          | Release[80 ms] Link [100 %]  |
-| [Δ] [BYPASS]  ANALYZER [Pre+Post v]  TILT [0 dB]        48.0 kHz  2 in ...   | ▸ TRIGGER   not used: ...   |
-+------------------------------------------------------------------------------+ ▾ SOURCE              | SC |  |
-                                                                               | Input [Ext SC] Detect[Vowel]| [] |
-                                                                               +-----------------------------+
++---------------------------------+----------------------------------------------------------------------------+
+| [ Init *        v][UNDO][REDO]  |     [▌/‾ ○][▌_/ ●][▌∩ ●][▌∩ ●][▌⌒ ●][▌∩ ●][▌‾\ ●][▌‾\ ○]               | <- PRESET BAR, RIBBON
++---------------------------------+----------------------------------------------------------------------------+
+| ROUTING                         | In | +12 dB .        .         .        .        .      | Out | Gain       |
+|  IN SUM SC                      | [] |  B5 NOW  A +2.0  B: -3.4 dB                           | []  | [+1.5]     |
+|  |   |  ¦ [●G1  Level]━━━━━┓    | [] |  +6 dB  .  (2)  .         .    _   .        .        | []  |  ||        |
+|  ├───┼──┼─[■G2  Vowel]━━┓  ┃    | [] |          /   \           .   / \  .        .  (3)   | []  | [==]       |
+|  ├───┼──┼─[▲G3  Level]━━╋━━╋━┓  | [] |   0 dB -*-------*--------*-------*---------*-/----   | []  |  ||        |
+|  ├───┼──┼─[◆G4  Level]  ┃  ┃ ┃  | [] |  -6 dB          \____/           \_______/          | []  |  ||        |
+|                    ▼ ▽  ▼    ▼  | [] |   20Hz   50Hz  100Hz  200Hz  500Hz  1kHz  5kHz 10kHz  | []  |  ||        |
+|  1   2   3   4   5   6   7   8  +----------------------------------------------------------------------------+
+|  A        G−6   M+4       G−4   | ● Band 5      FREQ   GAIN   Q   | DYN A   now +2.0 × | DYN B           × |
+|  B              G−9             | [ Vowel   v]   (◔)   (◑)   (◕)  | [Group 2        v] | [Group 3       v] |
+|---------------------------------| [TAP][CH]    AH 2.0 +9 dB 1.00x | [Gain|Freq|Morph]  | [Gain|Freq|Morph] |
+| ■ G2  Vowel · External SC  D 50%| [BYP] [SOLO]                    | RANGE  [+4.0]      | RANGE  [-9 dB]    |
+| [ detector scope              ] +----------------------------------------------------------------------------+
+| ▾ BALLISTICS                    | OUTPUT [Stereo v]  LOOKAHEAD [0.0 ms]  SCALE [100%]                         |
+| Attack [10 ms]  Hold [0 ms]     | [Δ] [BYPASS]  ANALYZER [Pre+Post v]  TILT [0 dB]       48.0 kHz  2 in ... |
+| ▸ TRIGGER   not used: ...       |                                                                         ⟋ |
++---------------------------------+----------------------------------------------------------------------------+
 ```
 
-* **Routing map:** the dynamics routing drawn like a subway map. Three source lines run across the top (Input, Band Sum, Sidechain; the Sidechain line is dashed amber and reads "SC · NONE" while no sidechain is connected). Each group's feed drops from the line it listens to into its head, with rounded junctions, and breaks the lines it crosses; click another line's crossing to change the group's Input. The heads show the group's shape, name, detect mode, live D (blue, grey while unused) and, in yellow from the center, the gain its bands apply now (left for a cut, right for a boost; full width = 24 dB; the largest deviation of those bands' combined response from their static response, a silent band counting as −60 dB). Bands are rows down the left, each with its Dyn A port above its Dyn B port. An assignment (a band subscribed with a nonzero range) is a line in the band's color that leaves its group's track with a rounded corner and ends in an arrowhead at the port (filled for A, hollow for B), labeled with its target and range (`G−6`, `F+8`, `M+4`); bypassed bands' lines are dashed. Hovering a band, group or crossing highlights what's connected to it and dims the rest. Click an empty crossing to connect that port to that group (moving it if it was connected elsewhere; a new connection starts as a −6 dB gain), click a joined crossing to select the band and group, Option-click it to disconnect (range 0). Groups are identified by shape (G1 circle, G2 square, G3 triangle, G4 diamond), never by hue, which belongs to bands.
+* **Routing map:** the dynamics routing drawn like a subway map, with bands as columns (left to right, like the ribbon) and groups as rows. Three source lines run down the left (IN = input, SUM = band sum, SC = sidechain; the SC line and label are dashed amber while no sidechain is connected). Each group's feed leaves the line it listens to, with rounded junctions, runs right into its head and breaks the lines it crosses; click another line's crossing to change the group's Input. The heads show the group's shape, name, detect mode, live D (blue, grey while unused) and, in yellow from the center, the gain its bands apply now (left for a cut, right for a boost; full width = 24 dB; the largest deviation of those bands' combined response from their static response, a silent band counting as −60 dB). Each group's track runs right from its head across the band columns. Each column has its Dyn A port (left) and Dyn B port (right) at the bottom, over the band's type icon. An assignment (a band subscribed with a nonzero range) is a line in the band's color that leaves its group's track with a rounded corner and drops to an arrowhead at the port (filled for A, hollow for B); under the icon, rows A and B give each assignment's target and range (`G−6`, `F+8`, `M+4`). Bypassed bands' lines are dashed. Hovering a band, group or crossing highlights what's connected to it and dims the rest. Click an empty crossing to connect that port to that group (moving it if it was connected elsewhere; a new connection starts as a −6 dB gain), click a joined crossing to select the band and group, Option-click it to disconnect (range 0). Groups are identified by shape (G1 circle, G2 square, G3 triangle, G4 diamond), never by hue, which belongs to bands.
 * **Band strip:** the selected band's type, routing (Tap, Chan), Option, Bypass and Solo, its X/Y/Z as dials (labeled by what they mean for the type: Freq/Morph, Gain/Phon, Q/Width/Tract) and two assignment cards, Dyn A and Dyn B: group, target (Gain | Freq | Morph), a Range dial, the current offset, and Makeup on the first card with a gain target. A card without an assignment offers "+ Connect to G*n*" (the selected group); × disconnects. Dials drag vertically (Shift = fine), scroll, take a typed value on double-click and reset with Option-click.
 * **Group sections:** under the map, the selected group's settings in foldable sections: Ballistics (Attack, Hold, Release, Link), Trigger (Threshold, Rise, Knee, Mode, Alpha, RMS Window; folded to "not used" in the Vowel and Pitch modes) and Source (Input, Detect, SC Filter, SC Hz, SC Q, SC Listen), with the sidechain meter beside them. Click a title to fold or unfold it; when the panel is short, the sections opened least recently fold first and show a one-line summary. The detector scope appears above them when there is room.
 * **Graph nodes:** frequency bands drag freq (horizontal) and gain (vertical), with the wheel adjusting Q. LP and HP nodes sit on the curve at the cutoff (Q in dB, doubled at 24 dB/oct) and drag Q vertically, as in Logic's Channel EQ. Fletcher-Munson has a node pinned at 1 kHz whose vertical drag sets Phon Delta. Vowel's node drags Morph (horizontal) and Formant Gain (vertical). K-Weight has no node. When a band's dynamics move its frequency away from its node (e.g. Dyn Target Freq following pitch), a thin line in the band's color marks its live frequency, with a dot on the live curve and the band number at the top. A selected Band Shelf also shows handles at its two edges; dragging one moves that edge while the other stays put (the wheel on its node changes the width). Option-dragging a node sets its `DynRange`, and Cmd-dragging (Ctrl on Windows) its `Dyn B Range`, along the axis its target moves: vertical for Gain, horizontal for Freq and Morph. The selected band shows where each assignment takes it at full dynamics ($D = 1$) as a ring labeled A or B, joined to its node.
-* **Band ribbon:** each cell shows the band number, a small icon of its type's curve (drawn from the real response at typical settings, a boost for types with a gain) and a short type name, dropping the name and then the icon as the cells narrow. Click a band to select it, click the selected band for its type menu; the dot at the right of each cell turns the band on or off (bypass).
+* **Band ribbon:** spans the graph's width, over it. Each cell shows the band's color and a large icon of its type's curve (drawn from the real response at typical settings, a boost for types with a gain); the type's full name is in the band strip and the type menu. Click a band to select it, click the selected band for its type menu; the dot at the right of each cell turns the band on or off (bypass).
 * **Output Gain fader:** a vertical fader to the right of the output meter, as in Logic's stock EQ, with its value on top. Drag (Shift = fine); double-click or Option-click resets to 0 dB.
 * **SCALE:** a gain scale for the whole EQ (section 3.B step 6). The curves and graph nodes show the scaled gain; dragging a node edits the band's own gain so it lands where you drop it (no gain edits from the graph below 5% |SCALE|).
 * **Level meters:** a vertical input meter at the left edge of the EQ graph and the output meter at its right (the `(M)` column), one bar per channel. Scale −60 to +6 dBFS (float signals can exceed full scale), segmented: green below −12 dBFS, yellow from −12 to 0, red above 0, with a peak-hold tick. Above each meter, a numeric readout of the recent peak (the meter's name sits below it); once a peak exceeds 0 dBFS the readout latches in red, showing the highest peak, until it is clicked or the host transport starts. Inactive channels (e.g. R on a mono track) are drawn empty.

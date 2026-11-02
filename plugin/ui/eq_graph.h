@@ -662,6 +662,7 @@ class EqGraph final : public iplug::igraphics::IControl {
                  mRECT.R, y);
       char buf[16];
       std::snprintf(buf, sizeof(buf), "%+d", db);
+      if (y > mRECT.B - 16.f || y < mRECT.T + 12.f) continue;  // Clear of Hz.
       g.DrawText(label, db == 0 ? "0 dB" : buf,
                  ig::IRECT(mRECT.L + 3, y - 12, mRECT.L + 40, y));
     }

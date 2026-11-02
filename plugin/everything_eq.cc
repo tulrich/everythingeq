@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 
@@ -12,6 +14,7 @@
 #include "model/presets.h"
 #include "model/state.h"
 #include "plugin/ui/editor.h"
+#include "plugin/ui/widgets.h"
 
 namespace eeq {
 
@@ -48,6 +51,19 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
 #endif
 
 #if IPLUG_EDITOR
+#if defined(APP_API)
+  // For screenshots: EEQ_EDITOR_SIZE=WxH, EEQ_PRESET=<preset index>.
+  if (const char* preset = std::getenv("EEQ_PRESET")) {
+    LoadPreset(std::atoi(preset), nullptr);
+  }
+  if (const char* size = std::getenv("EEQ_EDITOR_SIZE")) {
+    int w = 0, h = 0;
+    if (std::sscanf(size, "%dx%d", &w, &h) == 2) {
+      editor_width_ = std::clamp(w, PLUG_MIN_WIDTH, PLUG_MAX_WIDTH);
+      editor_height_ = std::clamp(h, PLUG_MIN_HEIGHT, PLUG_MAX_HEIGHT);
+    }
+  }
+#endif
   mMakeGraphicsFunc = [&]() {
     // Reopen at the size the window had last.
     return ig::MakeGraphics(*this, editor_width_, editor_height_, PLUG_FPS,
@@ -61,7 +77,8 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
       editor_->Layout();
       return;
     }
-    graphics->AttachCornerResizer(ig::EUIResizerMode::Size, true);
+    graphics->AttachCornerResizer(new GripResizer(graphics->GetBounds(), 18.f),
+                                  ig::EUIResizerMode::Size, true);
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
     // Command-Z / Shift-Command-Z (Control on Windows), when the host passes
     // the keys on.

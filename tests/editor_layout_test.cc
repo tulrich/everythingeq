@@ -24,7 +24,9 @@ std::vector<Rect> Shown(const EditorLayout& L) {
 
 TEST_CASE("Layout tiers follow the window size", "[layout]") {
   REQUIRE(TierFor(1200, 720) == LayoutTier::kFull);
-  REQUIRE(TierFor(960, 560) == LayoutTier::kFull);
+  REQUIRE(TierFor(kDefaultEditorWidth, kDefaultEditorHeight) ==
+          LayoutTier::kFull);
+  REQUIRE(TierFor(880, 480) == LayoutTier::kFull);
   REQUIRE(TierFor(720, 440) == LayoutTier::kCompact);
   REQUIRE(TierFor(1200, 440) == LayoutTier::kCompact);  // Height limits.
   REQUIRE(TierFor(520, 320) == LayoutTier::kSmall);
@@ -81,6 +83,11 @@ TEST_CASE("Tiers drop features as the window shrinks", "[layout]") {
   REQUIRE(small_tier.show_top);
   REQUIRE(!small_tier.show_strip);
   REQUIRE(!small_tier.show_meters);
+  // The ribbon spans the graph; the dynamics are left of the EQ.
+  REQUIRE(full.ribbon.l == full.graph.l);
+  REQUIRE(full.ribbon.r == full.graph.r);
+  REQUIRE(full.panel.r < full.in_meter.l);
+  REQUIRE(compact.drawer_tab.r < compact.in_meter.l);
   const EditorLayout minimum = ComputeEditorLayout(360, 220, false);
   REQUIRE(!minimum.show_top);
   REQUIRE(minimum.graph.w() > 340.f);
@@ -93,8 +100,8 @@ TEST_CASE("The dynamics panel folds sections to fit", "[layout]") {
     const Rect panel = {0, 0, 330, h};
     const PanelLayout P = ComputePanelLayout(panel, sections, true, true);
     INFO("height " << h);
-    REQUIRE(P.map_block >= kMapMinBlock);
-    REQUIRE(P.map_block <= kMapMaxBlock);
+    REQUIRE(P.map_row >= kMapMinRow);
+    REQUIRE(P.map_row <= kMapMaxRow);
     REQUIRE(P.sections.size() == 3);
     float bottom = P.map.b;
     for (const PanelLayout::Section& s : P.sections) {

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <optional>
 
@@ -84,6 +85,9 @@ Editor::Editor(ig::IGraphics& graphics, EditorModel& model)
   BuildStrip();
   BuildFooter();
   BuildPanel();
+#if defined(APP_API)
+  drawer_open_ = std::getenv("EEQ_DRAWER_OPEN") != nullptr;  // Screenshots.
+#endif
   Layout();
   OnBandSelected(model_.SelectedBand());
 }

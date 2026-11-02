@@ -38,8 +38,8 @@
 #define PLUG_HAS_UI 1
 // Default size; the window is resizable down to the graph alone
 // (model/editor_layout.h).
-#define PLUG_WIDTH 1200
-#define PLUG_HEIGHT 720
+#define PLUG_WIDTH 1000
+#define PLUG_HEIGHT 580
 #define PLUG_MIN_WIDTH 360
 #define PLUG_MIN_HEIGHT 220
 #define PLUG_MAX_WIDTH 2000

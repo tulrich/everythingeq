@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "Controls/ICornerResizerControl.h"
 #include "IControl.h"
 #include "plugin/ui/editor_model.h"
 #include "plugin/ui/theme.h"
@@ -308,7 +309,7 @@ class DrawerTab final : public iplug::igraphics::IControl {
       y += 36.f;
     }
     ig::IText text = theme::Text(9.f, theme::kTextDim, ig::EAlign::Center);
-    text.mAngle = 90.f;
+    text.mAngle = -90.f;
     g.DrawText(text, "DYNAMICS",
                ig::IRECT(mRECT.L, y + 6.f, mRECT.R, y + 66.f));
   }
@@ -321,6 +322,23 @@ class DrawerTab final : public iplug::igraphics::IControl {
   EditorModel& model_;
   std::function<bool(int)> group_active_;
   std::function<void()> on_click_;
+};
+
+// The window's resize grip: diagonal ridges in the bottom-right corner.
+class GripResizer final : public iplug::igraphics::ICornerResizerControl {
+ public:
+  GripResizer(const iplug::igraphics::IRECT& graphics_bounds, float size)
+      : ICornerResizerControl(graphics_bounds, size) {
+    SetTooltip("Drag to resize; double-click for the default size.");
+  }
+  void Draw(iplug::igraphics::IGraphics& g) override {
+    const iplug::igraphics::IColor c =
+        GetMouseIsOver() ? theme::kText : theme::kTextDim;
+    const float r = mRECT.R - 3.f, b = mRECT.B - 3.f;
+    for (const float k : {4.f, 8.f, 12.f}) {
+      g.DrawLine(c, r - k, b, r, b - k, nullptr, 1.5f);
+    }
+  }
 };
 
 // The selected band's name and settings over the graph's corner, for the

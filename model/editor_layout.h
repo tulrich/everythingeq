@@ -34,8 +34,8 @@ enum class LayoutTier {
   kFull,     // Everything, with the dynamics panel docked at the right.
 };
 
-inline constexpr int kDefaultEditorWidth = 1200;
-inline constexpr int kDefaultEditorHeight = 720;
+inline constexpr int kDefaultEditorWidth = 1000;
+inline constexpr int kDefaultEditorHeight = 580;
 inline constexpr int kMinEditorWidth = 360;
 inline constexpr int kMinEditorHeight = 220;
 inline constexpr int kMaxEditorWidth = 2000;
@@ -72,8 +72,8 @@ struct EditorLayout {
   bool show_footer = false;
   Rect footer;
 
-  // The dynamics panel: docked (full tier) or a drawer over the graph
-  // (compact tier, while open).
+  // The dynamics panel at the left: docked (full tier) or a drawer over the
+  // EQ (compact tier, while open) beside a tab at the left edge.
   bool show_panel = false;
   bool panel_overlay = false;
   Rect panel;
@@ -95,7 +95,7 @@ struct PanelSection {
 struct PanelLayout {
   Rect title;  // "ROUTING".
   Rect map;
-  float map_block = 26.f;  // Height of one band's row pair in the map.
+  float map_row = 26.f;  // Height of one group's row in the map.
   bool show_legend = false;
   Rect legend;
   Rect divider;
@@ -114,11 +114,15 @@ struct PanelLayout {
   std::vector<Section> sections;
 };
 
-// Map geometry shared by the layout and the routing map control.
-inline constexpr float kMapHeaderHeight = 81.f;  // Source lines and heads.
-inline constexpr float kMapMinBlock = 20.f;
-inline constexpr float kMapMaxBlock = 26.f;
-float MapHeight(float block);
+// Map geometry shared by the layout and the routing map control: source
+// labels on top, a row per group, then the bands' ports, icons and range
+// labels.
+inline constexpr int kNumMapGroups = 4;
+inline constexpr float kMapTopHeight = 14.f;
+inline constexpr float kMapBottomHeight = 46.f;
+inline constexpr float kMapMinRow = 22.f;
+inline constexpr float kMapMaxRow = 36.f;
+float MapHeight(float row);
 
 PanelLayout ComputePanelLayout(const Rect& panel,
                                const std::vector<PanelSection>& sections,

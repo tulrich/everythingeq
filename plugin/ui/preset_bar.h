@@ -8,6 +8,7 @@
 
 #include "IControl.h"
 #include "plugin/ui/editor_model.h"
+#include "plugin/ui/param_field.h"
 #include "plugin/ui/theme.h"
 
 namespace eeq {
@@ -39,10 +40,14 @@ class PresetBar final : public iplug::igraphics::IControl {
                    y + 2.f);
     const PresetRef ref = model_.CurrentPreset();
     const std::string name = ref.name.empty() ? "No Preset" : ref.name;
+    const ig::IText text =
+        theme::Text(11.f, ref.name.empty() ? theme::kTextDim : theme::kText);
+    const ig::IRECT text_rect = box.GetPadded(-6.f).GetReducedFromRight(8.f);
     g.DrawText(
-        theme::Text(11.f, ref.name.empty() ? theme::kTextDim : theme::kText),
-        (name + (modified_ ? " *" : "")).c_str(),
-        box.GetPadded(-6.f).GetReducedFromRight(8.f));
+        text,
+        ParamField::Fit(g, text, name + (modified_ ? " *" : ""), text_rect.W())
+            .c_str(),
+        text_rect);
     // Undo / Redo.
     for (const bool redo : {false, true}) {
       if (!show_undo_) break;

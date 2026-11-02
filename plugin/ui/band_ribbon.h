@@ -17,11 +17,11 @@
 
 namespace eeq {
 
-// The top band ribbon (ABOUT.md section 4): one cell per band slot showing
-// its number, an icon of its type's curve and a short type name (dropped as
-// the cells narrow); click to select, click the selected band for its type
-// menu.  The dot at the right of each cell toggles the band's bypass (when
-// shown).  Off bands read "--", bypassed bands are dimmed and struck through.
+// The band ribbon over the graph (ABOUT.md section 4): one cell per band
+// slot showing its color and a large icon of its type's curve; click to
+// select, click the selected band for its type menu.  The dot at the right
+// of each cell toggles the band's bypass (when shown).  Off bands show a
+// dash, bypassed bands are dimmed and struck through.
 //
 // Shift-click selects a range of bands and Command-click adds or removes
 // one; the selection is where pastes land and what a power dot toggles.
@@ -101,23 +101,18 @@ class BandRibbon final : public iplug::igraphics::IControl {
                                 : color,
                      cx, cy, 4.f, nullptr, 2.f);
       }
-      const ig::IColor text_color =
-          off || bypassed ? theme::kTextDim : theme::kText;
-      const std::string number = std::to_string(b + 1);
-      g.DrawText(theme::Text(10.f, theme::kTextDim), number.c_str(),
-                 content.ReduceFromLeft(9.f));
-      if (!off && content.W() >= kIconWidth + 2.f) {
-        DrawIcon(g, static_cast<BandType>(type),
-                 content.ReduceFromLeft(kIconWidth).GetVPadded(-6.f),
-                 color.WithOpacity(a));
-        content.ReduceFromLeft(4.f);
-      }
-      if (content.W() >= 34.f || off) {
-        g.DrawText(theme::Text(10.f, text_color), ShortName(type), content);
+      // The type's curve, as large as the cell allows; Off is a dash.
+      const ig::IRECT icon = content.GetPadded(-4.f, -5.f, -4.f, -5.f);
+      if (off) {
+        g.DrawLine(theme::kBorder, icon.MW() - 6.f, icon.MH(), icon.MW() + 6.f,
+                   icon.MH(), nullptr, 1.5f);
+      } else {
+        DrawIcon(g, static_cast<BandType>(type), icon, color.WithOpacity(a),
+                 1.75f);
       }
       if (bypassed && !off) {
-        g.DrawLine(theme::kTextDim, cell.L + 10.f, cell.MH(), cell.R - 6.f,
-                   cell.MH());
+        g.DrawLine(theme::kTextDim, content.L + 2.f, content.B - 5.f,
+                   content.R - 2.f, content.T + 5.f);
       }
     }
   }
@@ -181,17 +176,8 @@ class BandRibbon final : public iplug::igraphics::IControl {
 
  private:
   static constexpr int kNumTypes = static_cast<int>(BandType::kVintageHigh) + 1;
-  static constexpr float kIconWidth = 20.f;
   static constexpr int kIconPoints = 24;
   static constexpr double kIconRangeDb = 15.0;  // Half height.
-
-  static const char* ShortName(int type) {
-    static const char* const kNames[] = {
-        "--",  "Peak",  "Lo Shelf", "Hi Shelf",   "Band Shelf",
-        "LP",  "HP",    "Notch",    "BP",         "Tilt",
-        "F-M", "Vowel", "K-Wt",     "Vintage Lo", "Vintage Hi"};
-    return kNames[std::clamp(type, 0, static_cast<int>(std::size(kNames)) - 1)];
-  }
 
   // The curve of a band of `type` at typical settings (a boost for types
   // with a gain), 20 Hz - 20 kHz, in dB.
@@ -220,9 +206,12 @@ class BandRibbon final : public iplug::igraphics::IControl {
     return curves[static_cast<int>(type)];
   }
 
+ public:
+  // A small plot of a band type's curve at typical settings.
   static void DrawIcon(iplug::igraphics::IGraphics& g, BandType type,
                        const iplug::igraphics::IRECT& r,
-                       const iplug::igraphics::IColor& color) {
+                       const iplug::igraphics::IColor& color,
+                       float thickness = 1.25f) {
     const std::array<float, kIconPoints>& c = IconCurve(type);
     g.DrawLine(theme::kGrid, r.L, r.MH(), r.R, r.MH());
     g.PathClear();
@@ -237,9 +226,10 @@ class BandRibbon final : public iplug::igraphics::IControl {
         g.PathLineTo(x, y);
       }
     }
-    g.PathStroke(color, 1.25f);
+    g.PathStroke(color, thickness);
   }
 
+ private:
   iplug::igraphics::IRECT Cell(int band) const {
     return mRECT.SubRectHorizontal(kNumBands, band).GetHPadded(-2.f);
   }
