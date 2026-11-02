@@ -25,8 +25,8 @@ enum class BandType {
   kFletcherMunson,
   kVowel,
   kKWeight,
-  kPultecLow,
-  kPultecHigh,
+  kVintageLow,
+  kVintageHigh,
 };
 
 enum class DynTarget { kGain, kFreq, kMorph };
@@ -34,8 +34,8 @@ enum class Tap { kMain, kAux };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
 // The per-band Option, by band type.
 enum class VowelWeighting { kNatural, kFlat };
-enum class FilterSlope { k12, k24 };         // LP, HP
-enum class PultecAtten { k5k, k10k, k20k };  // Pultec High
+enum class FilterSlope { k12, k24 };          // LP, HP
+enum class VintageAtten { k5k, k10k, k20k };  // Vintage High
 inline constexpr int kNumOptions = 3;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
@@ -59,16 +59,16 @@ enum class OutputMode { kStereo, kSplitLr, kSplitMs };
 //   Vowel:               x = morph index 0..4, y = formant gain dB,
 //                        z = tract scale
 //   KWeight:             fixed (x, y, z unused)
-//   PultecLow:           x = Hz, y = boost dB, z = attenuation dB
-//   PultecHigh:          x = boost Hz, y = boost dB, z = attenuation dB
-//                        (a shelf at the Option's PultecAtten frequency)
+//   VintageLow:           x = Hz, y = boost dB, z = attenuation dB
+//   VintageHigh:          x = boost Hz, y = boost dB, z = attenuation dB
+//                        (a shelf at the Option's VintageAtten frequency)
 struct BandParams {
   BandType type = BandType::kOff;
   double x = 1000.0;
   double y = 0.0;
   double z = 0.70710678118654752440;
   int option = 0;  // Vowel: VowelWeighting; LP, HP: FilterSlope;
-                   // Pultec High: PultecAtten
+                   // Vintage High: VintageAtten
   // -1 = none, else 0..kNumGroups-1; the band follows its group only with a
   // nonzero dyn_range (see SubscribesTo).
   int dyn_group = -1;
@@ -135,8 +135,8 @@ inline bool SubscribesTo(const BandParams& bp, int g) {
 inline bool HasDynMakeup(BandType t) {
   return t == BandType::kPeak || t == BandType::kLowShelf ||
          t == BandType::kHighShelf || t == BandType::kBandShelf ||
-         t == BandType::kVowel || t == BandType::kPultecLow ||
-         t == BandType::kPultecHigh;
+         t == BandType::kVowel || t == BandType::kVintageLow ||
+         t == BandType::kVintageHigh;
 }
 
 // LP and HP at 24 dB/oct: the Aux tap gets the complementary crossover band.

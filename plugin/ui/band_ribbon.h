@@ -180,16 +180,16 @@ class BandRibbon final : public iplug::igraphics::IControl {
   bool IsDirty() override { return true; }  // Cheap; follows param changes.
 
  private:
-  static constexpr int kNumTypes = static_cast<int>(BandType::kPultecHigh) + 1;
+  static constexpr int kNumTypes = static_cast<int>(BandType::kVintageHigh) + 1;
   static constexpr float kIconWidth = 20.f;
   static constexpr int kIconPoints = 24;
   static constexpr double kIconRangeDb = 15.0;  // Half height.
 
   static const char* ShortName(int type) {
     static const char* const kNames[] = {
-        "--",  "Peak",  "Lo Shelf", "Hi Shelf",  "Band Shelf",
-        "LP",  "HP",    "Notch",    "BP",        "Tilt",
-        "F-M", "Vowel", "K-Wt",     "Pultec Lo", "Pultec Hi"};
+        "--",  "Peak",  "Lo Shelf", "Hi Shelf",   "Band Shelf",
+        "LP",  "HP",    "Notch",    "BP",         "Tilt",
+        "F-M", "Vowel", "K-Wt",     "Vintage Lo", "Vintage Hi"};
     return kNames[std::clamp(type, 0, static_cast<int>(std::size(kNames)) - 1)];
   }
 

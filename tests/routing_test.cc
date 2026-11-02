@@ -34,8 +34,8 @@ EngineParams RandomChain(std::mt19937& rng) {
                             BandType::kVowel,
                             BandType::kFletcherMunson,
                             BandType::kKWeight,
-                            BandType::kPultecLow,
-                            BandType::kPultecHigh};
+                            BandType::kVintageLow,
+                            BandType::kVintageHigh};
   std::uniform_int_distribution<int> type(0, std::size(types) - 1);
   std::uniform_real_distribution<double> oct(0.0, 10.0), gain(-12.0, 12.0),
       q(0.3, 6.0), morph(0.0, 4.0);

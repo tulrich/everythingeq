@@ -30,8 +30,8 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"FletcherMunson", BandType::kFletcherMunson},
     {"Vowel", BandType::kVowel},
     {"KWeight", BandType::kKWeight},
-    {"PultecLow", BandType::kPultecLow},
-    {"PultecHigh", BandType::kPultecHigh}};
+    {"VintageLow", BandType::kVintageLow},
+    {"VintageHigh", BandType::kVintageHigh}};
 const std::pair<const char*, DynTarget> kDynTargets[] = {
     {"Gain", DynTarget::kGain},
     {"Freq", DynTarget::kFreq},
@@ -47,10 +47,10 @@ const std::pair<const char*, VowelWeighting> kWeightings[] = {
     {"Natural", VowelWeighting::kNatural}, {"Flat", VowelWeighting::kFlat}};
 const std::pair<const char*, FilterSlope> kSlopes[] = {
     {"12", FilterSlope::k12}, {"24", FilterSlope::k24}};
-const std::pair<const char*, PultecAtten> kPultecAttens[] = {
-    {"5k", PultecAtten::k5k},
-    {"10k", PultecAtten::k10k},
-    {"20k", PultecAtten::k20k}};
+const std::pair<const char*, VintageAtten> kVintageAttens[] = {
+    {"5k", VintageAtten::k5k},
+    {"10k", VintageAtten::k10k},
+    {"20k", VintageAtten::k20k}};
 const std::pair<const char*, DetectorInput> kInputs[] = {
     {"InternalDry", DetectorInput::kInternalDry},
     {"InternalBandSum", DetectorInput::kInternalBandSum},
@@ -162,9 +162,9 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
         auto slope = static_cast<FilterSlope>(bp.option);
         ReadEnum(b, "slope", kSlopes, slope);
         bp.option = static_cast<int>(slope);
-      } else if (bp.type == BandType::kPultecHigh) {
-        auto atten = static_cast<PultecAtten>(bp.option);
-        ReadEnum(b, "attenSel", kPultecAttens, atten);
+      } else if (bp.type == BandType::kVintageHigh) {
+        auto atten = static_cast<VintageAtten>(bp.option);
+        ReadEnum(b, "attenSel", kVintageAttens, atten);
         bp.option = static_cast<int>(atten);
       }
       Read(b, "x", bp.x);
@@ -248,10 +248,10 @@ json EngineParamsToJson(const EngineParams& p) {
       } else if (bp.type == BandType::kLp || bp.type == BandType::kHp) {
         WriteEnum(j, "slope", kSlopes, static_cast<FilterSlope>(bp.option),
                   static_cast<FilterSlope>(bd.option));
-      } else if (bp.type == BandType::kPultecHigh) {
-        WriteEnum(j, "attenSel", kPultecAttens,
-                  static_cast<PultecAtten>(bp.option),
-                  static_cast<PultecAtten>(bd.option));
+      } else if (bp.type == BandType::kVintageHigh) {
+        WriteEnum(j, "attenSel", kVintageAttens,
+                  static_cast<VintageAtten>(bp.option),
+                  static_cast<VintageAtten>(bd.option));
       }
       // Groups are written when they differ from the band's default.
       if (bp.dyn_group >= 0) {

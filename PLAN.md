@@ -105,9 +105,9 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 4. Fletcher-Munson: offline fit (tools/) of the 3-cell cascade to ISO 226:2003 contour differences for several phon deltas. Store fitted parameters as a small table interpolated by Phon Delta, with 0 dB at 1 kHz enforced. Test: fit error report; 1 kHz anchor within 0.1 dB.
 5. Vowel: morph table, log-frequency interpolation, Tract Scale, Natural/Flat weighting, fixed Qs. Test: formant centers land within 1% for each anchor and intermediate morph value.
 6. `BandSlot`: polymorphic wrapper (a variant/switch, no virtual calls per sample) with up to 4 cells. Changing type resets state smoothly by crossfading 16–64 samples between old and new configuration to avoid clicks.
-7. Pultec types (user request, 2026-11-01; done). Shaped after published EQP-1A curves rather than fitted to measurements; fitting offline (like Fletcher-Munson) is worth doing if measurements turn up.
-   - **Pultec Low:** X = frequency (20–200 Hz, continuous), Y = boost, Z = attenuation. Resonant boost shelf at the frequency, broad attenuation shelf five times higher: the bump below, the dip above.
-   - **Pultec High:** X = boost frequency (2–20 kHz), Y = boost, Z = attenuation, Option = Atten Sel (5 / 10 / 20 kHz). Bandwidth is fixed (broad, Q 0.7); a Peak band covers sharper boosts. kNumOptions grew to 3; options beyond a type's choices are clamped when building engine params.
+7. Vintage types, after the classic passive program EQ (user request, 2026-11-01; done; renamed from "Pultec" on 2026-11-02 to stay clear of the trademark). Shaped after published curves rather than fitted to measurements; fitting offline (like Fletcher-Munson) is worth doing if measurements turn up.
+   - **Vintage Low:** X = frequency (20–200 Hz, continuous), Y = boost, Z = attenuation. Resonant boost shelf at the frequency, broad attenuation shelf five times higher: the bump below, the dip above.
+   - **Vintage High:** X = boost frequency (2–20 kHz), Y = boost, Z = attenuation, Option = Atten Sel (5 / 10 / 20 kHz). Bandwidth is fixed (broad, Q 0.7); a Peak band covers sharper boosts. kNumOptions grew to 3; options beyond a type's choices are clamped when building engine params.
    - Global Scale scales both Boost and Atten; a Gain target moves the Boost. Tests: shapes at the documented points, Atten Sel placement, scaling, preset round-trip.
 
 ## Phase 3 — Chain, routing & output modes (§3.D)

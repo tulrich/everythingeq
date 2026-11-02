@@ -1,11 +1,11 @@
 {
   "format": "everythingeq-preset",
   "version": 1,
-  "name": "Pultec Low & High Tricks",
+  "name": "Vintage Low & High Tricks",
   "params": {
     "bands": [
       {
-        "type": "PultecLow",
+        "type": "VintageLow",
         "x": 60,
         "y": 8,
         "z": 4
@@ -23,7 +23,7 @@
         "z": 1.0
       },
       {
-        "type": "PultecHigh",
+        "type": "VintageHigh",
         "x": 10000,
         "y": 4,
         "z": 3,

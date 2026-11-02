@@ -21,9 +21,9 @@ constexpr SlotMapping kMorph{0.0, 2.0, 4.0, false, "Morph", ""};
 constexpr SlotMapping kFormantGain{-30.0,          0.0, 30.0, false,
                                    "Formant Gain", "dB"};
 constexpr SlotMapping kTract{0.70, 1.0, 1.40, true, "Tract", "x"};
-constexpr SlotMapping kPultecLowFreq{20.0, 60.0, 200.0, true, "Freq", "Hz"};
-constexpr SlotMapping kPultecHighFreq{2000.0, 8000.0, 20000.0,
-                                      true,   "Freq", "Hz"};
+constexpr SlotMapping kVintageLowFreq{20.0, 60.0, 200.0, true, "Freq", "Hz"};
+constexpr SlotMapping kVintageHighFreq{2000.0, 8000.0, 20000.0,
+                                       true,   "Freq", "Hz"};
 constexpr SlotMapping kBoost{0.0, 4.0, 18.0, false, "Boost", "dB"};
 constexpr SlotMapping kAtten{0.0, 2.0, 18.0, false, "Atten", "dB"};
 
@@ -70,10 +70,11 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kMorph;
       if (slot == Slot::kY) return kFormantGain;
       return kTract;
-    case BandType::kPultecLow:
-    case BandType::kPultecHigh:
+    case BandType::kVintageLow:
+    case BandType::kVintageHigh:
       if (slot == Slot::kX) {
-        return type == BandType::kPultecLow ? kPultecLowFreq : kPultecHighFreq;
+        return type == BandType::kVintageLow ? kVintageLowFreq
+                                             : kVintageHighFreq;
       }
       if (slot == Slot::kY) return kBoost;
       return kAtten;
@@ -91,7 +92,7 @@ const char* OptionName(BandType type) {
     case BandType::kLp:
     case BandType::kHp:
       return "Slope";
-    case BandType::kPultecHigh:
+    case BandType::kVintageHigh:
       return "Atten Sel";
     default:
       return "";
@@ -105,8 +106,8 @@ std::vector<std::string> OptionLabels(BandType type) {
     case BandType::kLp:
     case BandType::kHp:
       return {"12 dB/oct", "24 dB/oct"};  // FilterSlope
-    case BandType::kPultecHigh:
-      return {"5 kHz", "10 kHz", "20 kHz"};  // PultecAtten
+    case BandType::kVintageHigh:
+      return {"5 kHz", "10 kHz", "20 kHz"};  // VintageAtten
     default:
       return {};
   }
@@ -118,7 +119,7 @@ int OptionCount(BandType type) {
     case BandType::kLp:
     case BandType::kHp:
       return 2;
-    case BandType::kPultecHigh:
+    case BandType::kVintageHigh:
       return 3;
     default:
       return 0;

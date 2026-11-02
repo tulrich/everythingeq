@@ -113,7 +113,7 @@ std::vector<ParamSpec> MakeTable() {
         Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
              {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP",
               "HP", "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel",
-              "K-Weight", "Pultec Low", "Pultec High"});
+              "K-Weight", "Vintage Low", "Vintage High"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
