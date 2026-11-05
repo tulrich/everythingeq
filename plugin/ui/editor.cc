@@ -272,12 +272,21 @@ void Editor::BuildPanel() {
   cb.selected_group = [this] { return selected_group_; };
   cb.group_active = [this](int g) { return graph_->group_active(g); };
   cb.group_gain_db = [this](int g) { return graph_->group_gain_db(g); };
-  cb.connected = [this](int band, int slot) { Arm(band, slot); };
+  cb.armed = [this](int band, int slot) {
+    return band == armed_band_ && armed_[slot];
+  };
+  cb.set_armed = [this](int band, int slot, bool armed) {
+    if (armed) {
+      Arm(band, slot);
+    } else if (band == armed_band_) {
+      armed_[slot] = false;
+    }
+  };
   routing_ = new RoutingMap(ig::IRECT(), model_, std::move(cb));
   graphics_.AttachControl(routing_);
   legend_ = new ig::ITextControl(
       ig::IRECT(),
-      "G gain \xc2\xb7 F freq \xc2\xb7 M morph \xc2\xb7 Option-click removes",
+      "G gain \xc2\xb7 F freq \xc2\xb7 M morph \xc2\xb7 click again removes",
       theme::Text(9.f, theme::kTextDim));
   legend_->SetIgnoreMouse(true);
   graphics_.AttachControl(legend_);

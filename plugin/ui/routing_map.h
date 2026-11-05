@@ -29,9 +29,10 @@ namespace eeq {
 // the right one).  Under the ports: each band's type icon and its
 // assignments' targets and ranges.
 //
-// Click an empty crossing to connect that port to the group (moving it if
-// it was connected elsewhere), a joined one to select the band and group,
-// Option-click a joined one to disconnect it.  Click a source crossing to
+// Every crossing of a group row and a port column has a faint dot.  Click
+// an empty crossing to connect that port to the group (moving it if it was
+// connected elsewhere) with Range 0, and a joined one to disconnect it;
+// either selects the band and group.  Click a source crossing to
 // change the group's input, a group head to select it, a band's foot to
 // select it.
 class RoutingMap final : public iplug::igraphics::IControl {
@@ -41,8 +42,10 @@ class RoutingMap final : public iplug::igraphics::IControl {
     std::function<int()> selected_group;
     std::function<bool(int)> group_active;
     std::function<float(int)> group_gain_db;
-    // A port was newly connected (with Range 0): band, slot.
-    std::function<void(int, int)> connected;
+    // Ports connected with Range 0, which alone means unassigned, are
+    // "armed" by the editor so their cards stay open: band, slot.
+    std::function<bool(int, int)> armed;
+    std::function<void(int, int, bool)> set_armed;
   };
 
   RoutingMap(const iplug::igraphics::IRECT& bounds, EditorModel& model,
@@ -50,8 +53,8 @@ class RoutingMap final : public iplug::igraphics::IControl {
       : IControl(bounds), model_(model), cb_(std::move(callbacks)) {
     SetTooltip(
         "Routing. Click an empty crossing to connect a band's Dyn A (left) "
-        "or Dyn B (right) port to a group; Option-click a connection to "
-        "remove it. Click where a group's feed meets a source line (IN = "
+        "or Dyn B (right) port to a group; click a connection to remove "
+        "it. Click where a group's feed meets a source line (IN = "
         "input, SUM = band sum, SC = sidechain) to choose what it listens "
         "to.");
   }
@@ -366,6 +369,20 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
+  // Faint dots where the crossings are; band lines cover the joined ones.
+  for (int b = 0; b < kNumBands; ++b) {
+    const bool off =
+        static_cast<BandType>(
+            std::lround(v[BandParamId(b, BandField::kType)])) == BandType::kOff;
+    if (off) continue;
+    for (int s = 0; s < 2; ++s) {
+      for (int gi = 0; gi < kNumGroups; ++gi) {
+        g.FillCircle(theme::kTextDim.WithOpacity(0.55f), PortX(b, s),
+                     GroupY(gi), 2.f);
+      }
+    }
+  }
+
   // Band lines, arrowheads, icons and range labels.
   g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "A",
              ig::IRECT(mRECT.L + kHeadL, LabelY(0), mRECT.L + kBandsL - 4.f,
@@ -489,10 +506,13 @@ inline void RoutingMap::OnMouseDown(float x, float y,
           h.band, a ? BandField::kDynTarget : BandField::kDynBTarget);
       const int range_id =
           BandParamId(h.band, a ? BandField::kDynRange : BandField::kDynBRange);
-      const bool here = p.on && p.group == h.group;
-      if (here && mod.A) {
-        model_.SetValueGesture(range_id, kSlotDefault);  // Range 0.
-      } else if (!here) {
+      const bool armed =
+          !p.on && p.group == h.group && cb_.armed && cb_.armed(h.band, h.slot);
+      if ((p.on && p.group == h.group) || armed) {
+        // Disconnect: Range 0.
+        if (p.on) model_.SetValueGesture(range_id, kSlotDefault);
+        if (cb_.set_armed) cb_.set_armed(h.band, h.slot, false);
+      } else {
         // Connect, moving the port if it was on another group.  A new
         // connection starts as Gain with Range 0, to set on the graph.
         const bool fresh = !p.on;
@@ -509,7 +529,7 @@ inline void RoutingMap::OnMouseDown(float x, float y,
           model_.EndEdit(target_id);
         }
         model_.EndEdit(group_id);
-        if (fresh && cb_.connected) cb_.connected(h.band, h.slot);
+        if (fresh && cb_.set_armed) cb_.set_armed(h.band, h.slot, true);
       }
       model_.SelectBand(h.band);
       if (cb_.select_group) cb_.select_group(h.group);
