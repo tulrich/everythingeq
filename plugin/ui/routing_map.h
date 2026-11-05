@@ -41,6 +41,8 @@ class RoutingMap final : public iplug::igraphics::IControl {
     std::function<int()> selected_group;
     std::function<bool(int)> group_active;
     std::function<float(int)> group_gain_db;
+    // A port was newly connected (with Range 0): band, slot.
+    std::function<void(int, int)> connected;
   };
 
   RoutingMap(const iplug::igraphics::IRECT& bounds, EditorModel& model,
@@ -388,6 +390,13 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const Port& p = ports[b][s];
       const float x = PortX(b, s);
       if (!p.on) {
+        // The selected band's idle ports (Range 0) show, faintly, the group
+        // they join once a range is set on the graph.
+        if (b == sel_band && !off) {
+          g.DrawDottedLine(theme::BandColor(b).WithOpacity(0.5f), x,
+                           GroupY(std::clamp(p.group, 0, kNumGroups - 1)), x,
+                           py - 6.f, nullptr, 1.2f, 3.f);
+        }
         g.DrawCircle(theme::kGridStrong.WithOpacity(off ? 0.5f : 1.f), x,
                      py - 3.f, 2.5f);
         continue;
@@ -485,7 +494,7 @@ inline void RoutingMap::OnMouseDown(float x, float y,
         model_.SetValueGesture(range_id, kSlotDefault);  // Range 0.
       } else if (!here) {
         // Connect, moving the port if it was on another group.  A new
-        // connection starts as a -6 dB gain.
+        // connection starts as Gain with Range 0, to set on the graph.
         const bool fresh = !p.on;
         model_.BeginEdit(group_id);
         if (fresh) {
@@ -495,13 +504,12 @@ inline void RoutingMap::OnMouseDown(float x, float y,
         model_.SetEdit(group_id, h.group / static_cast<double>(kNumGroups - 1));
         if (fresh) {
           model_.SetEdit(target_id, 0.0);
-          model_.SetEdit(
-              range_id,
-              SlotFromPhysical(DynRangeMapping(DynTarget::kGain), -6.0));
+          model_.SetEdit(range_id, kSlotDefault);
           model_.EndEdit(range_id);
           model_.EndEdit(target_id);
         }
         model_.EndEdit(group_id);
+        if (fresh && cb_.connected) cb_.connected(h.band, h.slot);
       }
       model_.SelectBand(h.band);
       if (cb_.select_group) cb_.select_group(h.group);

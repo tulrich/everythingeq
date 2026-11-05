@@ -31,10 +31,13 @@ namespace eeq {
 // half-gain points); dragging one moves that edge and keeps the other fixed.
 // Double-clicking empty space adds a Peak band in the first free slot.
 //
-// Option-dragging a node sets its Dyn Range, and Cmd-dragging (Ctrl on
-// Windows) its Dyn B Range, along the target's axis: vertical for Gain,
-// horizontal for Freq and Morph.  The selected band shows where each
-// assignment takes it at full dynamics as a ring labeled A or B.
+// The selected band shows where each Dyn assignment takes it at full
+// dynamics as a ring labeled A or B; dragging the ring sets that Dyn Range
+// along the target's axis: vertical for Gain, horizontal for Freq and
+// Morph.  While the ring is too close to the node to grab (e.g. Range 0), a
+// small A or B tab beside the node takes its place; dragging it away from 0
+// assigns the band to its Dyn Group.  Option-dragging a node also sets its
+// Dyn Range, and Cmd-dragging (Ctrl on Windows) its Dyn B Range.
 class EqGraph final : public iplug::igraphics::IControl {
  public:
   static constexpr double kMinHz = 20.0;
@@ -43,6 +46,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   static constexpr float kNodeRadius = 6.f;
   static constexpr float kEdgeHalfW = 2.5f;
   static constexpr float kEdgeHalfH = 7.f;
+  static constexpr float kTabRadius = 5.f;
   // Below this |Global Scale|, dragging a node doesn't change its gain.
   static constexpr double kMinDragGainScale = 0.05;
 
@@ -178,10 +182,11 @@ class EqGraph final : public iplug::igraphics::IControl {
       for (int id : DragParams(drag_band_)) model_.BeginEdit(id);
       return;
     }
-    drag_band_ = HitNode(x, y);
+    drag_dyn_ = HitDynHandle(x, y);
+    drag_band_ = drag_dyn_ >= 0 ? model_.SelectedBand() : HitNode(x, y);
     if (drag_band_ < 0) return;
     model_.SelectBand(drag_band_);
-    drag_dyn_ = mod.A ? 0 : DynBModifier(mod) ? 1 : -1;
+    if (drag_dyn_ < 0) drag_dyn_ = mod.A ? 0 : DynBModifier(mod) ? 1 : -1;
     if (drag_dyn_ >= 0) {
       const int id = DynRangeId(drag_band_, drag_dyn_);
       drag_range_ =
@@ -350,24 +355,61 @@ class EqGraph final : public iplug::igraphics::IControl {
     return NodePosition(band, bp);
   }
 
-  // Rings at the selected band's full-dynamics positions, joined to its
-  // node.
+  // The grab handle for a band's Dyn assignment `dyn`: its full-dynamics
+  // ring, or, while that is too close to the node to grab (e.g. Range 0, no
+  // assignment yet), a tab beside the node (A to the lower left, B to the
+  // lower right; above if there's no room below).
+  struct DynHandle {
+    iplug::igraphics::IVec2 pos;
+    bool ring;
+  };
+  std::optional<DynHandle> DynHandlePosition(int band, int dyn) const {
+    if (band < 0) return std::nullopt;
+    if (params_.bands[band].bypass) return std::nullopt;
+    const std::optional<iplug::igraphics::IVec2> p = NodePosition(band);
+    if (!p) return std::nullopt;
+    const std::optional<iplug::igraphics::IVec2> q = DynNodePosition(band, dyn);
+    if (q && std::hypot(q->x - p->x, q->y - p->y) >= 2.f * kNodeRadius + 4.f) {
+      return DynHandle{*q, true};
+    }
+    constexpr float kDx = 15.f, kDy = 13.f;
+    const float y = p->y + kDy + kTabRadius < mRECT.B ? p->y + kDy : p->y - kDy;
+    return DynHandle{{p->x + (dyn == 0 ? -kDx : kDx), y}, false};
+  }
+
+  // 0 = A, 1 = B for the selected band's Dyn handle under the pointer, or
+  // -1.
+  int HitDynHandle(float x, float y) const {
+    for (int dyn = 0; dyn < 2; ++dyn) {
+      const auto h = DynHandlePosition(model_.SelectedBand(), dyn);
+      if (h && std::hypot(h->pos.x - x, h->pos.y - y) <=
+                   (h->ring ? kNodeRadius : kTabRadius) + 3.f) {
+        return dyn;
+      }
+    }
+    return -1;
+  }
+
+  // The selected band's Dyn handles, joined to its node.
   void DrawDynNodes(iplug::igraphics::IGraphics& g, int band) {
     namespace ig = iplug::igraphics;
     const std::optional<ig::IVec2> p = NodePosition(band);
-    if (!p || params_.bands[band].bypass) return;
+    if (!p) return;
     const ig::IColor color = theme::BandColor(band);
     for (int dyn = 0; dyn < 2; ++dyn) {
-      const std::optional<ig::IVec2> q = DynNodePosition(band, dyn);
-      if (!q || std::hypot(q->x - p->x, q->y - p->y) < 2.f) continue;
+      const std::optional<DynHandle> h = DynHandlePosition(band, dyn);
+      if (!h) continue;
       const bool dragging = drag_band_ == band && drag_dyn_ == dyn;
-      g.DrawLine(color.WithOpacity(0.5f), p->x, p->y, q->x, q->y);
-      g.FillCircle(theme::kBackground, q->x, q->y, kNodeRadius);
-      g.DrawCircle(color, q->x, q->y, kNodeRadius, nullptr,
+      const float r = h->ring ? kNodeRadius : kTabRadius;
+      g.DrawLine(color.WithOpacity(h->ring ? 0.5f : 0.3f), p->x, p->y, h->pos.x,
+                 h->pos.y);
+      g.FillCircle(theme::kBackground, h->pos.x, h->pos.y, r);
+      g.DrawCircle(color, h->pos.x, h->pos.y, r, nullptr,
                    dragging ? 2.f : 1.25f);
-      g.DrawText(theme::Text(9.f, color, ig::EAlign::Center),
-                 dyn == 0 ? "A" : "B",
-                 ig::IRECT(q->x - 8, q->y - 6, q->x + 8, q->y + 6));
+      g.DrawText(
+          theme::Text(h->ring ? 9.f : 8.f, color, ig::EAlign::Center),
+          dyn == 0 ? "A" : "B",
+          ig::IRECT(h->pos.x - 8, h->pos.y - 6, h->pos.x + 8, h->pos.y + 6));
     }
   }
 

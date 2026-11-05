@@ -192,6 +192,7 @@ void Editor::BuildStrip() {
         ig::IRECT(), "\xc3\x97",
         [this, a] {
           const int band = std::max(0, model_.SelectedBand());
+          armed_[a ? 0 : 1] = false;
           model_.SetValueGesture(BandParamId(band, a ? BandField::kDynRange
                                                      : BandField::kDynBRange),
                                  kSlotDefault);
@@ -271,6 +272,7 @@ void Editor::BuildPanel() {
   cb.selected_group = [this] { return selected_group_; };
   cb.group_active = [this](int g) { return graph_->group_active(g); };
   cb.group_gain_db = [this](int g) { return graph_->group_gain_db(g); };
+  cb.connected = [this](int band, int slot) { Arm(band, slot); };
   routing_ = new RoutingMap(ig::IRECT(), model_, std::move(cb));
   graphics_.AttachControl(routing_);
   legend_ = new ig::ITextControl(
@@ -430,11 +432,17 @@ void Editor::Connect(int slot) {
   model_.SetEdit(group_id,
                  selected_group_ / static_cast<double>(kNumGroups - 1));
   model_.SetEdit(target_id, 0.0);
-  model_.SetEdit(range_id,
-                 SlotFromPhysical(DynRangeMapping(DynTarget::kGain), -6.0));
+  model_.SetEdit(range_id, kSlotDefault);  // Range 0, set on the card or graph.
   model_.EndEdit(range_id);
   model_.EndEdit(target_id);
   model_.EndEdit(group_id);
+  Arm(band, slot);
+}
+
+void Editor::Arm(int band, int slot) {
+  if (band != armed_band_) armed_ = {};
+  armed_band_ = band;
+  armed_[slot] = true;
 }
 
 void Editor::LayoutCards(const ParamValues& v, bool force) {
@@ -442,6 +450,7 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   const bool off =
       static_cast<BandType>(Int(v[BandParamId(band, BandField::kType)])) ==
       BandType::kOff;
+  if (band != armed_band_) armed_ = {};
   std::array<bool, 2> used{}, gain{};
   for (int slot = 0; slot < 2; ++slot) {
     const bool a = slot == 0;
@@ -450,7 +459,7 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
     const double range = SlotToPhysical(
         DynRangeMapping(target),
         v[BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange)]);
-    used[slot] = !off && range != 0.0;
+    used[slot] = !off && (range != 0.0 || armed_[slot]);
     gain[slot] = used[slot] && target == DynTarget::kGain;
   }
   // Dyn Makeup is one parameter; it sits in the first card with a gain.
