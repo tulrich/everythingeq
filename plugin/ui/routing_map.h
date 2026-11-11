@@ -309,15 +309,20 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   for (int gi = 0; gi < kNumGroups; ++gi) {
     const float l = Head(gi).R;
     float r = l + 8.f;
+    bool joined = false;
     for (int b = 0; b < kNumBands; ++b) {
       for (int s = 0; s < 2; ++s) {
         if (ports[b][s].on && ports[b][s].group == gi) {
           r = std::max(r, PortX(b, s) - kCorner);
+          joined = true;
         }
       }
     }
+    // Selected or hovered tracks stand out; others in use match the source
+    // lines, and an unused stub stays dark.
     const ig::IColor c = gi == sel_group   ? theme::kAccent
                          : GroupLit(v, gi) ? theme::kText
+                         : joined          ? theme::kTextDim
                                            : theme::kGridStrong;
     g.DrawLine(c, l, GroupY(gi), r, GroupY(gi), nullptr, 3.f);
   }
