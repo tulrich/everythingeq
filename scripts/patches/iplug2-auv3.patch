@@ -1,5 +1,5 @@
 diff --git a/IPlug/AUv3/IPlugAUAudioUnit.mm b/IPlug/AUv3/IPlugAUAudioUnit.mm
-index f0fd8fcc4..226db297c 100644
+index f0fd8fcc4..c217f41c8 100644
 --- a/IPlug/AUv3/IPlugAUAudioUnit.mm
 +++ b/IPlug/AUv3/IPlugAUAudioUnit.mm
 @@ -446,7 +446,11 @@ - (instancetype) initWithComponentDescription:(AudioComponentDescription)compone
@@ -15,30 +15,32 @@ index f0fd8fcc4..226db297c 100644
    
    mPlug->OnParamReset(kReset);
    
-@@ -572,21 +576,23 @@ - (AUInternalRenderBlock) internalRenderBlock
+@@ -572,21 +576,25 @@ - (AUInternalRenderBlock) internalRenderBlock
        return err;
      }
      
-+    // Every input bus feeds consecutive input channels (e.g. main, then
-+    // sidechain). Only the main bus is required: a bus the host hasn't
++    // Each input bus feeds a fixed range of plug-in channels, sized by the
++    // bus's maximum channel count (e.g. main 0-1, sidechain 2-3), so a mono
++    // main bus leaves channel 1 disconnected rather than shifting the
++    // sidechain onto it. Only the main bus is required: a bus the host hasn't
 +    // connected, such as an unused sidechain, is marked disconnected.
 +    int chanIdx = 0;
-+    
++
      for (auto busIdx = 0; busIdx < inputBuses->GetSize(); busIdx++)
      {
 -      err = inputBuses->Get(busIdx)->pullInput(&pullFlags, timestamp, frameCount, busIdx, pullInputBlock);
 +      BufferedInputBus* pBus = inputBuses->Get(busIdx);
 +      err = pBus->pullInput(&pullFlags, timestamp, frameCount, busIdx, pullInputBlock);
-+      
++
 +      if (err != noErr && busIdx == 0) { return err; }
-+      
-+      chanIdx += pPlug->AttachInputBuffers(pBus->mutableAudioBufferList, chanIdx, err == noErr);
++
++      chanIdx += pPlug->AttachInputBuffers(pBus->mutableAudioBufferList, chanIdx, busIdx, err == noErr);
      }
--
+ 
 -    if (err != 0) { return err; }
 -    
 -    AudioBufferList* pInAudioBufferList = nil;
-     
+-    
      if (inputBuses->GetSize())
 -    {
 -      pInAudioBufferList = inputBuses->Get(0)->mutableAudioBufferList; // TODO: buses > 0
@@ -49,7 +51,7 @@ index f0fd8fcc4..226db297c 100644
      
      outputBuses->Get(outputBusNumber)->prepareOutputBufferList(outputData, frameCount, true);
      
-@@ -712,6 +718,12 @@ - (void) setRenderingOffline:(BOOL)renderingOffline
+@@ -712,6 +720,12 @@ - (void) setRenderingOffline:(BOOL)renderingOffline
    mPlug->SetOffline(renderingOffline);
  }
  
@@ -63,7 +65,7 @@ index f0fd8fcc4..226db297c 100644
  {
    return static_cast<NSTimeInterval>(mPlug->GetLatency()) / mPlug->GetSampleRate();
 diff --git a/IPlug/AUv3/IPlugAUv3.h b/IPlug/AUv3/IPlugAUv3.h
-index 48be9c6c1..b400d1d55 100644
+index 48be9c6c1..8675a9644 100644
 --- a/IPlug/AUv3/IPlugAUv3.h
 +++ b/IPlug/AUv3/IPlugAUv3.h
 @@ -53,6 +53,7 @@ public:
@@ -74,15 +76,16 @@ index 48be9c6c1..b400d1d55 100644
    bool SendMidiMsg(const IMidiMsg& msg) override;
  //  bool SendMidiMsgs(WDL_TypedBuf<IMidiMsg>& msgs) override;
    bool SendSysEx(const ISysEx& msg) override;
-@@ -65,9 +66,16 @@ public:
+@@ -65,9 +66,17 @@ public:
    float GetParameter(uint64_t address);
    const char* GetParamDisplay(uint64_t address, float value);
    float GetParamStringToValue(uint64_t address, const char* str);
 -  void AttachInputBuffers(AudioBufferList* pInBufferList);
-+  /** Attach one input bus's buffers starting at input channel chanIdx.
++  /** Attach input bus busIdx's buffers starting at input channel chanIdx.
++   * Channels the host leaves out (e.g. the right channel of a stereo bus fed mono) are marked disconnected.
 +   * @param connected \c false if the host hasn't connected the bus (e.g. no sidechain); its channels are then marked disconnected
-+   * @return The bus's channel count */
-+  int AttachInputBuffers(AudioBufferList* pInBufferList, int chanIdx, bool connected);
++   * @return The number of plug-in channels the bus occupies (at least its maximum channel count), i.e. where the next bus starts */
++  int AttachInputBuffers(AudioBufferList* pInBufferList, int chanIdx, int busIdx, bool connected);
 +  /** Mark the input channels from chanIdx on as disconnected */
 +  void DisconnectInputBuffers(int chanIdx);
    void AttachOutputBuffers(AudioBufferList* pOutBufferList, uint32_t busNumber);
@@ -93,7 +96,7 @@ index 48be9c6c1..b400d1d55 100644
    {
      mParamAddressMap.insert({paramIdx, paramAddress});
 diff --git a/IPlug/AUv3/IPlugAUv3.mm b/IPlug/AUv3/IPlugAUv3.mm
-index 1fa7d302a..fc7bd34ac 100644
+index 1fa7d302a..58b09772b 100644
 --- a/IPlug/AUv3/IPlugAUv3.mm
 +++ b/IPlug/AUv3/IPlugAUv3.mm
 @@ -32,6 +32,21 @@
@@ -130,15 +133,16 @@ index 1fa7d302a..fc7bd34ac 100644
    LEAVE_PARAMS_MUTEX;
      
    //Output SYSEX from the editor, which has bypassed ProcessSysEx()
-@@ -280,22 +298,28 @@
+@@ -280,22 +298,36 @@
    return val;
  }
  
 -void IPlugAUv3::AttachInputBuffers(AudioBufferList* pInBufList)
-+int IPlugAUv3::AttachInputBuffers(AudioBufferList* pInBufList, int chanIdx, bool connected)
++int IPlugAUv3::AttachInputBuffers(AudioBufferList* pInBufList, int chanIdx, int busIdx, bool connected)
  {
 -  int chanIdx = 0;
 +  const int startIdx = chanIdx;
++  const int busChans = MaxNChannelsForBus(ERoute::kInput, busIdx);
    
    if (pInBufList)
    {
@@ -158,6 +162,13 @@ index 1fa7d302a..fc7bd34ac 100644
 -    SetChannelConnections(ERoute::kInput, chanIdx, MaxNChannels(kInput) - chanIdx, false);
    }
 +  
++  // Pad to the bus's full width so the next bus starts at a fixed channel
++  if (chanIdx - startIdx < busChans)
++  {
++    SetChannelConnections(ERoute::kInput, chanIdx, busChans - (chanIdx - startIdx), false);
++    chanIdx = startIdx + busChans;
++  }
++  
 +  return chanIdx - startIdx;
 +}
 +
@@ -167,7 +178,7 @@ index 1fa7d302a..fc7bd34ac 100644
  }
  
  void IPlugAUv3::AttachOutputBuffers(AudioBufferList* pOutBufList, uint32_t busNumber)
-@@ -313,7 +337,7 @@
+@@ -313,7 +345,7 @@
        AttachBuffers(ERoute::kOutput, (busNumber * numChannelsInBus) + chanIdx, nConnected, (float**) &(pOutBufList->mBuffers[i].mData), GetBlockSize());
        chanIdx += nConnected;
      }

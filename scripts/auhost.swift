@@ -5,10 +5,12 @@
 // Logic hosts an AUv3 out of process.
 //
 //   xcrun swiftc -O scripts/auhost.swift -o build-auv3/auhost
-//   build-auv3/auhost EvE3 [bypass|state]
+//   build-auv3/auhost EvE3 [bypass|state|mono]
 //
-// Expect a peak of about 0.126 (0.5 with bypass), latency 0.005 s after
-// Lookahead is set to 5 ms, and the restored values to match.
+// Expect a peak of about 0.126 (0.5 with bypass) on both channels, latency
+// 0.005 s after Lookahead is set to 5 ms, and the restored values to match.
+// `mono` feeds a mono input bus and a silent sidechain (mono -> stereo, as
+// on a mono Logic track).
 import AVFoundation
 
 func fourcc(_ s: String) -> FourCharCode {
@@ -32,31 +34,42 @@ sem.wait()
 guard let au = unit else { print("no unit"); exit(1) }
 print("loaded:", au.auAudioUnit.audioUnitName ?? "?", "inputs:", au.auAudioUnit.inputBusses.count)
 
+let mode = args.count > 2 ? args[2] : ""
 let fmt = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+let inFmt = AVAudioFormat(standardFormatWithSampleRate: 48000,
+                          channels: mode == "mono" ? 1 : 2)!
 let engine = AVAudioEngine()
 try engine.enableManualRenderingMode(.offline, format: fmt, maximumFrameCount: 512)
 let player = AVAudioPlayerNode()
 engine.attach(player)
 engine.attach(au)
-engine.connect(player, to: au, format: fmt)
+engine.connect(player, to: au, format: inFmt)
+// Like Logic, `mono` also connects the sidechain bus (here, to silence).
+let scPlayer = AVAudioPlayerNode()
+if mode == "mono" {
+  engine.attach(scPlayer)
+  engine.connect(scPlayer, to: au, fromBus: 0, toBus: 1, format: inFmt)
+}
 engine.connect(au, to: engine.mainMixerNode, format: fmt)
 try engine.start()
+print("bus formats: in", au.auAudioUnit.inputBusses[0].format.channelCount, "out", au.auAudioUnit.outputBusses[0].format.channelCount)
 
 let n: AVAudioFrameCount = 48000
-let sine = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
+let sine = AVAudioPCMBuffer(pcmFormat: inFmt, frameCapacity: n)!
 sine.frameLength = n
-for c in 0..<2 {
+for c in 0..<Int(inFmt.channelCount) {
   for i in 0..<Int(n) { sine.floatChannelData![c][i] = 0.5 * sinf(Float(i) * 2 * .pi * 440 / 48000) }
 }
 player.scheduleBuffer(sine, completionHandler: nil)
 player.play()
+if mode == "mono" { scPlayer.play() }
 func param(_ unit: AUAudioUnit, _ name: String) -> AUParameter? {
   unit.parameterTree?.allParameters.first(where: { $0.displayName == name })
 }
 if let g = param(au.auAudioUnit, "Output Gain") { g.value = -12 }
-if args.count > 2 && args[2] == "bypass" { au.auAudioUnit.shouldBypassEffect = true }
+if mode == "bypass" { au.auAudioUnit.shouldBypassEffect = true }
 // State: save, load into a second instance, compare.
-if args.count > 2 && args[2] == "state" {
+if mode == "state" {
   let state = au.auAudioUnit.fullState
   var second: AVAudioUnit?
   AVAudioUnit.instantiate(with: desc, options: [.loadInProcess]) { u, _ in second = u; sem.signal() }
@@ -82,10 +95,12 @@ print("latency after lookahead=5:", au.auAudioUnit.latency, "kvo:", kvoCount)
 _ = obs
 
 let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 512)!
-var peak: Float = 0
+var peak: [Float] = [0, 0]
 for block in 0..<20 {
   let status = try engine.renderOffline(512, to: out)
   if status != .success { print("block", block, "status", status.rawValue) }
-  for i in 0..<Int(out.frameLength) { peak = max(peak, abs(out.floatChannelData![0][i])) }
+  for c in 0..<2 {
+    for i in 0..<Int(out.frameLength) { peak[c] = max(peak[c], abs(out.floatChannelData![c][i])) }
+  }
 }
-print("peak:", peak, "latency(s):", au.auAudioUnit.latency)
+print("peak L:", peak[0], "R:", peak[1], "latency(s):", au.auAudioUnit.latency)
