@@ -11,9 +11,9 @@ namespace eeq {
 
 // Vowel and pitch tracking for a dynamics group (ABOUT.md section 3.B,
 // `Detect`).  The mono detector input is low-passed and decimated to about
-// 12 kHz; every hop (~5 ms) the latest ~43 ms are analyzed:
+// 12 kHz; every hop (~5 ms) the latest ~48 ms are analyzed:
 //   Pitch: YIN (difference function, cumulative-mean normalization, absolute
-//          threshold, parabolic interpolation) between 50 Hz and 1.5 kHz.
+//          threshold, parabolic interpolation) between 40 Hz and 1.5 kHz.
 //   Vowel: the same YIN voicing decision, then an LPC envelope (order 12,
 //          pre-emphasis, Hann window) whose first two peaks are F1 and F2,
 //          projected onto the Vowel band's OO..EE morph path in log-frequency.
@@ -24,13 +24,13 @@ namespace eeq {
 class Tracker {
  public:
   static constexpr double kTargetRate = 12000.0;
-  static constexpr int kWindow = 512;  // Decimated samples per analysis.
+  static constexpr int kWindow = 576;  // Decimated samples per analysis.
   static constexpr int kHop = 64;
   static constexpr int kYinWidth = 256;  // Integration window.
   static constexpr double kYinThreshold = 0.2;
   static constexpr int kLpcOrder = 12;
   static constexpr double kLpcSeconds = 0.03;
-  static constexpr double kMinPitchHz = 50.0;
+  static constexpr double kMinPitchHz = 40.0;
   static constexpr double kMaxPitchHz = 1500.0;
   static constexpr double kLevelFloorDb = -50.0;  // RMS, dBFS
   // Pitch output: value = log2(f0 / kPitchRefHz) / kPitchOctaves, so a band

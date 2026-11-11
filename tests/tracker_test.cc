@@ -66,7 +66,7 @@ Result Track(DetectMode mode, const std::vector<double>& x, double fs) {
 
 TEST_CASE("Pitch tracking finds f0 of harmonic tones", "[tracker]") {
   const double fs = GENERATE(44100.0, 48000.0, 96000.0);
-  const double f0 = GENERATE(55.0, 110.0, 196.0, 440.0, 880.0);
+  const double f0 = GENERATE(40.5, 41.2, 55.0, 110.0, 196.0, 440.0, 880.0);
   CAPTURE(fs, f0);
   const Result r = Track(DetectMode::kPitch, Harmonic(f0, 0.2, fs), fs);
   REQUIRE(r.voiced);
