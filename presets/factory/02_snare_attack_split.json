@@ -27,9 +27,11 @@
         "y": -60,
         "z": 0.5,
         "dynGroup": 0,
-        "dynRange": 60,
-        "tap": "Aux"
+        "dynRange": 60
       },
+      {},
+      {},
+      {},
       {
         "type": "Peak",
         "x": 190,

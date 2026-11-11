@@ -52,7 +52,7 @@ TEST_CASE("Static chain with lookahead is a pure delay", "[lookahead]") {
   EngineParams p;
   p.bands[0] = {BandType::kPeak, 1000.0, 6.0, 1.0};
   p.bands[1] = {BandType::kHp, 200.0, 0.0, kButterworthQ, kSlope24};
-  p.bands[1].tap = Tap::kAux;
+  p.global.output_mode = OutputMode::kSplitLr;
   const Stereo zero = Render(p, x);
   p.global.lookahead_ms = 5.0;
   REQUIRE(MaxAbsDiff(Render(p, x), Delayed(zero, 240)) == 0.0);

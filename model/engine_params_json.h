@@ -11,7 +11,7 @@ namespace eeq {
 //   {"global": {...}, "groups": [{...}, ...], "bands": [{...}, ...]}
 // Keys are the camelCase forms of the BandParams / GroupParams / GlobalParams
 // fields (e.g. "dynRange" for dyn_range); enums are given by name (e.g.
-// "type": "Peak", "tap": "Aux"); Vowel weighting is "weighting".  Missing keys
+// "type": "Peak", "chan": "Mid"); Vowel weighting is "weighting".  Missing keys
 // keep their defaults.  A dynamics assignment is on when it has a group
 // ("dynGroup": 0..3).
 

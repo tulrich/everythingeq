@@ -1,5 +1,5 @@
 {
-  "description": "Use case 2: dynamic vowel articulation before an LR24 crossover at 150 Hz; lows on Main (left), highs on Aux (right).",
+  "description": "Use case 2: LR24 crossover at sqrt(2) x the tracked fundamental; lows (fundamental) on the left, harmonics on the right with a dynamic vowel articulation band.",
   "sampleRate": 48000,
   "seconds": 4,
   "preset": "../../../presets/factory/03_bass_crossover.json",

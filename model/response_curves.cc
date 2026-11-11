@@ -46,10 +46,20 @@ void ComputeChainResponse(const EngineParams& params,
                           ChainResponse& out) {
   const size_t n = freqs.size();
   out.total_db.assign(n, 0.0f);
-  std::vector<std::complex<double>> main(n, 1.0), aux(n, 0.0);
+  const bool split_mode = params.global.output_mode != OutputMode::kStereo;
+  const SplitSide side = SplitSideOf(params);
+  // As the engine's chain (ABOUT.md section 3.D).
+  std::vector<std::complex<double>> main(n, 1.0), split(n, 0.0),
+      xover_comp(n, 0.0);
   const double scale = params.global.global_scale;
 
   for (int b = 0; b < kNumBands; ++b) {
+    if (split_mode && b == kSplitBands) {
+      for (size_t i = 0; i < n; ++i) {
+        split[i] = side.bands > 0 ? main[i] : 0.0;
+        main[i] = side.crossover >= 0 ? xover_comp[i] : 1.0 - split[i];
+      }
+    }
     const BandParams& bp = params.bands[b];
     std::vector<float>& curve = out.band_db[b];
     if (bp.type == BandType::kOff) {
@@ -65,21 +75,23 @@ void ComputeChainResponse(const EngineParams& params,
           bp, control_a, control_b, scale, freqs[i], sample_rate, &comp);
       curve[i] = ToDb(h);
       if (bp.bypass) continue;
-      // Tap semantics (ABOUT.md section 3.D).
-      if (bp.tap == Tap::kMain) {
-        main[i] *= h;
-      } else if (IsCrossover(bp.type, bp.option)) {
-        aux[i] += main[i] * h;
-        main[i] *= comp;
-      } else if (IsFilter(bp.type)) {
-        aux[i] += main[i] * h;
-        main[i] *= 1.0 - h;
-      } else {
-        aux[i] += main[i] * (h - 1.0);
-      }
+      if (b == side.crossover) xover_comp[i] = main[i] * comp;
+      main[i] *= h;
     }
   }
-  for (size_t i = 0; i < n; ++i) out.total_db[i] = ToDb(main[i] + aux[i]);
+  out.split_db.clear();
+  out.residual_db.clear();
+  if (split_mode) {
+    out.split_db.resize(n);
+    out.residual_db.resize(n);
+  }
+  for (size_t i = 0; i < n; ++i) {
+    out.total_db[i] = ToDb(main[i] + split[i]);
+    if (split_mode) {
+      out.split_db[i] = ToDb(split[i]);
+      out.residual_db[i] = ToDb(main[i]);
+    }
+  }
 }
 
 }  // namespace eeq

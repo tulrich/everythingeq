@@ -53,13 +53,6 @@ EngineParams RandomChain(std::mt19937& rng) {
   return p;
 }
 
-int LastActiveBand(const EngineParams& p) {
-  int last = -1;
-  for (int b = 0; b < kNumBands; ++b)
-    if (p.bands[b].type != BandType::kOff) last = b;
-  return last;
-}
-
 }  // namespace
 
 TEST_CASE("All bands off or bypassed is bit-exact identity", "[routing]") {
@@ -73,103 +66,125 @@ TEST_CASE("All bands off or bypassed is bit-exact identity", "[routing]") {
   REQUIRE(MaxAbsDiff(Render(p, x), x) == 0.0);
 }
 
-TEST_CASE("Delta tap on the last band recombines to the untapped chain",
-          "[routing]") {
+Stereo Mono(const Stereo& x) {
+  Stereo m = x;
+  for (size_t i = 0; i < x.l.size(); ++i)
+    m.l[i] = m.r[i] = 0.5f * (x.l[i] + x.r[i]);
+  return m;
+}
+
+double MaxSumErr(const Stereo& a, const Stereo& b, const Stereo& sum) {
+  double err = 0.0;
+  for (size_t i = 0; i < sum.l.size(); ++i) {
+    err = std::max(err, std::abs(double(a.l[i]) + b.l[i] - sum.l[i]));
+    err = std::max(err, std::abs(double(a.r[i]) + b.r[i] - sum.r[i]));
+  }
+  return err;
+}
+
+TEST_CASE("Split side plus residual recombines to the input", "[routing]") {
+  // With bands 5-8 off, the split side and the residual sum to the input,
+  // whatever bands 1-4 do (including per-band Chan).
   std::mt19937 rng(GENERATE(range(1u, 21u)));
   const Stereo x = Noise(kLen, 0.5, 4);
   EngineParams p = RandomChain(rng);
-  const int last = LastActiveBand(p);
-  if (IsFilter(p.bands[last].type)) p.bands[last].type = BandType::kPeak;
-  const Stereo untapped = Render(p, x);
-  p.bands[last].tap = Tap::kAux;
-  REQUIRE(MaxAbsDiff(Render(p, x), untapped) < 1e-5);
+  for (int b = kSplitBands; b < kNumBands; ++b)
+    p.bands[b].type = BandType::kOff;
+  p.global.output_mode = OutputMode::kSplitSide;
+  const Stereo side = Render(p, x);
+  p.global.output_mode = OutputMode::kResidual;
+  const Stereo residual = Render(p, x);
+  REQUIRE(MaxSumErr(side, residual, x) < 1e-5);
 }
 
-TEST_CASE("Split tap on the last band recombines to the chain without it",
-          "[routing]") {
-  std::mt19937 rng(GENERATE(range(1u, 21u)));
-  const Stereo x = Noise(kLen, 0.5, 5);
-  EngineParams p = RandomChain(rng);
-  const int b = LastActiveBand(p);
-  const BandType filters[] = {BandType::kLp, BandType::kHp, BandType::kBp,
-                              BandType::kNotch};
-  p.bands[b].type = filters[rng() % 4];
-  p.bands[b].tap = Tap::kAux;
-  const Stereo tapped = Render(p, x);
-  p.bands[b].type = BandType::kOff;
-  REQUIRE(MaxAbsDiff(tapped, Render(p, x)) < 1e-5);
-}
-
-TEST_CASE("Mid-chain taps bypass the downstream bands for Aux only",
-          "[routing]") {
-  // Split tap at band 0, gain band after it: out = D(x - y) + y, with D the
-  // downstream band and y the tapped filter output.
+TEST_CASE("Bands after the split shape only the residual", "[routing]") {
+  // Split side = LP(x); residual = shelf(x - LP(x)).
   const Stereo x = Noise(kLen, 0.5, 15);
   EngineParams p;
   p.bands[0] = {BandType::kLp, 400.0, 0.0, 0.7071};
-  p.bands[0].tap = Tap::kAux;
-  p.bands[1] = {BandType::kHighShelf, 2000.0, 6.0, 0.7071};
-  const Stereo out = Render(p, x);
+  p.bands[kSplitBands] = {BandType::kHighShelf, 2000.0, 6.0, 0.7071};
+  p.global.output_mode = OutputMode::kSplitSide;
+  const Stereo side = Render(p, x);
+  p.global.output_mode = OutputMode::kResidual;
+  const Stereo residual = Render(p, x);
   SvfCell lp, shelf;
   lp.Snap(DesignSvf(SvfShape::kLowPass, 400.0, 0.7071, 0.0, kFs));
   shelf.Snap(DesignSvf(SvfShape::kHighShelf, 2000.0, 0.7071, 6.0, kFs));
   double err = 0.0;
   for (size_t i = 0; i < kLen; ++i) {
     const double y = lp.Process(x.l[i]);
-    err = std::max(err, std::abs(shelf.Process(x.l[i] - y) + y - out.l[i]));
+    err = std::max(err, std::abs(y - side.l[i]));
+    err = std::max(err, std::abs(shelf.Process(x.l[i] - y) - residual.l[i]));
   }
   REQUIRE(err < 1e-5);
+  // Stereo mode runs all the bands in series.
+  p.global.output_mode = OutputMode::kStereo;
+  const Stereo stereo = Render(p, x);
+  lp.Reset();
+  shelf.Reset();
+  double chain_err = 0.0;
+  for (size_t i = 0; i < kLen; ++i) {
+    chain_err = std::max(
+        chain_err, std::abs(shelf.Process(lp.Process(x.l[i])) - stereo.l[i]));
+  }
+  REQUIRE(chain_err < 1e-5);
 }
 
-TEST_CASE("LR tap recombines to the LR all-pass", "[routing]") {
+TEST_CASE("A lone crossover band splits into LR bands", "[routing]") {
+  // HP 24 dB/oct alone on the split side: the residual is its LR low band,
+  // and the two sum to the LR all-pass.
   const Stereo x = Noise(kLen, 0.5, 6);
   EngineParams p;
-  p.bands[0] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
-  p.bands[0].tap = Tap::kAux;
-  const Stereo y = Render(p, x);
+  p.bands[1] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
+  p.global.output_mode = OutputMode::kSplitSide;
+  const Stereo side = Render(p, x);
+  p.global.output_mode = OutputMode::kResidual;
+  const Stereo residual = Render(p, x);
   SvfCell ap[2];
   for (SvfCell& c : ap)
     c.Snap(DesignSvf(SvfShape::kAllPass, 150.0, kButterworthQ, 0.0, kFs));
   double err = 0.0;
   for (size_t i = 0; i < kLen; ++i) {
-    err = std::max(err, std::abs(ap[0].Process(x.l[i]) - y.l[i]));
-    err = std::max(err, std::abs(ap[1].Process(x.r[i]) - y.r[i]));
+    err = std::max(err, std::abs(ap[0].Process(x.l[i]) -
+                                 (double(side.l[i]) + residual.l[i])));
+    err = std::max(err, std::abs(ap[1].Process(x.r[i]) -
+                                 (double(side.r[i]) + residual.r[i])));
   }
   REQUIRE(err < 1e-5);
 }
 
-TEST_CASE("Split modes: L/R carries Main/Aux and M/S encodes them",
+TEST_CASE("Split L/R carries the split side and residual of a mono input",
           "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 7);
   EngineParams p;
-  p.bands[0] = {BandType::kPeak, 2000.0, 6.0, 1.0};
-  p.bands[1] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
-  p.bands[1].tap = Tap::kAux;
-  p.bands[2] = {BandType::kLowShelf, 80.0, 4.0, 0.7071};
-
+  p.bands[0] = {BandType::kBp, 2000.0, 0.0, 1.0};
+  p.bands[2] = {BandType::kPeak, 3000.0, 4.0, 2.0};
+  p.bands[5] = {BandType::kLowShelf, 80.0, 4.0, 0.7071};
   p.global.output_mode = OutputMode::kSplitLr;
   const Stereo lr = Render(p, x);
-  p.global.output_mode = OutputMode::kSplitMs;
-  const Stereo ms = Render(p, x);
-  p.global.output_mode = OutputMode::kStereo;
-
+  p.global.output_mode = OutputMode::kSplitSide;
+  const Stereo side = Render(p, Mono(x));
+  p.global.output_mode = OutputMode::kResidual;
+  const Stereo residual = Render(p, Mono(x));
   double err = 0.0;
   for (size_t i = 0; i < kLen; ++i) {
-    err = std::max(err, std::abs(double(ms.l[i]) + ms.r[i] - lr.l[i]));
-    err = std::max(err, std::abs(double(ms.l[i]) - ms.r[i] - lr.r[i]));
+    err = std::max(err, std::abs(double(lr.l[i]) - side.l[i]));
+    err = std::max(err, std::abs(double(lr.r[i]) - residual.l[i]));
   }
   REQUIRE(err < 1e-6);
+}
 
-  // Main + Aux in split L/R equals the stereo-mode output for a mono input.
-  Stereo mono = x;
-  for (size_t i = 0; i < kLen; ++i)
-    mono.l[i] = mono.r[i] = 0.5f * (x.l[i] + x.r[i]);
-  const Stereo stereo = Render(p, mono);
-  double sum_err = 0.0;
-  for (size_t i = 0; i < kLen; ++i)
-    sum_err =
-        std::max(sum_err, std::abs(double(lr.l[i]) + lr.r[i] - stereo.l[i]));
-  REQUIRE(sum_err < 1e-5);
+TEST_CASE("With no band on the split side, nothing is split off", "[routing]") {
+  const Stereo x = Noise(kLen, 0.5, 5);
+  EngineParams p;
+  p.bands[1] = {BandType::kLp, 300.0, 0.0, kButterworthQ};
+  p.bands[1].bypass = true;
+  p.bands[6] = {BandType::kPeak, 1000.0, 6.0, 1.0};
+  const Stereo stereo = Render(p, x);
+  p.global.output_mode = OutputMode::kSplitSide;
+  REQUIRE(MaxAbsDiff(Render(p, x), Stereo(kLen)) == 0.0);
+  p.global.output_mode = OutputMode::kResidual;
+  REQUIRE(MaxAbsDiff(Render(p, x), stereo) < 1e-6);
 }
 
 TEST_CASE("Chan routing leaves the other component untouched", "[routing]") {

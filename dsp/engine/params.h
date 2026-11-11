@@ -30,7 +30,6 @@ enum class BandType {
 };
 
 enum class DynTarget { kGain, kFreq, kMorph };
-enum class Tap { kMain, kAux };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
 // The per-band Option, by band type.
 enum class VowelWeighting { kNatural, kFlat };
@@ -44,7 +43,10 @@ enum class TriggerMode { kAbove, kBelow };
 // What a group's D follows: input level (the gain computer), or the tracked
 // vowel or pitch of the detector input (dsp/dynamics/tracker.h).
 enum class DetectMode { kLevel, kVowel, kPitch };
-enum class OutputMode { kStereo, kSplitLr, kSplitMs };
+// Output modes (ABOUT.md section 3.D).  In the split modes, bands
+// 1..kSplitBands pick the split side and the rest shape the residual.
+enum class OutputMode { kStereo, kSplitLr, kSplitSide, kResidual };
+inline constexpr int kSplitBands = 4;
 
 // Physical (unnormalized) band parameters.  Meaning of x/y/z by type:
 //   Peak, Low/HighShelf: x = Hz, y = gain dB, z = Q
@@ -82,7 +84,6 @@ struct BandParams {
   int dyn_b_group = -1;
   DynTarget dyn_b_target = DynTarget::kGain;
   double dyn_b_range = 0.0;
-  Tap tap = Tap::kMain;
   Chan chan = Chan::kStereo;
   bool bypass = false;
   bool solo = false;
@@ -137,16 +138,30 @@ inline bool HasDynMakeup(BandType t) {
          t == BandType::kVintageHigh;
 }
 
-// LP and HP at 24 dB/oct: the Aux tap gets the complementary crossover band.
+// LP and HP at 24 dB/oct (Linkwitz-Riley).  When one is the only band on
+// the split side, the residual is its complementary crossover band.
 inline bool IsCrossover(BandType t, int option) {
   return (t == BandType::kLp || t == BandType::kHp) &&
          option == static_cast<int>(FilterSlope::k24);
 }
-// Filters (checked after IsCrossover): the Aux tap gets the input minus the
-// filtered band.
-inline bool IsFilter(BandType t) {
-  return t == BandType::kLp || t == BandType::kHp || t == BandType::kBp ||
-         t == BandType::kNotch;
+
+// The split side (bands 1..kSplitBands) in the split output modes.
+struct SplitSide {
+  int bands = 0;       // Bands that are on and not bypassed.  With none,
+                       // nothing is split off.
+  int crossover = -1;  // The only band, when it's a crossover; else -1.
+};
+inline SplitSide SplitSideOf(const EngineParams& p) {
+  SplitSide s;
+  int last = -1;
+  for (int b = 0; b < kSplitBands; ++b) {
+    const BandParams& bp = p.bands[b];
+    if (bp.type != BandType::kOff && !bp.bypass) ++s.bands, last = b;
+  }
+  if (s.bands == 1 && IsCrossover(p.bands[last].type, p.bands[last].option)) {
+    s.crossover = last;
+  }
+  return s;
 }
 
 }  // namespace eeq

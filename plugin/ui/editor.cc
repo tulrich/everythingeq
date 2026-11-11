@@ -143,11 +143,7 @@ void Editor::BuildStrip() {
   graphics_.AttachControl(strip_panel_);
   type_field_ = AddBandField(BandField::kType, "", 0.f, kField);
   type_field_->SetTooltip("Band type.");
-  tap_field_ = AddBandField(BandField::kTap, "TAP", 26.f, kField);
-  tap_field_->SetTooltip(
-      "Main: the band filters the signal. Sum: its output is mixed back in "
-      "parallel (ABOUT.md section 3.D).");
-  chan_field_ = AddBandField(BandField::kChan, "CH", 18.f, kField);
+  chan_field_ = AddBandField(BandField::kChan, "CHAN", 46.f, kField);
   chan_field_->SetTooltip("Which channels the band processes.");
   option_field_ = AddBandField(BandField::kOption, "OPTION", 46.f, kField);
   bypass_field_ = AddBandField(BandField::kBypass, "BYP", 0.f, kToggle);
@@ -405,10 +401,7 @@ void Editor::LayoutStrip() {
   constexpr float kTop = 18.f;  // Under "Band n".
   Place(type_field_, show, Row(info, 0, kTop));
   const ig::IRECT routing_row = Row(info, 1, kTop);
-  Place(tap_field_, show && !s.compact,
-        routing_row.GetGridCell(0, 1, 2).GetHPadded(-1.f));
-  Place(chan_field_, show && !s.compact,
-        routing_row.GetGridCell(1, 1, 2).GetHPadded(-1.f));
+  Place(chan_field_, show && !s.compact, routing_row);
   Place(option_field_, show, Row(info, s.compact ? 1 : 2, kTop));
   const ig::IRECT toggles = Row(info, s.compact ? 2 : 3, kTop);
   Place(bypass_field_, show, toggles.GetGridCell(0, 1, 2).GetHPadded(-1.f));

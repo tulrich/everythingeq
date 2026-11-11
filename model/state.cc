@@ -73,6 +73,15 @@ void MigrateState(int version, nlohmann::json& params) {
       }
     }
   }
+  if (version < 6) {
+    // Version 6 dropped per-band Tap (now fixed: bands 1-4 pick the split
+    // side) and Split M/S, which becomes Split L/R.
+    const auto it = params.find("global.output_mode");
+    if (it != params.end() && it->is_number() &&
+        std::lround(it->get<double>()) == 2) {
+      *it = static_cast<int>(OutputMode::kSplitLr);
+    }
+  }
 }
 
 }  // namespace

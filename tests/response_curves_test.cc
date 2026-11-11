@@ -14,7 +14,7 @@ namespace {
 
 constexpr double kFs = 48000.0;
 
-EngineParams RandomTappedChain(std::mt19937& rng) {
+EngineParams RandomChain(std::mt19937& rng) {
   const BandType types[] = {BandType::kPeak,      BandType::kLowShelf,
                             BandType::kHighShelf, BandType::kLp,
                             BandType::kHp,        BandType::kNotch,
@@ -33,7 +33,6 @@ EngineParams RandomTappedChain(std::mt19937& rng) {
     bp.z = bp.type == BandType::kVowel ? 1.0 : q(rng);
     if (bp.type == BandType::kLp || bp.type == BandType::kHp)
       bp.option = unit(rng) < 0.5 ? 0 : kSlope24;
-    bp.tap = unit(rng) < 0.3 ? Tap::kAux : Tap::kMain;
     bp.bypass = unit(rng) < 0.1;
   }
   return p;
@@ -43,7 +42,7 @@ EngineParams RandomTappedChain(std::mt19937& rng) {
 
 TEST_CASE("Chain response matches the engine's impulse response", "[curves]") {
   std::mt19937 rng(GENERATE(range(1u, 16u)));
-  const EngineParams p = RandomTappedChain(rng);
+  const EngineParams p = RandomChain(rng);
   Engine e;
   e.SetParams(p);
   e.Prepare(kFs);
@@ -65,6 +64,28 @@ TEST_CASE("Chain response matches the engine's impulse response", "[curves]") {
   }
   for (int b = 0; b < kNumBands; ++b) {
     REQUIRE(curves.band_db[b].empty() == (p.bands[b].type == BandType::kOff));
+  }
+  REQUIRE(curves.split_db.empty());
+
+  // The split modes' two outputs.
+  for (const OutputMode mode :
+       {OutputMode::kSplitSide, OutputMode::kResidual}) {
+    EngineParams q = p;
+    q.global.output_mode = mode;
+    Engine es;
+    es.SetParams(q);
+    es.Prepare(kFs);
+    const Stereo ys = Run(es, impulse);
+    const std::vector<double> hs(ys.l.begin(), ys.l.end());
+    ComputeChainResponse(q, GroupControls{}, kFs, freqs, curves);
+    const std::vector<float>& c =
+        mode == OutputMode::kSplitSide ? curves.split_db : curves.residual_db;
+    REQUIRE(c.size() == freqs.size());
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      const double measured = MagDb(DftAt(hs, freqs[i], kFs));
+      CAPTURE(mode, freqs[i], measured, c[i]);
+      if (measured > -60.0) REQUIRE(std::abs(measured - c[i]) < 0.05);
+    }
   }
 }
 

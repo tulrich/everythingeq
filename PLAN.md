@@ -46,7 +46,7 @@ line limit, etc.)
 ```
 dsp/                 framework-free engine (C++20)
   svf/               ZDF SVF cell, coefficient design, response evaluation
-  bands/             band types, polymorphic band slot, tap logic
+  bands/             band types, polymorphic band slot
   dynamics/          sidechain conditioning, detector, gain computer, ballistics
   engine/            chain, groups, routing/output modes, parameter snapshot
 model/               framework-free plugin model: parameter table, slot mappings,
@@ -112,13 +112,13 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 
 ## Phase 3 — Chain, routing & output modes (§3.D)
 1. Series chain of 10 slots with per-band Bypass and Chan (Stereo/L/R/Mid/Side via M/S encode/decode around the band).
-2. Tap logic per band category (delta / split / LR crossover), with Aux accumulation.
-3. Output modes: Stereo, Split L/R, Split M/S (mono-sum input).
+2. Split: bands 1–4 pick the split side, bands 5–8 shape the residual (x − split, or the LR complement of a lone crossover band). Replaced the original per-band taps (delta / split / LR crossover) in November 2026.
+3. Output modes: Stereo, Split L/R (mono-sum input), Split Side, Residual.
 4. Delta listen, band Solo (detector filter), global Bypass (crossfaded), Output Gain.
 
 **Tests (property-based, random parameter sets):**
-* Recombination identities from §3.D hold within 1e-5 (taps on the last band; mid-chain taps match $D(\text{main}) + \text{aux}$).
-* Split M/S: L+R = Main and L−R = Aux exactly.
+* Recombination identities from §3.D hold within 1e-5 (split side + residual = input with bands 5–8 flat; the residual is bands 5–8 applied to x − split; a lone LR band sums to the LR all-pass).
+* Split L/R carries the split side and residual of the mono-summed input.
 * Bypassed band equals the identity bit-exactly.
 
 ## Phase 4 — Dynamics engine (§3.B)

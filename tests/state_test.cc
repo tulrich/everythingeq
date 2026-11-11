@@ -146,6 +146,17 @@ TEST_CASE("Version 4 assignments with a Dyn Range turn on", "[state]") {
   REQUIRE(*v == expected);
 }
 
+TEST_CASE("Version 5 Split M/S becomes Split L/R", "[state]") {
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 5,
+      "params": {"global.output_mode": 2, "band1.tap": 1}})");
+  REQUIRE(v.has_value());
+  ParamValues expected = DefaultParamValues();
+  expected[GlobalParamId(GlobalField::kOutputMode)] =
+      static_cast<int>(OutputMode::kSplitLr);
+  REQUIRE(*v == expected);
+}
+
 TEST_CASE("Dyn On decides whether a band follows its group", "[state]") {
   ParamValues v = DefaultParamValues();
   for (int b = 0; b < kNumBands; ++b) {

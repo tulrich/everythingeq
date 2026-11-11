@@ -1,12 +1,17 @@
 {
   "format": "everythingeq-preset",
   "version": 1,
-  "name": "Bass Crossover + Articulation",
+  "name": "Bass Note-Tracking Crossover",
   "params": {
     "global": {
       "outputMode": "SplitLR"
     },
     "groups": [
+      {
+        "detect": "Pitch",
+        "attackMs": 10,
+        "releaseMs": 10
+      },
       {
         "input": "InternalDry",
         "alpha": 0.3,
@@ -19,19 +24,24 @@
     ],
     "bands": [
       {
+        "type": "LP",
+        "slope": "24",
+        "x": 38.89,
+        "dynGroup": 0,
+        "dynTarget": "Freq",
+        "dynRange": 8.0
+      },
+      {},
+      {},
+      {},
+      {
         "type": "Vowel",
         "x": 2.0,
         "y": 3,
         "z": 1.0,
         "weighting": "Natural",
-        "dynGroup": 0,
+        "dynGroup": 1,
         "dynRange": 6
-      },
-      {
-        "type": "HP",
-        "slope": "24",
-        "x": 150,
-        "tap": "Aux"
       }
     ]
   }

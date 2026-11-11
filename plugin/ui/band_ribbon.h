@@ -116,6 +116,14 @@ class BandRibbon final : public iplug::igraphics::IControl {
                    content.R - 2.f, content.T + 5.f);
       }
     }
+    // In the split output modes, a bar between the split side and the
+    // bands that shape the residual.
+    if (static_cast<OutputMode>(
+            std::lround(v[GlobalParamId(GlobalField::kOutputMode)])) !=
+        OutputMode::kStereo) {
+      const float x = 0.5f * (Cell(kSplitBands - 1).R + Cell(kSplitBands).L);
+      g.DrawLine(theme::kGain, x, mRECT.T, x, mRECT.B, nullptr, 2.f);
+    }
   }
 
   void OnMouseDown(float x, float y,

@@ -35,14 +35,14 @@ TEST_CASE("Band copy/paste carries the chosen sections", "[clipboard]") {
       REQUIRE(w[BandParamId(6, field)] == expected);
     }
   }
-  // The sections don't overlap, and routing (Tap, Chan) and the switches
+  // The sections don't overlap, and routing (Chan) and the switches
   // (Bypass, Solo) only travel with All.
   for (int f = 0; f < kNumBandFields; ++f) {
     const auto field = static_cast<BandField>(f);
     REQUIRE_FALSE((SectionHas(BandSection::kShape, field) &&
                    SectionHas(BandSection::kDynamics, field)));
   }
-  REQUIRE_FALSE(SectionHas(BandSection::kShape, BandField::kTap));
+  REQUIRE_FALSE(SectionHas(BandSection::kShape, BandField::kChan));
   REQUIRE_FALSE(SectionHas(BandSection::kDynamics, BandField::kBypass));
 }
 

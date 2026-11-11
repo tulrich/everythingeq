@@ -132,7 +132,6 @@ class Editor {
   // Band strip.
   StripPanel* strip_panel_ = nullptr;
   ParamField* type_field_ = nullptr;
-  ParamField* tap_field_ = nullptr;
   ParamField* chan_field_ = nullptr;
   ParamField* option_field_ = nullptr;
   ParamField* bypass_field_ = nullptr;

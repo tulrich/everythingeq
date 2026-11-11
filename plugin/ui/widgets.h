@@ -2,6 +2,7 @@
 #define EVERYTHINGEQ_PLUGIN_UI_WIDGETS_H_
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -219,11 +220,22 @@ class StripPanel final : public iplug::igraphics::IControl {
     g.FillCircle(theme::BandColor(band), row.L + 5.f, row.MH(), 4.5f);
     const std::string label = "Band " + std::to_string(band + 1);
     g.DrawText(theme::Text(12.f), label.c_str(), row.GetReducedFromLeft(14.f));
+    // Which part of a split the band shapes.
+    if (split_) {
+      g.DrawText(theme::Text(9.f, theme::kGain, ig::EAlign::Near),
+                 band < kSplitBands ? "SPLIT" : "RESIDUAL",
+                 row.GetReducedFromLeft(62.f).GetFromLeft(70.f));
+    }
   }
   bool IsDirty() override {
     const int band = model_.SelectedBand();
-    if (band != shown_) {
+    const bool split =
+        static_cast<OutputMode>(std::lround(
+            model_.Values()[GlobalParamId(GlobalField::kOutputMode)])) !=
+        OutputMode::kStereo;
+    if (band != shown_ || split != split_) {
       shown_ = band;
+      split_ = split;
       return true;
     }
     return IControl::IsDirty();
@@ -232,6 +244,7 @@ class StripPanel final : public iplug::igraphics::IControl {
  private:
   EditorModel& model_;
   int shown_ = -2;
+  bool split_ = false;
 };
 
 // The selected group's title row in the dynamics panel: shape, name,

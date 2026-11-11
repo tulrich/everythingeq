@@ -57,9 +57,12 @@ class Engine {
   void ControlUpdate(bool snap_now);
   void ApplyStaticDesigns(bool snap_now);
   Frame DetectorInputFrame(int g, const Frame& dry, const Frame& sc);
-  void ProcessChain(const Frame& chain_in, Frame& main, Frame& aux, Frame& solo,
-                    bool& any_solo);
-  Frame Encode(const Frame& main, const Frame& aux) const;
+  // Runs the band chain.  In the split modes, `split` gets what bands
+  // 1..kSplitBands pick and `rest` the residual after the other bands; in
+  // Stereo, `split` is silent and `rest` is the whole chain.
+  void ProcessChain(const Frame& chain_in, Frame& split, Frame& rest,
+                    Frame& solo, bool& any_solo);
+  Frame Encode(const Frame& split, const Frame& rest) const;
 
   double fs_ = 48000.0;
   bool prepared_ = false;
@@ -74,6 +77,11 @@ class Engine {
   std::array<DynamicsGroup, kNumGroups> groups_{};
   std::array<DelayLine, kNumChannels> delay_{};
 
+  // 1 while any band on the split side is on (else nothing is split off),
+  // ramped so that toggling one crossfades.
+  LinearRamp split_gain_;
+  // The split side's only band, when it's a crossover; else -1.
+  int split_xover_band_ = -1;
   LinearRamp bypass_mix_;
   LinearRamp output_gain_;
   bool bypass_state_ = false;

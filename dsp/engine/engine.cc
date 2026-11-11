@@ -72,6 +72,10 @@ void Engine::ApplyStaticDesigns(bool snap_now) {
     band_detectors_[b].Apply(d, ramp);
     solo_filters_[b].Apply(d, ramp);
   }
+  const SplitSide side = SplitSideOf(params_);
+  split_xover_band_ = side.crossover;
+  split_gain_.SetTarget(side.bands > 0 ? 1.0 : 0.0,
+                        snap_now ? 1 : BypassFadeSamples());
   const double la =
       std::clamp(params_.global.lookahead_ms, 0.0, kMaxLookaheadMs);
   latency_ = static_cast<int>(std::lround(la * fs_ / 1000.0));
@@ -89,7 +93,7 @@ void Engine::ControlUpdate(bool snap_now) {
   for (int b = 0; b < kNumBands; ++b) {
     const BandParams& bp = params_.bands[b];
     const bool ms_chan = bp.chan == Chan::kMid || bp.chan == Chan::kSide;
-    const bool mono = params_.global.output_mode != OutputMode::kStereo;
+    const bool mono = params_.global.output_mode == OutputMode::kSplitLr;
     auto controls = [&](int group) {
       std::array<double, kNumChannels> dyn{};
       if (group < 0 || group >= kNumGroups) return dyn;
@@ -137,15 +141,29 @@ void Engine::ProcessDetectors(const Frame& dry, const Frame& sc) {
   }
 }
 
-void Engine::ProcessChain(const Frame& chain_in, Frame& main, Frame& aux,
+void Engine::ProcessChain(const Frame& chain_in, Frame& split, Frame& rest,
                           Frame& solo, bool& any_solo) {
-  main = chain_in;
-  aux = {0.0, 0.0};
+  const OutputMode mode = params_.global.output_mode;
+  const bool split_mode = mode != OutputMode::kStereo;
+  // Split L/R plays a mono signal, so per-band Chan doesn't apply.
+  const bool use_chan = mode != OutputMode::kSplitLr;
+  const double split_gain = split_gain_.Next();
+  Frame main = chain_in, xover_comp{0.0, 0.0};
+  split = {0.0, 0.0};
   solo = {0.0, 0.0};
   any_solo = false;
-  const bool stereo = params_.global.output_mode == OutputMode::kStereo;
 
   for (int b = 0; b < kNumBands; ++b) {
+    if (split_mode && b == kSplitBands) {
+      // Bands 1..kSplitBands have picked the split side; the rest of the
+      // chain shapes what's left.
+      split = {split_gain * main[0], split_gain * main[1]};
+      if (split_xover_band_ >= 0) {
+        main = xover_comp;
+      } else {
+        main = {chain_in[0] - split[0], chain_in[1] - split[1]};
+      }
+    }
     const BandParams& bp = params_.bands[b];
     BandSlot& slot = slots_[b];
     if (bp.solo && bp.type != BandType::kOff) {
@@ -157,7 +175,7 @@ void Engine::ProcessChain(const Frame& chain_in, Frame& main, Frame& aux,
     if (type == BandType::kOff && !slot.IsFading()) continue;
 
     // Choose the domain (L/R or M/S) and which components the band touches.
-    const Chan chan = stereo ? bp.chan : Chan::kStereo;
+    const Chan chan = use_chan ? bp.chan : Chan::kStereo;
     const bool ms = chan == Chan::kMid || chan == Chan::kSide;
     Frame v = main;
     if (ms) v = {0.5 * (main[0] + main[1]), 0.5 * (main[0] - main[1])};
@@ -166,47 +184,40 @@ void Engine::ProcessChain(const Frame& chain_in, Frame& main, Frame& aux,
         chan == Chan::kStereo || chan == Chan::kRight || chan == Chan::kSide,
     };
 
-    Frame new_main = v;
-    Frame aux_add{0.0, 0.0};
+    // Components the band doesn't touch pass through, and have no
+    // complement.
+    Frame new_main = v, comp{0.0, 0.0};
     for (int ch = 0; ch < kNumChannels; ++ch) {
       if (!active[ch]) continue;
       const BandOutput o = slot.Process(ch, v[ch]);
-      if (bp.tap == Tap::kMain) {
-        new_main[ch] = o.y;
-      } else if (IsCrossover(type, bp.option)) {
-        aux_add[ch] = o.y;
-        new_main[ch] = o.comp;
-      } else if (IsFilter(type)) {
-        aux_add[ch] = o.y;
-        new_main[ch] = v[ch] - o.y;
-      } else {
-        aux_add[ch] = o.y - v[ch];
-      }
+      new_main[ch] = o.y;
+      comp[ch] = o.comp;
     }
     slot.Advance();
 
     if (ms) {
       main = {new_main[0] + new_main[1], new_main[0] - new_main[1]};
-      aux[0] += aux_add[0] + aux_add[1];
-      aux[1] += aux_add[0] - aux_add[1];
+      comp = {comp[0] + comp[1], comp[0] - comp[1]};
     } else {
       main = new_main;
-      aux[0] += aux_add[0];
-      aux[1] += aux_add[1];
     }
+    if (b == split_xover_band_) xover_comp = comp;
   }
+  rest = main;
 }
 
-Engine::Frame Engine::Encode(const Frame& main, const Frame& aux) const {
+Engine::Frame Engine::Encode(const Frame& split, const Frame& rest) const {
   switch (params_.global.output_mode) {
     case OutputMode::kStereo:
-      return {main[0] + aux[0], main[1] + aux[1]};
+      return rest;
     case OutputMode::kSplitLr:
-      return {main[0], aux[0]};
-    case OutputMode::kSplitMs:
-      return {0.5 * (main[0] + aux[0]), 0.5 * (main[0] - aux[0])};
+      return {split[0], rest[0]};
+    case OutputMode::kSplitSide:
+      return split;
+    case OutputMode::kResidual:
+      return rest;
   }
-  return main;
+  return rest;
 }
 
 void Engine::Process(const float* const* in, const float* const* sidechain,
@@ -215,7 +226,8 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
   if (params_dirty_) ApplyStaticDesigns(false);
 
   const GlobalParams& gp = params_.global;
-  const bool split = gp.output_mode != OutputMode::kStereo;
+  // Split L/R plays the split side and the residual of a mono signal.
+  const bool mono = gp.output_mode == OutputMode::kSplitLr;
 
   // Fully bypassed: pass the (delayed) input.  The detectors keep running so
   // dynamics pick up where they are on release; the band chain is skipped.
@@ -226,7 +238,7 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
       const Frame sc =
           sidechain ? Frame{sidechain[0][i], sidechain[1][i]} : Frame{0.0, 0.0};
       Frame dry = x;
-      if (split) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
+      if (mono) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
       ProcessDetectors(dry, sc);
       for (int ch = 0; ch < kNumChannels; ++ch)
         out[ch][i] = static_cast<float>(delay_[ch].Process(x[ch], latency_));
@@ -252,7 +264,7 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
     const Frame sc =
         sidechain ? Frame{sidechain[0][i], sidechain[1][i]} : Frame{0.0, 0.0};
     Frame dry = x;
-    if (split) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
+    if (mono) dry[0] = dry[1] = 0.5 * (x[0] + x[1]);
 
     ProcessDetectors(dry, sc);
 
@@ -260,16 +272,16 @@ void Engine::Process(const float* const* in, const float* const* sidechain,
     const Frame xd = {delay_[0].Process(x[0], latency_),
                       delay_[1].Process(x[1], latency_)};
     Frame chain_in = xd;
-    if (split) chain_in[0] = chain_in[1] = 0.5 * (xd[0] + xd[1]);
+    if (mono) chain_in[0] = chain_in[1] = 0.5 * (xd[0] + xd[1]);
 
-    Frame main, aux, solo;
+    Frame split, rest, solo;
     bool any_solo = false;
-    ProcessChain(chain_in, main, aux, solo, any_solo);
-    if (any_solo) main = solo, aux = {0.0, 0.0};
+    ProcessChain(chain_in, split, rest, solo, any_solo);
+    if (any_solo) split = rest = solo;
 
-    Frame y = Encode(main, aux);
+    Frame y = Encode(split, rest);
     if (gp.delta) {
-      const Frame dry_enc = Encode(chain_in, {0.0, 0.0});
+      const Frame dry_enc = Encode({0.0, 0.0}, chain_in);
       y = {y[0] - dry_enc[0], y[1] - dry_enc[1]};
     }
     const double gain = output_gain_.Next();

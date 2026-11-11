@@ -36,8 +36,6 @@ const std::pair<const char*, DynTarget> kDynTargets[] = {
     {"Gain", DynTarget::kGain},
     {"Freq", DynTarget::kFreq},
     {"Morph", DynTarget::kMorph}};
-const std::pair<const char*, Tap> kTaps[] = {{"Main", Tap::kMain},
-                                             {"Aux", Tap::kAux}};
 const std::pair<const char*, Chan> kChans[] = {{"Stereo", Chan::kStereo},
                                                {"Left", Chan::kLeft},
                                                {"Right", Chan::kRight},
@@ -68,7 +66,9 @@ const std::pair<const char*, TriggerMode> kModes[] = {
 const std::pair<const char*, OutputMode> kOutputModes[] = {
     {"Stereo", OutputMode::kStereo},
     {"SplitLR", OutputMode::kSplitLr},
-    {"SplitMS", OutputMode::kSplitMs}};
+    {"SplitSide", OutputMode::kSplitSide},
+    {"Residual", OutputMode::kResidual},
+    {"SplitMS", OutputMode::kSplitLr}};  // Legacy: Split M/S was dropped.
 
 template <typename E, size_t N>
 void ReadEnum(const json& j, const char* key,
@@ -152,7 +152,6 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
         bp.option = static_cast<int>(FilterSlope::k24);
       }
       ReadEnum(b, "dynTarget", kDynTargets, bp.dyn_target);
-      ReadEnum(b, "tap", kTaps, bp.tap);
       ReadEnum(b, "chan", kChans, bp.chan);
       if (bp.type == BandType::kVowel) {
         auto weighting = static_cast<VowelWeighting>(bp.option);
@@ -268,7 +267,6 @@ json EngineParamsToJson(const EngineParams& p) {
       Write(j, "dynBGroup", bp.dyn_b_group, -1);
       WriteEnum(j, "dynBTarget", kDynTargets, bp.dyn_b_target, bd.dyn_b_target);
       Write(j, "dynBRange", bp.dyn_b_range, bd.dyn_b_range);
-      WriteEnum(j, "tap", kTaps, bp.tap, bd.tap);
       WriteEnum(j, "chan", kChans, bp.chan, bd.chan);
       Write(j, "bypass", bp.bypass, bd.bypass);
       Write(j, "solo", bp.solo, bd.solo);

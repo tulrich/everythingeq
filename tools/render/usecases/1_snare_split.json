@@ -1,5 +1,5 @@
 {
-  "description": "Use case 1: snare attack split to Aux (right), residual body on Main (left). Transient mode, 2 ms lookahead.",
+  "description": "Use case 1: snare attack split off by band 1 (left), residual body shaped by band 5 (right). Transient mode, 2 ms lookahead.",
   "sampleRate": 48000,
   "seconds": 4,
   "preset": "../../../presets/factory/02_snare_attack_split.json",

@@ -137,7 +137,6 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kDynBRange) =
         SlotParam(k + "dyn_b_range", n + "Dyn B Range", g);
     at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
-    at(BandField::kTap) = Enum(k + "tap", n + "Tap", g, 0, {"Main", "Aux"});
     at(BandField::kChan) =
         Enum(k + "chan", n + "Chan", g, 0, {"Stereo", "L", "R", "Mid", "Side"});
     at(BandField::kSolo) = Bool(k + "solo", n + "Solo", g, false);
@@ -145,8 +144,8 @@ std::vector<ParamSpec> MakeTable() {
     for (BandField f :
          {BandField::kType, BandField::kDynOn, BandField::kDynGroup,
           BandField::kDynTarget, BandField::kDynBOn, BandField::kDynBGroup,
-          BandField::kDynBTarget, BandField::kOption, BandField::kTap,
-          BandField::kChan, BandField::kSolo}) {
+          BandField::kDynBTarget, BandField::kOption, BandField::kChan,
+          BandField::kSolo}) {
       at(f).automatable = false;
     }
   }
@@ -199,8 +198,9 @@ std::vector<ParamSpec> MakeTable() {
   }
   const std::string g = "Global";
   auto at = [&](GlobalField f) -> ParamSpec& { return t[GlobalParamId(f)]; };
-  at(GlobalField::kOutputMode) = Enum("global.output_mode", "Output Mode", g, 0,
-                                      {"Stereo", "Split L/R", "Split M/S"});
+  at(GlobalField::kOutputMode) =
+      Enum("global.output_mode", "Output Mode", g, 0,
+           {"Stereo", "Split L/R", "Split Side", "Residual"});
   at(GlobalField::kGlobalScale) = Continuous(
       "global.global_scale", "Scale", g, -100.0, 200.0, 100.0, "%", false, 1.0);
   at(GlobalField::kDelta) = Bool("global.delta", "Delta", g, false);
@@ -291,7 +291,6 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     } else {
       bp.dyn_b_range = 0.0;
     }
-    bp.tap = static_cast<Tap>(Int(at(BandField::kTap)));
     bp.chan = mono_output ? Chan::kStereo
                           : static_cast<Chan>(Int(at(BandField::kChan)));
     bp.bypass = at(BandField::kBypass) >= 0.5;
@@ -319,9 +318,11 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
   }
   auto at = [&](GlobalField f) { return v[GlobalParamId(f)]; };
   GlobalParams& gl = p.global;
-  gl.output_mode =
-      mono_output ? OutputMode::kStereo
-                  : static_cast<OutputMode>(Int(at(GlobalField::kOutputMode)));
+  // A mono output can't carry Split L/R; it plays the whole chain.
+  gl.output_mode = static_cast<OutputMode>(Int(at(GlobalField::kOutputMode)));
+  if (mono_output && gl.output_mode == OutputMode::kSplitLr) {
+    gl.output_mode = OutputMode::kStereo;
+  }
   gl.global_scale = at(GlobalField::kGlobalScale) / 100.0;
   gl.delta = at(GlobalField::kDelta) >= 0.5;
   gl.bypass = at(GlobalField::kBypass) >= 0.5;
@@ -354,7 +355,6 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
     set(BandField::kDynBRange,
         SlotFromPhysical(DynRangeMapping(bp.dyn_b_target),
                          dynamic_b ? bp.dyn_b_range : 0.0));
-    set(BandField::kTap, static_cast<int>(bp.tap));
     set(BandField::kChan, static_cast<int>(bp.chan));
     set(BandField::kBypass, bp.bypass);
     set(BandField::kSolo, bp.solo);

@@ -40,6 +40,9 @@ namespace eeq {
 // Dyn Range, and Cmd-dragging (Ctrl on Windows) its Dyn B Range.
 class EqGraph final : public iplug::igraphics::IControl {
  public:
+  static inline const iplug::igraphics::IColor kSplitColor = theme::kGain;
+  static inline const iplug::igraphics::IColor kResidualColor = theme::kText;
+
   static constexpr double kMinHz = 20.0;
   static constexpr double kMaxHz = 20000.0;
   static constexpr double kRangeDb = 18.0;
@@ -132,7 +135,9 @@ class EqGraph final : public iplug::igraphics::IControl {
       StrokeCurve(g, c, color.WithOpacity(bypassed ? 0.2f : 0.55f),
                   b == selected ? 1.5f : 1.f);
     }
-    if (any_dynamic_) {
+    if (!static_.split_db.empty()) {
+      DrawSplitCurves(g);
+    } else if (any_dynamic_) {
       StrokeCurve(g, ghost_.total_db, theme::kText.WithOpacity(0.25f), 1.f);
       StrokeCurve(g, static_.total_db, theme::kText.WithOpacity(0.5f), 1.f);
       StrokeCurve(g, live_curves_.total_db, theme::kAccent, 2.f);
@@ -731,12 +736,35 @@ class EqGraph final : public iplug::igraphics::IControl {
     g.DrawRect(theme::kBorder, mRECT);
   }
 
+  // The split output modes: the split side (bands 1-4) and the residual,
+  // each dimmed when the output mode doesn't play it, with a key.
+  void DrawSplitCurves(iplug::igraphics::IGraphics& g) {
+    namespace ig = iplug::igraphics;
+    const ChainResponse& c = any_dynamic_ ? live_curves_ : static_;
+    const OutputMode mode = params_.global.output_mode;
+    const float split_a = mode == OutputMode::kResidual ? 0.3f : 1.f;
+    const float rest_a = mode == OutputMode::kSplitSide ? 0.3f : 1.f;
+    StrokeCurve(g, c.residual_db, kResidualColor.WithOpacity(rest_a), 2.f);
+    StrokeCurve(g, c.split_db, kSplitColor.WithOpacity(split_a), 2.f);
+    const bool lr = mode == OutputMode::kSplitLr;
+    const ig::IRECT key(mRECT.R - 190.f, mRECT.T + 6.f, mRECT.R - 8.f,
+                        mRECT.T + 18.f);
+    g.DrawText(
+        theme::Text(10.f, kSplitColor.WithOpacity(split_a), ig::EAlign::Near),
+        lr ? "SPLIT 1-4 (L)" : "SPLIT 1-4", key);
+    g.DrawText(
+        theme::Text(10.f, kResidualColor.WithOpacity(rest_a), ig::EAlign::Far),
+        lr ? "RESIDUAL 5-8 (R)" : "RESIDUAL 5-8", key);
+  }
+
   void StrokeCurve(iplug::igraphics::IGraphics& g, const std::vector<float>& c,
                    const iplug::igraphics::IColor& color, float thickness) {
     if (c.size() != freqs_.size()) return;
     g.PathClear();
     for (size_t i = 0; i < c.size(); ++i) {
-      const float x = FreqToX(freqs_[i]), y = DbToY(c[i]);
+      // Clipped, e.g. a silent split side.
+      const float x = FreqToX(freqs_[i]),
+                  y = std::clamp(DbToY(c[i]), mRECT.T, mRECT.B);
       if (i == 0) {
         g.PathMoveTo(x, y);
       } else {
