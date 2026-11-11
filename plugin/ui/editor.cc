@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <functional>
 #include <optional>
+#include <utility>
 
 #include "IControls.h"
 #include "model/band_clipboard.h"
@@ -192,13 +193,12 @@ void Editor::BuildStrip() {
         ig::IRECT(), "\xc3\x97",
         [this, a] {
           const int band = std::max(0, model_.SelectedBand());
-          armed_[a ? 0 : 1] = false;
-          model_.SetValueGesture(BandParamId(band, a ? BandField::kDynRange
-                                                     : BandField::kDynBRange),
-                                 kSlotDefault);
+          model_.SetValueGesture(
+              BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn),
+              0.0);
         },
         TextButton::Style::kGhost);
-    c.disconnect->SetTooltip("Disconnect (sets the range to 0).");
+    c.disconnect->SetTooltip("Disconnect from the group.");
     graphics_.AttachControl(c.disconnect);
     c.connect = new TextButton(
         ig::IRECT(), "+ Connect", [this, slot] { Connect(slot); },
@@ -272,16 +272,6 @@ void Editor::BuildPanel() {
   cb.selected_group = [this] { return selected_group_; };
   cb.group_active = [this](int g) { return graph_->group_active(g); };
   cb.group_gain_db = [this](int g) { return graph_->group_gain_db(g); };
-  cb.armed = [this](int band, int slot) {
-    return band == armed_band_ && armed_[slot];
-  };
-  cb.set_armed = [this](int band, int slot, bool armed) {
-    if (armed) {
-      Arm(band, slot);
-    } else if (band == armed_band_) {
-      armed_[slot] = false;
-    }
-  };
   routing_ = new RoutingMap(ig::IRECT(), model_, std::move(cb));
   graphics_.AttachControl(routing_);
   legend_ = new ig::ITextControl(
@@ -429,29 +419,19 @@ void Editor::LayoutStrip() {
 void Editor::Connect(int slot) {
   const int band = std::max(0, model_.SelectedBand());
   const bool a = slot == 0;
-  const int group_id =
-      BandParamId(band, a ? BandField::kDynGroup : BandField::kDynBGroup);
-  const int target_id =
-      BandParamId(band, a ? BandField::kDynTarget : BandField::kDynBTarget);
-  const int range_id =
-      BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange);
-  model_.BeginEdit(group_id);
-  model_.BeginEdit(target_id);
-  model_.BeginEdit(range_id);
-  model_.SetEdit(group_id,
-                 selected_group_ / static_cast<double>(kNumGroups - 1));
-  model_.SetEdit(target_id, 0.0);
-  model_.SetEdit(range_id, kSlotDefault);  // Range 0, set on the card or graph.
-  model_.EndEdit(range_id);
-  model_.EndEdit(target_id);
-  model_.EndEdit(group_id);
-  Arm(band, slot);
-}
-
-void Editor::Arm(int band, int slot) {
-  if (band != armed_band_) armed_ = {};
-  armed_band_ = band;
-  armed_[slot] = true;
+  // Range 0, to set on the card or graph.
+  const std::array<std::pair<int, double>, 4> edits = {{
+      {BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn), 1.0},
+      {BandParamId(band, a ? BandField::kDynGroup : BandField::kDynBGroup),
+       selected_group_ / static_cast<double>(kNumGroups - 1)},
+      {BandParamId(band, a ? BandField::kDynTarget : BandField::kDynBTarget),
+       0.0},
+      {BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange),
+       kSlotDefault},
+  }};
+  for (const auto& [id, value] : edits) model_.BeginEdit(id);
+  for (const auto& [id, value] : edits) model_.SetEdit(id, value);
+  for (const auto& [id, value] : edits) model_.EndEdit(id);
 }
 
 void Editor::LayoutCards(const ParamValues& v, bool force) {
@@ -459,16 +439,14 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   const bool off =
       static_cast<BandType>(Int(v[BandParamId(band, BandField::kType)])) ==
       BandType::kOff;
-  if (band != armed_band_) armed_ = {};
   std::array<bool, 2> used{}, gain{};
   for (int slot = 0; slot < 2; ++slot) {
     const bool a = slot == 0;
     const auto target = static_cast<DynTarget>(Int(v[BandParamId(
         band, a ? BandField::kDynTarget : BandField::kDynBTarget)]));
-    const double range = SlotToPhysical(
-        DynRangeMapping(target),
-        v[BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange)]);
-    used[slot] = !off && (range != 0.0 || armed_[slot]);
+    used[slot] =
+        !off &&
+        v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     gain[slot] = used[slot] && target == DynTarget::kGain;
   }
   // Dyn Makeup is one parameter; it sits in the first card with a gain.

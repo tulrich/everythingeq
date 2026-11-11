@@ -60,6 +60,19 @@ void MigrateState(int version, nlohmann::json& params) {
       }
     }
   }
+  if (version < 5) {
+    // Version 5 added Dyn On and Dyn B On; before, an assignment was on
+    // exactly when its Dyn Range was nonzero.
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::string k = "band" + std::to_string(b + 1) + ".";
+      for (const char* slot : {"dyn_", "dyn_b_"}) {
+        const auto it = params.find(k + slot + "range");
+        const bool on = it != params.end() && it->is_number() &&
+                        std::abs(it->get<double>() - kSlotDefault) > 1e-9;
+        params[k + slot + "on"] = on ? 1.0 : 0.0;
+      }
+    }
+  }
 }
 
 }  // namespace

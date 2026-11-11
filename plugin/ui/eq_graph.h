@@ -188,10 +188,15 @@ class EqGraph final : public iplug::igraphics::IControl {
     model_.SelectBand(drag_band_);
     if (drag_dyn_ < 0) drag_dyn_ = mod.A ? 0 : DynBModifier(mod) ? 1 : -1;
     if (drag_dyn_ >= 0) {
-      const int id = DynRangeId(drag_band_, drag_dyn_);
+      // An assignment that's off starts from Range 0 and turns on once the
+      // drag moves it.
+      drag_dyn_off_ = values_[DynOnId(drag_band_, drag_dyn_)] < 0.5;
       drag_range_ =
-          SlotToPhysical(DynRangeMapping(DynTargetOf(drag_dyn_)), values_[id]);
-      model_.BeginEdit(id);
+          drag_dyn_off_
+              ? 0.0
+              : SlotToPhysical(DynRangeMapping(DynTargetOf(drag_dyn_)),
+                               values_[DynRangeId(drag_band_, drag_dyn_)]);
+      for (int id : DragParams(drag_band_)) model_.BeginEdit(id);
       SetDirty(false);
       return;
     }
@@ -310,6 +315,9 @@ class EqGraph final : public iplug::igraphics::IControl {
     return BandParamId(band,
                        dyn == 0 ? BandField::kDynRange : BandField::kDynBRange);
   }
+  static int DynOnId(int band, int dyn) {
+    return BandParamId(band, dyn == 0 ? BandField::kDynOn : BandField::kDynBOn);
+  }
   DynTarget DynTargetOf(int dyn) const {
     const BandParams& bp = params_.bands[drag_band_];
     return dyn == 0 ? bp.dyn_target : bp.dyn_b_target;
@@ -339,6 +347,10 @@ class EqGraph final : public iplug::igraphics::IControl {
     }
     const SlotMapping m = DynRangeMapping(target);
     drag_range_ = std::clamp(drag_range_, m.min, m.max);
+    if (drag_dyn_off_ && drag_range_ != 0.0) {
+      model_.SetEdit(DynOnId(drag_band_, drag_dyn_), 1.0);
+      drag_dyn_off_ = false;
+    }
     model_.SetEdit(DynRangeId(drag_band_, drag_dyn_),
                    SlotFromPhysical(m, drag_range_));
   }
@@ -525,7 +537,9 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   std::vector<int> DragParams(int band) const {
-    if (drag_dyn_ >= 0) return {DynRangeId(band, drag_dyn_)};
+    if (drag_dyn_ >= 0) {
+      return {DynRangeId(band, drag_dyn_), DynOnId(band, drag_dyn_)};
+    }
     if (drag_edge_ >= 0) {
       return {BandParamId(band, BandField::kX),
               BandParamId(band, BandField::kZ)};
@@ -761,7 +775,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   int drag_band_ = -1;
   int drag_edge_ = -1;  // Band Shelf edge being dragged: 0 = low, 1 = high.
   int drag_dyn_ = -1;   // Dyn Range being dragged: 0 = A, 1 = B.
-  double drag_range_ = 0.0;  // Its physical value.
+  bool drag_dyn_off_ = false;  // Its assignment is off (not yet moved).
+  double drag_range_ = 0.0;    // Its physical value.
   double drag_fixed_hz_ = 0.0;
   float drag_x_ = 0.f, drag_y_ = 0.f;
 };

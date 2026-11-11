@@ -82,7 +82,7 @@ TEST_CASE("Tiers drop features as the window shrinks", "[layout]") {
   const EditorLayout small_tier = ComputeEditorLayout(520, 320, false);
   REQUIRE(small_tier.show_top);
   REQUIRE(!small_tier.show_strip);
-  REQUIRE(!small_tier.show_meters);
+  REQUIRE(small_tier.show_meters);
   // The ribbon spans the graph; the dynamics are left of the EQ.
   REQUIRE(full.ribbon.l == full.graph.l);
   REQUIRE(full.ribbon.r == full.graph.r);
@@ -90,7 +90,8 @@ TEST_CASE("Tiers drop features as the window shrinks", "[layout]") {
   REQUIRE(compact.drawer_tab.r < compact.in_meter.l);
   const EditorLayout minimum = ComputeEditorLayout(360, 220, false);
   REQUIRE(!minimum.show_top);
-  REQUIRE(minimum.graph.w() > 340.f);
+  REQUIRE(minimum.show_meters);  // Never lose the meters and fader.
+  REQUIRE(minimum.graph.w() > 260.f);
 }
 
 TEST_CASE("The dynamics panel folds sections to fit", "[layout]") {

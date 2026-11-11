@@ -99,7 +99,6 @@ class Editor {
   void ToggleSection(int section);
   void PasteBands(int section, const std::vector<int>& bands);
   void Connect(int slot);
-  void Arm(int band, int slot);
 
   void UpdateBandEditor(const ParamValues& v);
   void UpdateDynamicsPanel(const ParamValues& v);
@@ -119,10 +118,6 @@ class Editor {
   // What the dynamics panel was last laid out for.
   std::string panel_key_;
   std::array<int, 2> card_state_ = {-1, -1};
-  // Ports just connected with Range 0 (which alone means unassigned): their
-  // cards stay open until a range is set or another band is selected.
-  int armed_band_ = -1;
-  std::array<bool, 2> armed_{};
 
   BandRibbon* ribbon_ = nullptr;
   PresetBar* preset_bar_ = nullptr;

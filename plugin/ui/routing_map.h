@@ -30,9 +30,9 @@ namespace eeq {
 // assignments' targets and ranges.
 //
 // Every crossing of a group row and a port column has a faint dot.  Click
-// an empty crossing to connect that port to the group (moving it if it was
-// connected elsewhere) with Range 0, and a joined one to disconnect it;
-// either selects the band and group.  Click a source crossing to
+// an empty crossing to connect that port to the group (Dyn On, Range 0; a
+// port connected elsewhere moves, keeping its range), and a joined one to
+// disconnect it; either selects the band and group.  Click a source crossing to
 // change the group's input, a group head to select it, a band's foot to
 // select it.
 class RoutingMap final : public iplug::igraphics::IControl {
@@ -42,10 +42,6 @@ class RoutingMap final : public iplug::igraphics::IControl {
     std::function<int()> selected_group;
     std::function<bool(int)> group_active;
     std::function<float(int)> group_gain_db;
-    // Ports connected with Range 0, which alone means unassigned, are
-    // "armed" by the editor so their cards stay open: band, slot.
-    std::function<bool(int, int)> armed;
-    std::function<void(int, int, bool)> set_armed;
   };
 
   RoutingMap(const iplug::igraphics::IRECT& bounds, EditorModel& model,
@@ -89,7 +85,7 @@ class RoutingMap final : public iplug::igraphics::IControl {
     int band = -1, slot = -1, group = -1, source = -1;
   };
   struct Port {
-    bool on = false;  // Subscribed (nonzero range) and the band isn't Off.
+    bool on = false;  // Dyn On, and the band isn't Off.
     int group = 0;
     DynTarget target = DynTarget::kGain;
     double range = 0.0;
@@ -142,7 +138,9 @@ class RoutingMap final : public iplug::igraphics::IControl {
     p.range = SlotToPhysical(
         DynRangeMapping(p.target),
         v[BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange)]);
-    p.on = type != BandType::kOff && p.range != 0.0;
+    p.on =
+        type != BandType::kOff &&
+        v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     return p;
   }
 
@@ -377,8 +375,8 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     if (off) continue;
     for (int s = 0; s < 2; ++s) {
       for (int gi = 0; gi < kNumGroups; ++gi) {
-        g.FillCircle(theme::kTextDim.WithOpacity(0.55f), PortX(b, s),
-                     GroupY(gi), 2.f);
+        g.FillCircle(theme::kTextDim.WithOpacity(0.4f), PortX(b, s), GroupY(gi),
+                     1.6f);
       }
     }
   }
@@ -407,8 +405,8 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const Port& p = ports[b][s];
       const float x = PortX(b, s);
       if (!p.on) {
-        // The selected band's idle ports (Range 0) show, faintly, the group
-        // they join once a range is set on the graph.
+        // The selected band's unconnected ports show, faintly, the group
+        // they join if a range is dragged on the graph.
         if (b == sel_band && !off) {
           g.DrawDottedLine(theme::BandColor(b).WithOpacity(0.5f), x,
                            GroupY(std::clamp(p.group, 0, kNumGroups - 1)), x,
@@ -500,36 +498,32 @@ inline void RoutingMap::OnMouseDown(float x, float y,
       if (type == BandType::kOff) break;
       const bool a = h.slot == 0;
       const Port p = PortOf(v, h.band, h.slot);
+      const int on_id =
+          BandParamId(h.band, a ? BandField::kDynOn : BandField::kDynBOn);
       const int group_id =
           BandParamId(h.band, a ? BandField::kDynGroup : BandField::kDynBGroup);
       const int target_id = BandParamId(
           h.band, a ? BandField::kDynTarget : BandField::kDynBTarget);
       const int range_id =
           BandParamId(h.band, a ? BandField::kDynRange : BandField::kDynBRange);
-      const bool armed =
-          !p.on && p.group == h.group && cb_.armed && cb_.armed(h.band, h.slot);
-      if ((p.on && p.group == h.group) || armed) {
-        // Disconnect: Range 0.
-        if (p.on) model_.SetValueGesture(range_id, kSlotDefault);
-        if (cb_.set_armed) cb_.set_armed(h.band, h.slot, false);
+      if (p.on && p.group == h.group) {
+        model_.SetValueGesture(on_id, 0.0);  // Disconnect.
+      } else if (p.on) {
+        // Move the port to this group, keeping its target and range.
+        model_.SetValueGesture(group_id,
+                               h.group / static_cast<double>(kNumGroups - 1));
       } else {
-        // Connect, moving the port if it was on another group.  A new
-        // connection starts as Gain with Range 0, to set on the graph.
-        const bool fresh = !p.on;
-        model_.BeginEdit(group_id);
-        if (fresh) {
-          model_.BeginEdit(target_id);
-          model_.BeginEdit(range_id);
-        }
-        model_.SetEdit(group_id, h.group / static_cast<double>(kNumGroups - 1));
-        if (fresh) {
-          model_.SetEdit(target_id, 0.0);
-          model_.SetEdit(range_id, kSlotDefault);
-          model_.EndEdit(range_id);
-          model_.EndEdit(target_id);
-        }
-        model_.EndEdit(group_id);
-        if (fresh && cb_.set_armed) cb_.set_armed(h.band, h.slot, true);
+        // Connect.  A new connection starts as Gain with Range 0, to set on
+        // the graph or the card.
+        const std::array<std::pair<int, double>, 4> edits = {{
+            {on_id, 1.0},
+            {group_id, h.group / static_cast<double>(kNumGroups - 1)},
+            {target_id, 0.0},
+            {range_id, kSlotDefault},
+        }};
+        for (const auto& [id, value] : edits) model_.BeginEdit(id);
+        for (const auto& [id, value] : edits) model_.SetEdit(id, value);
+        for (const auto& [id, value] : edits) model_.EndEdit(id);
       }
       model_.SelectBand(h.band);
       if (cb_.select_group) cb_.select_group(h.group);

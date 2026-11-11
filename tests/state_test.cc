@@ -128,29 +128,50 @@ TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {
   expected[BandParamId(3, BandField::kDynGroup)] = 1;  // Bands 3-4: Group 2.
   expected[BandParamId(4, BandField::kDynGroup)] = 3;
   expected[BandParamId(4, BandField::kDynRange)] = 0.8;
+  expected[BandParamId(4, BandField::kDynOn)] = 1;  // Migrated from v4.
   REQUIRE(*v == expected);
 }
 
-TEST_CASE("Dyn Range 0 means a band is static", "[state]") {
+TEST_CASE("Version 4 assignments with a Dyn Range turn on", "[state]") {
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 4,
+      "params": {"band1.dyn_range": 0.6, "band1.dyn_b_range": 0.5,
+                 "band2.dyn_b_range": 0.3}})");
+  REQUIRE(v.has_value());
+  ParamValues expected = DefaultParamValues();
+  expected[BandParamId(0, BandField::kDynRange)] = 0.6;
+  expected[BandParamId(0, BandField::kDynOn)] = 1;
+  expected[BandParamId(1, BandField::kDynBRange)] = 0.3;
+  expected[BandParamId(1, BandField::kDynBOn)] = 1;
+  REQUIRE(*v == expected);
+}
+
+TEST_CASE("Dyn On decides whether a band follows its group", "[state]") {
   ParamValues v = DefaultParamValues();
   for (int b = 0; b < kNumBands; ++b) {
     REQUIRE(v[BandParamId(b, BandField::kDynGroup)] == b / 2);
+    REQUIRE(v[BandParamId(b, BandField::kDynOn)] == 0);
   }
-  // The group is kept, but the band doesn't subscribe without a range.
-  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == 1);
-  REQUIRE_FALSE(SubscribesTo(BuildEngineParams(v, false).bands[2], 1));
+  // Off: no group and no range, whatever the parameters hold.
   v[BandParamId(2, BandField::kDynRange)] = 0.6;
+  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_group == -1);
+  REQUIRE(BuildEngineParams(v, false).bands[2].dyn_range == 0.0);
+  v[BandParamId(2, BandField::kDynOn)] = 1;
   REQUIRE(SubscribesTo(BuildEngineParams(v, false).bands[2], 1));
-  // A preset's group survives without a range (e.g. a band set up for the
-  // user to turn up its Dyn Range).
+  // On with no range still follows the group (e.g. a band set up for the
+  // user to turn up its Dyn Range), and survives a preset round trip.
   v[BandParamId(2, BandField::kDynRange)] = kSlotDefault;
   v[BandParamId(2, BandField::kDynGroup)] = 3;
+  REQUIRE(SubscribesTo(BuildEngineParams(v, false).bands[2], 3));
   const ParamValues kept = ValuesFromEngineParams(BuildEngineParams(v, false));
   REQUIRE(kept[BandParamId(2, BandField::kDynGroup)] == 3);
-  // And back: a static engine band gets its default group and no range.
+  REQUIRE(kept[BandParamId(2, BandField::kDynOn)] == 1);
+  // And back: an engine band with no group is off, with its default group
+  // and no range.
   EngineParams p;
   p.bands[6].dyn_range = 12.0;
   const ParamValues back = ValuesFromEngineParams(p);
+  REQUIRE(back[BandParamId(6, BandField::kDynOn)] == 0);
   REQUIRE(back[BandParamId(6, BandField::kDynGroup)] == 3);
   REQUIRE(back[BandParamId(6, BandField::kDynRange)] == 0.5);
 }

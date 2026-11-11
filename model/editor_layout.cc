@@ -9,6 +9,7 @@ constexpr float kPad = 8.f;
 constexpr float kGap = 4.f;
 constexpr float kFooterHeight = 48.f;
 constexpr float kDrawerTabWidth = 22.f;
+constexpr float kGripClearance = 14.f;  // The resize grip in the corner.
 
 // Panel rows.
 constexpr float kTitleHeight = 12.f;
@@ -50,6 +51,20 @@ StripLayout ComputeStrip(const Rect& r, bool full) {
   return s;
 }
 
+// The input meter left of the graph, the output meter and fader right of it,
+// in every tier.  Returns what's left for the graph.
+Rect PlaceMeters(Rect area, bool full, EditorLayout& L) {
+  L.show_meters = true;
+  const float meter_w = full ? 28.f : 22.f;
+  const float fader_w = full ? 24.f : 20.f;
+  L.in_meter = {area.l, area.t, area.l + meter_w, area.b};
+  L.fader = {area.r - fader_w, area.t, area.r, area.b};
+  L.out_meter = {L.fader.l - kGap - meter_w, area.t, L.fader.l - kGap, area.b};
+  area.l = L.in_meter.r + kGap;
+  area.r = L.out_meter.l - kGap;
+  return area;
+}
+
 }  // namespace
 
 LayoutTier TierFor(float width, float height) {
@@ -74,7 +89,8 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
   const bool compact = L.tier == LayoutTier::kCompact;
 
   if (L.tier == LayoutTier::kMinimum) {
-    L.graph = {kGap, kGap, width - kGap, height - kGap};
+    L.graph = PlaceMeters({kGap, kGap, width - kGap, height - kGap}, false, L);
+    L.fader.b -= kGripClearance;
     return L;
   }
 
@@ -122,21 +138,8 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
     L.strip = ComputeStrip(strip, full);
     graph_b = strip.t - kPad;
   }
-  Rect graph_area = {eq.l, eq.t, eq.r, graph_b};
-  if (tier >= 2) {
-    L.show_meters = true;
-    const float meter_w = full ? 28.f : 22.f;
-    const float fader_w = full ? 24.f : 20.f;
-    L.in_meter = {graph_area.l, graph_area.t, graph_area.l + meter_w,
-                  graph_area.b};
-    L.fader = {graph_area.r - fader_w, graph_area.t, graph_area.r,
-               graph_area.b};
-    L.out_meter = {L.fader.l - kGap - meter_w, graph_area.t, L.fader.l - kGap,
-                   graph_area.b};
-    graph_area.l = L.in_meter.r + kGap;
-    graph_area.r = L.out_meter.l - kGap;
-  }
-  L.graph = graph_area;
+  L.graph = PlaceMeters({eq.l, eq.t, eq.r, graph_b}, full, L);
+  if (tier < 2) L.fader.b -= kGripClearance;  // It reaches the window corner.
   // The ribbon spans the graph, so each band's cell sits over its curve's
   // part of the window (beside the preset name when they'd collide).
   L.ribbon = {std::max(L.graph.l, L.preset.r + kPad), kPad, L.graph.r,

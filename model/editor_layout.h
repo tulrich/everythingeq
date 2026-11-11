@@ -28,9 +28,9 @@ struct Rect {
 // What the window shows, from largest to smallest.  A window is in the
 // smaller of its width and height tiers.
 enum class LayoutTier {
-  kMinimum,  // The EQ graph only.
-  kSmall,    // Band ribbon, preset name and the graph.
-  kCompact,  // Plus meters, fader and band strip; dynamics in a drawer.
+  kMinimum,  // The EQ graph, meters and fader.
+  kSmall,    // Plus the band ribbon and preset name.
+  kCompact,  // Plus the band strip; dynamics in a drawer.
   kFull,     // Everything, with the dynamics panel docked at the right.
 };
 

@@ -12,11 +12,14 @@ namespace eeq {
 // Keys are the camelCase forms of the BandParams / GroupParams / GlobalParams
 // fields (e.g. "dynRange" for dyn_range); enums are given by name (e.g.
 // "type": "Peak", "tap": "Aux"); Vowel weighting is "weighting".  Missing keys
-// keep their defaults.
+// keep their defaults.  A dynamics assignment is on when it has a group
+// ("dynGroup": 0..3).
 
 // Applies `j` on top of `params`.  Throws std::runtime_error on bad values.
 void ApplyEngineParamsJson(const nlohmann::json& j, EngineParams& params);
 
+// As ApplyEngineParamsJson on defaults.  An assignment with a nonzero range
+// and no group (from older presets) follows the band's default group.
 EngineParams ParseEngineParams(const nlohmann::json& j);
 
 // Writes every non-default field; Off bands and unused trailing groups are

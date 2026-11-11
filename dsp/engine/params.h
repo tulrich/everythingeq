@@ -69,8 +69,8 @@ struct BandParams {
   double z = 0.70710678118654752440;
   int option = 0;  // Vowel: VowelWeighting; LP, HP: FilterSlope;
                    // Vintage High: VintageAtten
-  // -1 = none, else 0..kNumGroups-1; the band follows its group only with a
-  // nonzero dyn_range (see SubscribesTo).
+  // -1 = none, else 0..kNumGroups-1 (see SubscribesTo).  A band can follow
+  // a group with dyn_range 0, e.g. a preset set up for the user to turn up.
   int dyn_group = -1;
   DynTarget dyn_target = DynTarget::kGain;
   double dyn_range = 0.0;  // dB, octaves or morph index (per dyn_target)
@@ -124,11 +124,9 @@ struct EngineParams {
 
 inline constexpr double kBpOffDb = -60.0;
 
-// Whether either of a band's dynamics assignments uses group g (an
-// assignment with no range does nothing).
+// Whether either of a band's dynamics assignments uses group g.
 inline bool SubscribesTo(const BandParams& bp, int g) {
-  return (bp.dyn_group == g && bp.dyn_range != 0.0) ||
-         (bp.dyn_b_group == g && bp.dyn_b_range != 0.0);
+  return bp.dyn_group == g || bp.dyn_b_group == g;
 }
 
 // Bands whose dynamic gain can be offset by Dyn Makeup.

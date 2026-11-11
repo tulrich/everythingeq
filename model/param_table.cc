@@ -119,6 +119,7 @@ std::vector<ParamSpec> MakeTable() {
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
     at(BandField::kY) = SlotParam(k + "y", n + "Gain", g);
     at(BandField::kZ) = SlotParam(k + "z", n + "Q", g);
+    at(BandField::kDynOn) = Bool(k + "dyn_on", n + "Dyn On", g, false);
     at(BandField::kDynGroup) =
         Enum(k + "dyn_group", n + "Dyn Group", g, DefaultDynGroup(b),
              {"Group 1", "Group 2", "Group 3", "Group 4"});
@@ -127,6 +128,7 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
     at(BandField::kDynMakeup) = Continuous(k + "dyn_makeup", n + "Dyn Makeup",
                                            g, 0.0, 100.0, 0.0, "%", false, 0.1);
+    at(BandField::kDynBOn) = Bool(k + "dyn_b_on", n + "Dyn B On", g, false);
     at(BandField::kDynBGroup) =
         Enum(k + "dyn_b_group", n + "Dyn B Group", g, DefaultDynGroup(b),
              {"Group 1", "Group 2", "Group 3", "Group 4"});
@@ -139,6 +141,14 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kChan) =
         Enum(k + "chan", n + "Chan", g, 0, {"Stereo", "L", "R", "Mid", "Side"});
     at(BandField::kSolo) = Bool(k + "solo", n + "Solo", g, false);
+    // Routing choices aren't offered for automation.
+    for (BandField f :
+         {BandField::kType, BandField::kDynOn, BandField::kDynGroup,
+          BandField::kDynTarget, BandField::kDynBOn, BandField::kDynBGroup,
+          BandField::kDynBTarget, BandField::kOption, BandField::kTap,
+          BandField::kChan, BandField::kSolo}) {
+      at(f).automatable = false;
+    }
   }
   for (int i = 0; i < kNumGroups; ++i) {
     const std::string k = "group" + std::to_string(i + 1) + ".";
@@ -181,6 +191,11 @@ std::vector<ParamSpec> MakeTable() {
                                        100.0, "%", false, 1.0);
     at(GroupField::kScListen) =
         Bool(k + "sc_listen", n + "SC Listen", g, false);
+    for (GroupField f :
+         {GroupField::kMode, GroupField::kInput, GroupField::kScFilter,
+          GroupField::kLink, GroupField::kScListen}) {
+      at(f).automatable = false;
+    }
   }
   const std::string g = "Global";
   auto at = [&](GlobalField f) -> ParamSpec& { return t[GlobalParamId(f)]; };
@@ -196,7 +211,10 @@ std::vector<ParamSpec> MakeTable() {
   at(GlobalField::kLookahead) =
       Continuous("global.lookahead_ms", "Lookahead", g, 0.0, kMaxLookaheadMs,
                  0.0, "ms", false, 0.1);
-  at(GlobalField::kLookahead).automatable = false;
+  for (GlobalField f : {GlobalField::kOutputMode, GlobalField::kDelta,
+                        GlobalField::kLookahead}) {
+    at(f).automatable = false;
+  }
   return t;
 }
 
@@ -262,10 +280,17 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
     bp.dyn_b_target = static_cast<DynTarget>(Int(at(BandField::kDynBTarget)));
     bp.dyn_b_range = SlotToPhysical(DynRangeMapping(bp.dyn_b_target),
                                     at(BandField::kDynBRange));
-    // The groups are kept without a Dyn Range (so presets keep them), but a
-    // band subscribes to a group only with one (D19, SubscribesTo).
-    bp.dyn_b_group = Int(at(BandField::kDynBGroup));
-    bp.dyn_group = Int(at(BandField::kDynGroup));
+    // An assignment that's off follows no group and has no range (D19).
+    if (at(BandField::kDynOn) >= 0.5) {
+      bp.dyn_group = Int(at(BandField::kDynGroup));
+    } else {
+      bp.dyn_range = 0.0;
+    }
+    if (at(BandField::kDynBOn) >= 0.5) {
+      bp.dyn_b_group = Int(at(BandField::kDynBGroup));
+    } else {
+      bp.dyn_b_range = 0.0;
+    }
     bp.tap = static_cast<Tap>(Int(at(BandField::kTap)));
     bp.chan = mono_output ? Chan::kStereo
                           : static_cast<Chan>(Int(at(BandField::kChan)));
@@ -316,12 +341,14 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
     set(BandField::kZ, NormalizedSlot(bp.type, Slot::kZ, bp.z));
     set(BandField::kOption, bp.option);
     const bool dynamic = bp.dyn_group >= 0 && bp.dyn_group < kNumGroups;
+    set(BandField::kDynOn, dynamic);
     set(BandField::kDynGroup, dynamic ? bp.dyn_group : DefaultDynGroup(b));
     set(BandField::kDynTarget, static_cast<int>(bp.dyn_target));
     set(BandField::kDynRange, SlotFromPhysical(DynRangeMapping(bp.dyn_target),
                                                dynamic ? bp.dyn_range : 0.0));
     set(BandField::kDynMakeup, bp.dyn_makeup * 100.0);
     const bool dynamic_b = bp.dyn_b_group >= 0 && bp.dyn_b_group < kNumGroups;
+    set(BandField::kDynBOn, dynamic_b);
     set(BandField::kDynBGroup, dynamic_b ? bp.dyn_b_group : DefaultDynGroup(b));
     set(BandField::kDynBTarget, static_cast<int>(bp.dyn_b_target));
     set(BandField::kDynBRange,

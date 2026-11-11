@@ -184,10 +184,17 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
 
 EngineParams ParseEngineParams(const json& j) {
   EngineParams p;
-  for (int b = 0; b < kNumBands; ++b) {
-    p.bands[b].dyn_group = p.bands[b].dyn_b_group = DefaultDynGroup(b);
-  }
   ApplyEngineParamsJson(j, p);
+  // Older presets named only groups other than the band's default.
+  for (int b = 0; b < kNumBands; ++b) {
+    BandParams& bp = p.bands[b];
+    if (bp.dyn_group < 0 && bp.dyn_range != 0.0) {
+      bp.dyn_group = DefaultDynGroup(b);
+    }
+    if (bp.dyn_b_group < 0 && bp.dyn_b_range != 0.0) {
+      bp.dyn_b_group = DefaultDynGroup(b);
+    }
+  }
   return p;
 }
 
@@ -253,16 +260,12 @@ json EngineParamsToJson(const EngineParams& p) {
                   static_cast<VintageAtten>(bp.option),
                   static_cast<VintageAtten>(bd.option));
       }
-      // Groups are written when they differ from the band's default.
-      if (bp.dyn_group >= 0) {
-        Write(j, "dynGroup", bp.dyn_group, DefaultDynGroup(b));
-      }
+      // An assignment is on when it names its group.
+      Write(j, "dynGroup", bp.dyn_group, -1);
       WriteEnum(j, "dynTarget", kDynTargets, bp.dyn_target, bd.dyn_target);
       Write(j, "dynRange", bp.dyn_range, bd.dyn_range);
       Write(j, "dynMakeup", bp.dyn_makeup, bd.dyn_makeup);
-      if (bp.dyn_b_group >= 0) {
-        Write(j, "dynBGroup", bp.dyn_b_group, DefaultDynGroup(b));
-      }
+      Write(j, "dynBGroup", bp.dyn_b_group, -1);
       WriteEnum(j, "dynBTarget", kDynTargets, bp.dyn_b_target, bd.dyn_b_target);
       Write(j, "dynBRange", bp.dyn_b_range, bd.dyn_b_range);
       WriteEnum(j, "tap", kTaps, bp.tap, bd.tap);

@@ -19,8 +19,9 @@ bool SectionHas(BandSection section, BandField field) {
              field == BandField::kY || field == BandField::kZ ||
              field == BandField::kOption;
     case BandSection::kDynamics:
-      return field == BandField::kDynGroup || field == BandField::kDynTarget ||
-             field == BandField::kDynRange || field == BandField::kDynMakeup ||
+      return field == BandField::kDynOn || field == BandField::kDynGroup ||
+             field == BandField::kDynTarget || field == BandField::kDynRange ||
+             field == BandField::kDynMakeup || field == BandField::kDynBOn ||
              field == BandField::kDynBGroup ||
              field == BandField::kDynBTarget || field == BandField::kDynBRange;
   }

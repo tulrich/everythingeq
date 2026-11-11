@@ -46,6 +46,7 @@ ParamValues BaseValues() {
   SetBand(v, 7, BandType::kLp, 0.9, 0.5, 0.5);
   v[BandParamId(7, BandField::kOption)] = kSlope24;
   // Dynamic bands on two groups.
+  for (int b : {0, 1, 5}) v[BandParamId(b, BandField::kDynOn)] = 1;
   v[BandParamId(0, BandField::kDynGroup)] = 0;
   v[BandParamId(0, BandField::kDynRange)] = 0.55;
   v[BandParamId(1, BandField::kDynGroup)] = 1;
@@ -144,10 +145,10 @@ TEST_CASE("Automating continuous parameters is click-free", "[automation]") {
     REQUIRE(r.hf_rms < std::max(3e-4 * r.rms, 1e-5));
     ++swept;
   }
-  // 5 slots (X, Y, Z, two Dyn Ranges) and Dyn Makeup per band, 11
-  // continuous parameters per group, Scale and Output Gain (Lookahead isn't
-  // automatable).
-  REQUIRE(swept == kNumBands * 6 + kNumGroups * 11 + 2);
+  // 5 slots (X, Y, Z, two Dyn Ranges) and Dyn Makeup per band, 10
+  // continuous parameters per group (Link isn't automatable), Scale and
+  // Output Gain (nor is Lookahead).
+  REQUIRE(swept == kNumBands * 6 + kNumGroups * 10 + 2);
 }
 
 TEST_CASE("Switching enum parameters stays finite and bounded",

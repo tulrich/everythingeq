@@ -52,12 +52,20 @@ std::string PresetFileName(std::string_view name) {
 
 bool ValuesMatch(const ParamValues& a, const ParamValues& b) {
   // Compare what a preset would store: slots and options a band type
-  // doesn't use are not stored.
+  // doesn't use are not stored, nor is anything but the type of an Off band.
   ParamValues ca = ValuesFromEngineParams(BuildEngineParams(a, false));
   ParamValues cb = ValuesFromEngineParams(BuildEngineParams(b, false));
+  const ParamValues defaults = DefaultParamValues();
   for (int band = 0; band < kNumBands; ++band) {
     const int type =
         static_cast<int>(std::lround(ca[BandParamId(band, BandField::kType)]));
+    if (static_cast<BandType>(type) == BandType::kOff) {
+      for (int f = 0; f < kNumBandFields; ++f) {
+        if (f == static_cast<int>(BandField::kType)) continue;
+        const int id = band * kNumBandFields + f;
+        ca[id] = cb[id] = defaults[id];
+      }
+    }
     if (OptionLabels(static_cast<BandType>(type)).empty()) {
       const int id = BandParamId(band, BandField::kOption);
       ca[id] = cb[id] = 0.0;
