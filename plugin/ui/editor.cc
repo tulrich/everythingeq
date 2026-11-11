@@ -482,6 +482,7 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   }
   if (!force && state == card_state_) return;
   card_state_ = state;
+  graphics_.SetAllControlsDirty();  // As in LayoutPanel().
 
   ParamField* makeup = cards_[0].makeup;
   ParamField* makeup_dial = cards_[0].makeup_dial;
@@ -586,6 +587,9 @@ void Editor::LayoutPanel(const ParamValues& v, bool force) {
       sections_[0].priority, sections_[1].priority, sections_[2].priority);
   if (!force && panel_key_ == key) return;
   panel_key_ = key;
+  // Controls that move or hide leave their old pixels behind unless
+  // everything is redrawn.
+  graphics_.SetAllControlsDirty();
 
   std::vector<ig::IControl*> all = {routing_title_,  routing_, legend_,
                                     group_header_,   warning_, scope_,

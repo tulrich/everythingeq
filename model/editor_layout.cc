@@ -177,9 +177,13 @@ PanelLayout ComputePanelLayout(const Rect& panel,
   };
   const float avail = inner.b - y;
   P.show_legend = true;
+  P.show_scope = true;
+  // The scope needs at least this; it's the group's main readout, so it
+  // stays while sections can fold to make room.
+  auto scope_min = [&] { return P.show_scope ? kScopeHeight + 8.f : 0.f; };
   // Fold the lowest-priority open sections until everything fits, then
-  // drop the legend.
-  while (below(P.show_legend) > avail) {
+  // drop the legend, then the scope.
+  while (below(P.show_legend) + scope_min() > avail) {
     int fold = -1;
     for (size_t i = 0; i < sections.size(); ++i) {
       if (open[i] && (fold < 0 || sections[i].fold_priority <
@@ -191,6 +195,8 @@ PanelLayout ComputePanelLayout(const Rect& panel,
       open[fold] = false;
     } else if (P.show_legend) {
       P.show_legend = false;
+    } else if (P.show_scope) {
+      P.show_scope = false;
     } else {
       break;
     }
@@ -210,7 +216,6 @@ PanelLayout ComputePanelLayout(const Rect& panel,
     P.warning = Box(inner.l, y, inner.w(), kWarningHeight);
     y += kWarningHeight + 2.f;
   }
-  P.show_scope = spare >= kScopeHeight + 8.f;
   if (P.show_scope) {
     // The scope takes what room is spare, within reason.
     const float scope_h = std::min(spare - 8.f, kMaxScopeHeight);
