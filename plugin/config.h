@@ -2,7 +2,12 @@
 #define PLUG_MFR "tulrich"
 #define PLUG_VERSION_HEX 0x00000100
 #define PLUG_VERSION_STR "0.1.0"
+#if defined(AUv3_API)
+// The AUv3 is a separate component, so it can sit beside the AUv2.
+#define PLUG_UNIQUE_ID 'EvE3'
+#else
 #define PLUG_UNIQUE_ID 'EvEQ'
+#endif
 #define PLUG_MFR_ID 'Tulr'
 #define PLUG_URL_STR "https://github.com/tulrich/everythingeq"
 #define PLUG_EMAIL_STR ""

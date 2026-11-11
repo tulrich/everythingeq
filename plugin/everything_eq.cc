@@ -77,8 +77,14 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
       editor_->Layout();
       return;
     }
+#if defined(AUv3_API)
+    // AUv3 hosts ignore size requests from the plug-in, so there's no grip:
+    // the host resizes the window (e.g. by its edges in Logic).
+    graphics->SetLayoutOnResize(true);
+#else
     graphics->AttachCornerResizer(new GripResizer(graphics->GetBounds(), 18.f),
                                   ig::EUIResizerMode::Size, true);
+#endif
     graphics->LoadFont("Roboto-Regular", ROBOTO_FN);
     // Command-Z / Shift-Command-Z (Control on Windows), when the host passes
     // the keys on.

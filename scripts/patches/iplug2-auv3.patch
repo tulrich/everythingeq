@@ -1,0 +1,178 @@
+diff --git a/IPlug/AUv3/IPlugAUAudioUnit.mm b/IPlug/AUv3/IPlugAUAudioUnit.mm
+index f0fd8fcc4..226db297c 100644
+--- a/IPlug/AUv3/IPlugAUAudioUnit.mm
++++ b/IPlug/AUv3/IPlugAUAudioUnit.mm
+@@ -446,7 +446,11 @@ - (instancetype) initWithComponentDescription:(AudioComponentDescription)compone
+ //                  options:NSKeyValueObservingOptionNew
+ //                  context:mUIUpdateParamObserverToken];
+     
+-  self.currentPreset = mPresets.firstObject;
++  // Load the first factory preset now: setCurrentPreset defers the load to
++  // the main queue, where it would overwrite a state the host restores right
++  // after instantiating the unit (e.g. when reopening a project).
++  if (mPresets.count)
++    mPlug->RestorePreset(0);
+   
+   mPlug->OnParamReset(kReset);
+   
+@@ -572,21 +576,23 @@ - (AUInternalRenderBlock) internalRenderBlock
+       return err;
+     }
+     
++    // Every input bus feeds consecutive input channels (e.g. main, then
++    // sidechain). Only the main bus is required: a bus the host hasn't
++    // connected, such as an unused sidechain, is marked disconnected.
++    int chanIdx = 0;
++    
+     for (auto busIdx = 0; busIdx < inputBuses->GetSize(); busIdx++)
+     {
+-      err = inputBuses->Get(busIdx)->pullInput(&pullFlags, timestamp, frameCount, busIdx, pullInputBlock);
++      BufferedInputBus* pBus = inputBuses->Get(busIdx);
++      err = pBus->pullInput(&pullFlags, timestamp, frameCount, busIdx, pullInputBlock);
++      
++      if (err != noErr && busIdx == 0) { return err; }
++      
++      chanIdx += pPlug->AttachInputBuffers(pBus->mutableAudioBufferList, chanIdx, err == noErr);
+     }
+-
+-    if (err != 0) { return err; }
+-    
+-    AudioBufferList* pInAudioBufferList = nil;
+     
+     if (inputBuses->GetSize())
+-    {
+-      pInAudioBufferList = inputBuses->Get(0)->mutableAudioBufferList; // TODO: buses > 0
+-      
+-      pPlug->AttachInputBuffers(pInAudioBufferList);
+-    }
++      pPlug->DisconnectInputBuffers(chanIdx);
+     
+     outputBuses->Get(outputBusNumber)->prepareOutputBufferList(outputData, frameCount, true);
+     
+@@ -712,6 +718,12 @@ - (void) setRenderingOffline:(BOOL)renderingOffline
+   mPlug->SetOffline(renderingOffline);
+ }
+ 
++- (void) setShouldBypassEffect:(BOOL)shouldBypassEffect
++{
++  [super setShouldBypassEffect:shouldBypassEffect];
++  mPlug->SetHostBypassed(shouldBypassEffect);
++}
++
+ - (NSTimeInterval) latency
+ {
+   return static_cast<NSTimeInterval>(mPlug->GetLatency()) / mPlug->GetSampleRate();
+diff --git a/IPlug/AUv3/IPlugAUv3.h b/IPlug/AUv3/IPlugAUv3.h
+index 48be9c6c1..b400d1d55 100644
+--- a/IPlug/AUv3/IPlugAUv3.h
++++ b/IPlug/AUv3/IPlugAUv3.h
+@@ -53,6 +53,7 @@ public:
+   void InformHostOfPresetChange() override {};
+ 
+   //IPlugProcessor
++  void SetLatency(int samples) override;
+   bool SendMidiMsg(const IMidiMsg& msg) override;
+ //  bool SendMidiMsgs(WDL_TypedBuf<IMidiMsg>& msgs) override;
+   bool SendSysEx(const ISysEx& msg) override;
+@@ -65,9 +66,16 @@ public:
+   float GetParameter(uint64_t address);
+   const char* GetParamDisplay(uint64_t address, float value);
+   float GetParamStringToValue(uint64_t address, const char* str);
+-  void AttachInputBuffers(AudioBufferList* pInBufferList);
++  /** Attach one input bus's buffers starting at input channel chanIdx.
++   * @param connected \c false if the host hasn't connected the bus (e.g. no sidechain); its channels are then marked disconnected
++   * @return The bus's channel count */
++  int AttachInputBuffers(AudioBufferList* pInBufferList, int chanIdx, bool connected);
++  /** Mark the input channels from chanIdx on as disconnected */
++  void DisconnectInputBuffers(int chanIdx);
+   void AttachOutputBuffers(AudioBufferList* pOutBufferList, uint32_t busNumber);
+   void Prepare(double sampleRate, uint32_t blockSize);
++  /** Called when the host sets AUAudioUnit.shouldBypassEffect */
++  void SetHostBypassed(bool bypassed) { SetBypassed(bypassed); }
+   void AddParamAddress(int paramIdx, uint64_t paramAddress)
+   {
+     mParamAddressMap.insert({paramIdx, paramAddress});
+diff --git a/IPlug/AUv3/IPlugAUv3.mm b/IPlug/AUv3/IPlugAUv3.mm
+index 1fa7d302a..fc7bd34ac 100644
+--- a/IPlug/AUv3/IPlugAUv3.mm
++++ b/IPlug/AUv3/IPlugAUv3.mm
+@@ -32,6 +32,21 @@
+   mAUAudioUnit = pAUAudioUnit;
+ }
+ 
++void IPlugAUv3::SetLatency(int samples)
++{
++  IPlugProcessor::SetLatency(samples);
++
++  // Hosts observe AUAudioUnit.latency with key-value observing.
++  IPLUG_AUAUDIOUNIT* pAU = (__bridge IPLUG_AUAUDIOUNIT*) mAUAudioUnit;
++  if (pAU)
++  {
++    dispatch_async(dispatch_get_main_queue(), ^{
++      [pAU willChangeValueForKey:@"latency"];
++      [pAU didChangeValueForKey:@"latency"];
++    });
++  }
++}
++
+ void IPlugAUv3::BeginInformHostOfParamChange(int paramIdx)
+ {
+   const AUParameterAddress address = GetParamAddress(paramIdx);
+@@ -181,7 +196,10 @@
+   }
+ 
+   ENTER_PARAMS_MUTEX;
+-  ProcessBuffers(0.f, framesRemaining); // what about bufferOffset
++  if (GetBypassed() && !GetProcessWhileBypassed())
++    PassThroughBuffers(0.f, framesRemaining);
++  else
++    ProcessBuffers(0.f, framesRemaining); // what about bufferOffset
+   LEAVE_PARAMS_MUTEX;
+     
+   //Output SYSEX from the editor, which has bypassed ProcessSysEx()
+@@ -280,22 +298,28 @@
+   return val;
+ }
+ 
+-void IPlugAUv3::AttachInputBuffers(AudioBufferList* pInBufList)
++int IPlugAUv3::AttachInputBuffers(AudioBufferList* pInBufList, int chanIdx, bool connected)
+ {
+-  int chanIdx = 0;
++  const int startIdx = chanIdx;
+   
+   if (pInBufList)
+   {
+     for (int i = 0; i < pInBufList->mNumberBuffers; i++)
+     {
+-      int nConnected = pInBufList->mBuffers[i].mNumberChannels;
+-      SetChannelConnections(ERoute::kInput, chanIdx, nConnected, true);
+-      AttachBuffers(ERoute::kInput, chanIdx, nConnected, (float**) &(pInBufList->mBuffers[i].mData), GetBlockSize());
+-      chanIdx += nConnected;
++      int nChans = pInBufList->mBuffers[i].mNumberChannels;
++      SetChannelConnections(ERoute::kInput, chanIdx, nChans, connected);
++      if (connected)
++        AttachBuffers(ERoute::kInput, chanIdx, nChans, (float**) &(pInBufList->mBuffers[i].mData), GetBlockSize());
++      chanIdx += nChans;
+     }
+-    
+-    SetChannelConnections(ERoute::kInput, chanIdx, MaxNChannels(kInput) - chanIdx, false);
+   }
++  
++  return chanIdx - startIdx;
++}
++
++void IPlugAUv3::DisconnectInputBuffers(int chanIdx)
++{
++  SetChannelConnections(ERoute::kInput, chanIdx, MaxNChannels(kInput) - chanIdx, false);
+ }
+ 
+ void IPlugAUv3::AttachOutputBuffers(AudioBufferList* pOutBufList, uint32_t busNumber)
+@@ -313,7 +337,7 @@
+       AttachBuffers(ERoute::kOutput, (busNumber * numChannelsInBus) + chanIdx, nConnected, (float**) &(pOutBufList->mBuffers[i].mData), GetBlockSize());
+       chanIdx += nConnected;
+     }
+-    SetChannelConnections(ERoute::kInput, chanIdx, MaxNChannels(kOutput) - chanIdx, false);
++    SetChannelConnections(ERoute::kOutput, (busNumber * numChannelsInBus) + chanIdx, MaxNChannels(kOutput) - ((busNumber * numChannelsInBus) + chanIdx), false);
+   }
+ }
+ 

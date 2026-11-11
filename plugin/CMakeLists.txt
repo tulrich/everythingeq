@@ -15,6 +15,10 @@ endif()
 # deployment instead of iPlug2's (see eeq_sign_and_install below).
 set(IPLUG_DEPLOY_PLUGINS OFF CACHE BOOL "Handled by EEQ_INSTALL_PLUGINS" FORCE)
 option(EEQ_INSTALL_PLUGINS "Copy built plugins into the per-user plug-in folders" OFF)
+# Experimental: an AUv3 app extension embedded in the standalone app
+# (macOS). It registers as a separate component ('EvE3') so it can sit
+# beside the AUv2.
+option(EEQ_AUV3 "Build the AUv3 app extension (macOS, experimental)" OFF)
 
 include(${IPLUG2_DIR}/iPlug2.cmake)
 find_package(iPlug2 REQUIRED)
@@ -27,6 +31,11 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_subdirectory(../dsp ${CMAKE_BINARY_DIR}/dsp)
 add_subdirectory(../model ${CMAKE_BINARY_DIR}/model)
+
+set(_formats APP VST3 CLAP AU)
+if(EEQ_AUV3)
+  list(APPEND _formats AUV3)
+endif()
 
 iplug_add_plugin(${PROJECT_NAME}
   SOURCES
@@ -49,12 +58,37 @@ iplug_add_plugin(${PROJECT_NAME}
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
-  FORMATS APP VST3 CLAP AU
+  FORMATS ${_formats}
   LINK eeq_model
 )
 
 # macOS: ad-hoc sign each bundle (ABOUT.md D11), then optionally install it.
 if(APPLE)
+  # The AUv3's framework and app extension go inside the app. iPlug2's own
+  # embedding step only runs when the app relinks, so this target refreshes
+  # them on every build, then signs inside out (the extension must be
+  # sandboxed to load).
+  if(EEQ_AUV3 AND TARGET ${PROJECT_NAME}-app)
+    set(_app "${CMAKE_BINARY_DIR}/out/EverythingEQ.app")
+    set(_fw "${_app}/Contents/Frameworks/EverythingEQAU.framework")
+    set(_appex "${_app}/Contents/PlugIns/EverythingEQAUv3.appex")
+    add_custom_target(${PROJECT_NAME}-auv3-embed ALL
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${_fw}" "${_appex}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_app}/Contents/Frameworks"
+        "${_app}/Contents/PlugIns"
+      COMMAND cp -R "${CMAKE_BINARY_DIR}/out/EverythingEQAU.framework" "${_fw}"
+      COMMAND cp -R "${CMAKE_BINARY_DIR}/out/EverythingEQAUv3.appex" "${_appex}"
+      COMMAND codesign --force --sign - --timestamp=none "${_fw}"
+      COMMAND codesign --force --sign - --timestamp=none
+        --entitlements "${CMAKE_CURRENT_SOURCE_DIR}/resources/EverythingEQ-AUv3.entitlements"
+        "${_appex}"
+      COMMAND codesign --force --sign - --timestamp=none "${_app}"
+      COMMENT "Embedding and signing the AUv3"
+      VERBATIM)
+    add_dependencies(${PROJECT_NAME}-auv3-embed ${PROJECT_NAME}-app
+      ${PROJECT_NAME}AUv3-appex ${PROJECT_NAME}AU-framework)
+  endif()
+
   set(_plugins "au|EverythingEQ.component|Components"
                "vst3|EverythingEQ.vst3|VST3"
                "clap|EverythingEQ.clap|CLAP"
