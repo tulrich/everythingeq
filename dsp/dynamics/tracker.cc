@@ -41,7 +41,7 @@ void Tracker::Prepare(double sample_rate) {
 
   ring_.assign(kWindow, 0.0);
   frame_.assign(kWindow, 0.0);
-  diff_.assign(kWindow / 2 + 1, 0.0);
+  diff_.assign(kWindow - kYinWidth, 0.0);  // Lags 0 .. tau_max.
   lpc_len_ =
       std::min(kWindow, static_cast<int>(std::lround(kLpcSeconds * fs_d_)));
   lpc_window_.resize(lpc_len_);

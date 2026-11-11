@@ -233,4 +233,3 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
     - Expose "Harmonic n" directly instead of the 27.5 Hz arithmetic. This could be a per-band option or a display mode for X when the band follows a Pitch group.
     - Tracking only works on monophonic sources, and a glide or octave errors show up as audible jumps. Faster attack/release suits this better than the vowel defaults.
     - Several bands on one Pitch group could form a harmonic comb (e.g. odd harmonics only).
-    - Extend the pitch tracker's 40 Hz floor (lowered from 50 Hz with a ~48 ms window, so it follows a 4-string's low E at 41 Hz) down to about 30 Hz, for drop D (37 Hz) and a 5-string's low B (31 Hz). YIN needs about two periods, so this means a longer window (~65 ms), which adds tracking lag and CPU. Bass is a main Harmonic EQ use case (ABOUT.md use case 7).
