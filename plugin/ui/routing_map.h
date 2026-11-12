@@ -22,9 +22,9 @@ namespace eeq {
 // The dynamics routing, drawn like a subway map (ABOUT.md section 4).
 // Bands are columns, left to right like the ribbon above the graph; groups
 // are rows.  Three source lines at the left (Input, Band Sum, Sidechain)
-// each feed a group's head, and the group's track runs right across the
-// bands.  An assignment is a line in the band's color leaving the track
-// with a rounded corner and dropping to the band's port at the bottom,
+// each feed a group's head.  An assignment is a line in the band's color
+// that runs right from the head in its own lane, then turns down with a
+// rounded corner and drops to the band's port at the bottom,
 // ending in an arrowhead (filled = Dyn A, the left port; hollow = Dyn B,
 // the right one).  Under the ports: each band's type icon and its
 // assignments' targets and ranges.
@@ -305,26 +305,30 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Group tracks, from the head right to the last band that joins them.
+  // Each connection runs from its group's head in its own lane, in the
+  // band's color.  The lanes of a group are stacked around its row with the
+  // leftmost port at the bottom, so each line turns down without crossing
+  // the lanes that continue right above it.
+  std::array<std::array<float, 2>, kNumBands> lane_y{};
   for (int gi = 0; gi < kNumGroups; ++gi) {
-    const float l = Head(gi).R;
-    float r = l + 8.f;
-    bool joined = false;
-    for (int b = 0; b < kNumBands; ++b) {
+    std::array<std::pair<int, int>, 2 * kNumBands> joined{};
+    int n = 0;
+    for (int b = 0; b < kNumBands; ++b) {  // Left to right.
       for (int s = 0; s < 2; ++s) {
-        if (ports[b][s].on && ports[b][s].group == gi) {
-          r = std::max(r, PortX(b, s) - kCorner);
-          joined = true;
-        }
+        if (ports[b][s].on && ports[b][s].group == gi) joined[n++] = {b, s};
       }
     }
-    // Selected or hovered tracks stand out; others in use match the source
-    // lines, and an unused stub stays dark.
-    const ig::IColor c = gi == sel_group   ? theme::kAccent
-                         : GroupLit(v, gi) ? theme::kText
-                         : joined          ? theme::kTextDim
-                                           : theme::kGridStrong;
-    g.DrawLine(c, l, GroupY(gi), r, GroupY(gi), nullptr, 3.f);
+    const float sp = n > 1 ? std::min(3.5f, Row() * 0.6f / (n - 1)) : 0.f;
+    for (int k = 0; k < n; ++k) {
+      const auto [b, s] = joined[k];
+      lane_y[b][s] = GroupY(gi) + (0.5f * (n - 1) - k) * sp;
+    }
+    if (n == 0) {
+      // An unused group shows a dark stub (the selected one in the accent).
+      const float l = Head(gi).R;
+      g.DrawLine(gi == sel_group ? theme::kAccent : theme::kGridStrong, l,
+                 GroupY(gi), l + 8.f, GroupY(gi), nullptr, 3.f);
+    }
   }
 
   // Group heads: shape, name, detect mode, live D and the applied gain.
@@ -393,16 +397,34 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "B",
              ig::IRECT(mRECT.L + kHeadL, LabelY(1), mRECT.L + kBandsL - 4.f,
                        LabelY(1) + 9.f));
+  auto band_color = [&](int b) {
+    const bool off =
+        static_cast<BandType>(
+            std::lround(v[BandParamId(b, BandField::kType)])) == BandType::kOff;
+    float a = off ? 0.45f : 1.f;
+    if (any_hover && !BandLit(v, b)) a *= 0.3f;
+    if (v[BandParamId(b, BandField::kBypass)] >= 0.5) a *= 0.55f;
+    return theme::BandColor(b).WithOpacity(a);
+  };
+  auto line_width = [&](int b) {
+    return BandLit(v, b) || b == sel_band ? 2.6f : 2.f;
+  };
+  // Lanes first, so the drops below break the lanes they cross.
+  for (int b = 0; b < kNumBands; ++b) {
+    for (int s = 0; s < 2; ++s) {
+      const Port& p = ports[b][s];
+      if (!p.on) continue;
+      const float y = lane_y[b][s];
+      g.DrawLine(band_color(b), Head(p.group).R, y, PortX(b, s) - kCorner, y,
+                 nullptr, line_width(b));
+    }
+  }
   for (int b = 0; b < kNumBands; ++b) {
     const auto type =
         static_cast<BandType>(std::lround(v[BandParamId(b, BandField::kType)]));
     const bool off = type == BandType::kOff;
     const bool bypassed = v[BandParamId(b, BandField::kBypass)] >= 0.5;
-    const bool lit = BandLit(v, b) || b == sel_band;
-    float a = off ? 0.45f : 1.f;
-    if (any_hover && !BandLit(v, b)) a *= 0.3f;
-    if (bypassed) a *= 0.55f;
-    const ig::IColor color = theme::BandColor(b).WithOpacity(a);
+    const ig::IColor color = band_color(b);
     const ig::IColor halo = b == sel_band   ? theme::kPanelRaised
                             : BandLit(v, b) ? lit_col
                                             : background_;
@@ -421,9 +443,9 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
                      py - 3.f, 2.5f);
         continue;
       }
-      const float y = GroupY(p.group);
-      const float w = lit ? 2.6f : 2.f;
-      g.DrawLine(halo, x, y + kCorner, x, py - kArrow, nullptr, 7.f);
+      const float y = lane_y[b][s];
+      const float w = line_width(b);
+      g.DrawLine(halo, x, y + kCorner, x, py - kArrow, nullptr, w + 2.5f);
       if (bypassed) {
         g.DrawDottedLine(color, x, y + kCorner, x, py - kArrow, nullptr, w,
                          3.f);
