@@ -124,7 +124,7 @@ ParamValues DefaultParamValues();
 double SanitizeParamValue(int id, double value);
 
 // Host values -> engine parameters.  `mono_output` applies the mono -> mono
-// rules (D10): output mode forced to Stereo and per-band Chan ignored.
+// rules (D10): Split L/R sums its two sides and per-band Chan is ignored.
 EngineParams BuildEngineParams(const ParamValues& values, bool mono_output);
 
 // Engine parameters -> host values (used to load presets).  Slots a band type

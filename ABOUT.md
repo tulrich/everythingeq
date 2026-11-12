@@ -114,7 +114,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 * **Supported layouts:** stereo → stereo, mono → stereo, and mono → mono. The sidechain may be mono or stereo in each layout (a mono sidechain feeds both detector channels).
   * *Mono → stereo:* the input is copied to both channels, then everything behaves as in stereo → stereo. Per-band `Chan` = `Side` (or `L`/`R` on identical channels) is legal but has the obvious effect.
-  * *Mono → mono:* the engine runs one channel. `Split L/R` plays as `Stereo` (`Split Side` and `Residual` work as usual); per-band `Chan` is ignored; `Link` has no effect.
+  * *Mono → mono:* the engine runs one channel. `Split L/R` plays the split side plus the residual, the two halves summed back together (`Split Side` and `Residual` work as usual); per-band `Chan` is ignored; `Link` has no effect.
 
 * **Series chain:** in `Stereo` output mode, bands 1→8 process in series.
 * **Split** (the other output modes): bands 1–4 (in series) pick the **split side** $A$ from the input $x$, and bands 5–8 (in series) shape the **residual** $B$, which starts as $x - A$. With no band on (and not bypassed) among 1–4, nothing is split off ($A = 0$). If the only band on among 1–4 is an LP or HP at 24 dB/oct (Linkwitz-Riley), the residual instead starts as its complementary LR band, for a steep crossover. Use filter types (LP, HP, BP, Notch) to pick the split side; a gain-type band there splits off the whole signal with its boost or cut.
@@ -260,7 +260,7 @@ The layout reads left to right like the signal: the dynamics (routing and groups
 | D7 | Per-band `Dyn Target` and `Option` parameters. | DynRange needs a defined unit per band (dB / octaves / morph index). |
 | D8 | DSP in a framework-free C++20 library. | Unit-testable offline; insulates the DSP from wrapper choices. |
 | D9 | Global, non-automatable detector Lookahead (0–10 ms, default 0), implemented as an audio-path delay reported to the host; Internal Band-Sum detection reads the dry input. | Lets dynamics catch transients before they arrive; one global value because a plugin reports one latency; default 0 preserves zero latency. |
-| D10 | I/O layouts: stereo → stereo, mono → stereo, mono → mono; mono or stereo sidechain. Mono → mono plays `Split L/R` as `Stereo`. | Logic users often insert plugins on mono tracks; Split L/R needs two output channels. |
+| D10 | I/O layouts: stereo → stereo, mono → stereo, mono → mono; mono or stereo sidechain. Mono → mono plays `Split L/R` as the split side plus the residual. | Logic users often insert plugins on mono tracks; Split L/R needs two output channels. |
 | D11 | Free and open source; unsigned builds (ad-hoc signed on macOS) on GitHub Releases, with install notes for clearing the macOS quarantine flag. Developer ID signing and notarization are optional later. | No signing certificates are available; ad-hoc signing is enough for Apple Silicon to load the plugins locally. |
 | D12 | Manual host testing in Logic Pro (AU) on macOS only. VST3 and CLAP are covered by `pluginval` and `clap-validator` in CI on macOS and Windows; Reaper's free evaluation on macOS is an optional extra check for VST3/CLAP sidechain routing. | That is the hardware and software available. |
 | D13 | Listen precedence: Bypass > SC Listen > Delta > Solo; SC Listen and Solo are mutually exclusive in the UI. | Makes simultaneous listen modes well defined. |

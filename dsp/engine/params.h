@@ -110,6 +110,9 @@ struct GroupParams {
 
 struct GlobalParams {
   OutputMode output_mode = OutputMode::kStereo;
+  // Split L/R into a mono output: play the split side plus the residual (on
+  // both channels) instead of one per channel.
+  bool sum_split = false;
   double global_scale = 1.0;
   bool delta = false;
   bool bypass = false;

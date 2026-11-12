@@ -156,16 +156,14 @@ TEST_CASE("Factory presets parse and are representable", "[params]") {
   }
 }
 
-TEST_CASE("Mono output forces Stereo mode and ignores Chan", "[params]") {
+TEST_CASE("Mono output ignores Chan", "[params]") {
   ParamValues v = DefaultParamValues();
-  v[GlobalParamId(GlobalField::kOutputMode)] =
-      static_cast<int>(OutputMode::kSplitLr);
   v[BandParamId(0, BandField::kType)] = static_cast<int>(BandType::kPeak);
   v[BandParamId(0, BandField::kY)] = 0.75;  // +15 dB
   v[BandParamId(0, BandField::kChan)] = static_cast<int>(Chan::kSide);
   const EngineParams mono = BuildEngineParams(v, true);
-  REQUIRE(mono.global.output_mode == OutputMode::kStereo);
   REQUIRE(mono.bands[0].chan == Chan::kStereo);
+  REQUIRE_FALSE(mono.global.sum_split);
 
   // Mono -> mono output equals the left channel of the stereo engine fed a
   // dual-mono signal with the band on both channels.
@@ -176,13 +174,52 @@ TEST_CASE("Mono output forces Stereo mode and ignores Chan", "[params]") {
   e.Prepare(48000.0);
   const Stereo y = Run(e, x);
   v[BandParamId(0, BandField::kChan)] = static_cast<int>(Chan::kStereo);
-  v[GlobalParamId(GlobalField::kOutputMode)] =
-      static_cast<int>(OutputMode::kStereo);
   Engine ref;
   ref.SetParams(BuildEngineParams(v, false));
   ref.Prepare(48000.0);
   const Stereo z = Run(ref, x);
   REQUIRE(MaxAbsDiff(y, z) == 0.0);
+}
+
+TEST_CASE("Mono output plays Split L/R as split side plus residual",
+          "[params]") {
+  ParamValues v = DefaultParamValues();
+  v[GlobalParamId(GlobalField::kOutputMode)] =
+      static_cast<int>(OutputMode::kSplitLr);
+  v[BandParamId(0, BandField::kType)] = static_cast<int>(BandType::kPeak);
+  v[BandParamId(0, BandField::kBypass)] = 0.0;
+  v[BandParamId(0, BandField::kY)] = 0.75;  // +15 dB
+  const EngineParams mono = BuildEngineParams(v, true);
+  REQUIRE(mono.global.output_mode == OutputMode::kSplitLr);
+  REQUIRE(mono.global.sum_split);
+
+  Stereo x = Noise(24000, 0.5, 31);
+  x.r = x.l;
+  Engine e;
+  e.SetParams(mono);
+  e.Prepare(48000.0);
+  const Stereo y = Run(e, x);
+  // With bands 5-8 flat, the split side and the residual add back up to the
+  // input.
+  REQUIRE(MaxAbsDiff(y, x) < 1e-5);
+
+  // With a residual band, it is L + R of the stereo Split L/R output.
+  v[BandParamId(kSplitBands, BandField::kType)] =
+      static_cast<int>(BandType::kHighShelf);
+  v[BandParamId(kSplitBands, BandField::kY)] = 0.3;  // -6 dB
+  Engine e2;
+  e2.SetParams(BuildEngineParams(v, true));
+  e2.Prepare(48000.0);
+  const Stereo y2 = Run(e2, x);
+  Engine ref;
+  ref.SetParams(BuildEngineParams(v, false));
+  ref.Prepare(48000.0);
+  const Stereo z = Run(ref, x);
+  Stereo sum = z;
+  for (size_t i = 0; i < sum.l.size(); ++i)
+    sum.l[i] = sum.r[i] = z.l[i] + z.r[i];
+  REQUIRE(MaxAbsDiff(y2, sum) < 1e-5);
+  REQUIRE(MaxAbsDiff(y2, x) > 0.01);
 }
 
 TEST_CASE("Display text follows the band type", "[params]") {

@@ -318,11 +318,9 @@ EngineParams BuildEngineParams(const ParamValues& v, bool mono_output) {
   }
   auto at = [&](GlobalField f) { return v[GlobalParamId(f)]; };
   GlobalParams& gl = p.global;
-  // A mono output can't carry Split L/R; it plays the whole chain.
+  // A mono output can't carry Split L/R; it plays both sides summed.
   gl.output_mode = static_cast<OutputMode>(Int(at(GlobalField::kOutputMode)));
-  if (mono_output && gl.output_mode == OutputMode::kSplitLr) {
-    gl.output_mode = OutputMode::kStereo;
-  }
+  gl.sum_split = mono_output && gl.output_mode == OutputMode::kSplitLr;
   gl.global_scale = at(GlobalField::kGlobalScale) / 100.0;
   gl.delta = at(GlobalField::kDelta) >= 0.5;
   gl.bypass = at(GlobalField::kBypass) >= 0.5;

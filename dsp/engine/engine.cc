@@ -211,6 +211,10 @@ Engine::Frame Engine::Encode(const Frame& split, const Frame& rest) const {
     case OutputMode::kStereo:
       return rest;
     case OutputMode::kSplitLr:
+      if (params_.global.sum_split) {
+        const double sum = split[0] + rest[0];
+        return {sum, sum};
+      }
       return {split[0], rest[0]};
     case OutputMode::kSplitSide:
       return split;
