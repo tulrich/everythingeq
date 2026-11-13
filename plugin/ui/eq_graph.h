@@ -34,7 +34,7 @@ namespace eeq {
 // The selected band shows where each Dyn assignment takes it at full
 // dynamics as a ring labeled A or B; dragging the ring sets that Dyn Range
 // along the target's axis: vertical for Gain, horizontal for Freq and
-// Morph.  While the ring is too close to the node to grab (e.g. Range 0), a
+// Morph; the other axis moves the node.  While the ring is too close to the node to grab (e.g. Range 0), a
 // small A or B tab beside the node takes its place; dragging it away from 0
 // assigns the band to its Dyn Group.  Option-dragging a node also sets its
 // Dyn Range, and Cmd-dragging (Ctrl on Windows) its Dyn B Range.
@@ -191,6 +191,10 @@ class EqGraph final : public iplug::igraphics::IControl {
     drag_band_ = drag_dyn_ >= 0 ? model_.SelectedBand() : HitNode(x, y);
     if (drag_band_ < 0) return;
     model_.SelectBand(drag_band_);
+    // Drag relative to the node's own position, so it doesn't jump.
+    const auto p = NodePosition(drag_band_);
+    drag_x_ = p ? p->x : x;
+    drag_y_ = p ? p->y : y;
     if (drag_dyn_ < 0) drag_dyn_ = mod.A ? 0 : DynBModifier(mod) ? 1 : -1;
     if (drag_dyn_ >= 0) {
       // An assignment that's off starts from Range 0 and turns on once the
@@ -205,10 +209,6 @@ class EqGraph final : public iplug::igraphics::IControl {
       SetDirty(false);
       return;
     }
-    // Drag relative to the node's own position, so it doesn't jump.
-    const auto p = NodePosition(drag_band_);
-    drag_x_ = p ? p->x : x;
-    drag_y_ = p ? p->y : y;
     for (int id : DragParams(drag_band_)) model_.BeginEdit(id);
     SetDirty(false);
   }
@@ -229,37 +229,8 @@ class EqGraph final : public iplug::igraphics::IControl {
       Refresh();
       return;
     }
-    const BandParams& bp = params_.bands[drag_band_];
-    const int x_id = BandParamId(drag_band_, BandField::kX);
-    const int y_id = BandParamId(drag_band_, BandField::kY);
-    if (const auto m = SlotMappingFor(bp.type, Slot::kX)) {
-      if (std::string(m->unit) == "Hz") {
-        model_.SetEdit(x_id, SlotFromPhysical(*m, XToFreq(drag_x_)));
-      } else {  // Vowel morph: full width = full range.
-        model_.SetEdit(
-            x_id, std::clamp(values_[x_id] + dx * gear / mRECT.W(), 0.0, 1.0));
-      }
-    }
-    if (DragsQ(bp.type)) {
-      const SlotMapping q = *SlotMappingFor(bp.type, Slot::kZ);
-      model_.SetEdit(
-          BandParamId(drag_band_, BandField::kZ),
-          SlotFromPhysical(
-              q, std::pow(10.0, YToDb(drag_y_) / QDbScale(drag_band_))));
-    } else if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
-      // The node is drawn at the scaled gain; near zero Scale it can't
-      // move the curve, so leave the gain alone.
-      const double k = GainScale(drag_band_);
-      if (std::abs(k) >= kMinDragGainScale) {
-        if (std::string(m->unit) == "dB") {
-          model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_) / k));
-        } else {  // Phon: full height = full range.
-          model_.SetEdit(
-              y_id,
-              std::clamp(values_[y_id] - dy * gear / mRECT.H() / k, 0.0, 1.0));
-        }
-      }
-    }
+    DragNodeX(dx * gear);
+    DragNodeY(dy * gear);
     Refresh();
   }
 
@@ -320,17 +291,63 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   // Moves the dragged Dyn Range with the pointer, in the units of the axis
   // its target moves the node along.
+  // Moves the dragged band's node horizontally (Freq or Morph) to drag_x_;
+  // `dx` is the step, for slots that move relatively.
+  void DragNodeX(float dx) {
+    const BandParams& bp = params_.bands[drag_band_];
+    const int x_id = BandParamId(drag_band_, BandField::kX);
+    if (const auto m = SlotMappingFor(bp.type, Slot::kX)) {
+      if (std::string(m->unit) == "Hz") {
+        model_.SetEdit(x_id, SlotFromPhysical(*m, XToFreq(drag_x_)));
+      } else {  // Vowel morph: full width = full range.
+        model_.SetEdit(x_id,
+                       std::clamp(values_[x_id] + dx / mRECT.W(), 0.0, 1.0));
+      }
+    }
+  }
+
+  // Moves the dragged band's node vertically (Gain, or Q for LP and HP) to
+  // drag_y_; `dy` is the step, for slots that move relatively.
+  void DragNodeY(float dy) {
+    const BandParams& bp = params_.bands[drag_band_];
+    const int y_id = BandParamId(drag_band_, BandField::kY);
+    if (DragsQ(bp.type)) {
+      const SlotMapping q = *SlotMappingFor(bp.type, Slot::kZ);
+      model_.SetEdit(
+          BandParamId(drag_band_, BandField::kZ),
+          SlotFromPhysical(
+              q, std::pow(10.0, YToDb(drag_y_) / QDbScale(drag_band_))));
+    } else if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
+      // The node is drawn at the scaled gain; near zero Scale it can't
+      // move the curve, so leave the gain alone.
+      const double k = GainScale(drag_band_);
+      if (std::abs(k) >= kMinDragGainScale) {
+        if (std::string(m->unit) == "dB") {
+          model_.SetEdit(y_id, SlotFromPhysical(*m, YToDb(drag_y_) / k));
+        } else {  // Phon: full height = full range.
+          model_.SetEdit(
+              y_id, std::clamp(values_[y_id] - dy / mRECT.H() / k, 0.0, 1.0));
+        }
+      }
+    }
+  }
+
+  // Dragging a Dyn handle sets its range along the target's axis; the other
+  // axis moves the node, as dragging the node would.
   void DragDynRange(float dx, float dy) {
     const DynTarget target = DynTargetOf(drag_dyn_);
     const double oct_per_px = std::log2(kMaxHz / kMinHz) / mRECT.W();
     switch (target) {
       case DynTarget::kGain:
         drag_range_ -= dy * 2.0 * kRangeDb / mRECT.H();
+        DragNodeX(dx);
         break;
       case DynTarget::kFreq:
         drag_range_ += dx * oct_per_px;
+        DragNodeY(dy);
         break;
       case DynTarget::kMorph:
+        DragNodeY(dy);
         if (params_.bands[drag_band_].type == BandType::kVowel) {
           // As the node's own Morph drag: full width = full range.
           const SlotMapping m = *SlotMappingFor(BandType::kVowel, Slot::kX);
@@ -532,17 +549,17 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   std::vector<int> DragParams(int band) const {
+    const int node_y = BandParamId(
+        band, DragsQ(params_.bands[band].type) ? BandField::kZ : BandField::kY);
     if (drag_dyn_ >= 0) {
-      return {DynRangeId(band, drag_dyn_), DynOnId(band, drag_dyn_)};
+      return {DynRangeId(band, drag_dyn_), DynOnId(band, drag_dyn_),
+              BandParamId(band, BandField::kX), node_y};
     }
     if (drag_edge_ >= 0) {
       return {BandParamId(band, BandField::kX),
               BandParamId(band, BandField::kZ)};
     }
-    return {
-        BandParamId(band, BandField::kX),
-        BandParamId(band, DragsQ(params_.bands[band].type) ? BandField::kZ
-                                                           : BandField::kY)};
+    return {BandParamId(band, BandField::kX), node_y};
   }
 
   // A Band Shelf's edges (Hz): the half-gain points of its two shelves.
