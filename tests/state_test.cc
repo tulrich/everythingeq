@@ -157,6 +157,21 @@ TEST_CASE("Version 5 Split M/S becomes Split L/R", "[state]") {
   REQUIRE(*v == expected);
 }
 
+TEST_CASE("Version 6 Off bands become bypassed default bands", "[state]") {
+  // v6 Type indices: 0 Off, 1 Peak, 2 Low Shelf, ...
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 6,
+      "params": {"band2.type": 0, "band2.x": 0.9, "band2.bypass": 0,
+                 "band3.type": 2, "band3.x": 0.25}})");
+  REQUIRE(v.has_value());
+  ParamValues expected = DefaultParamValues();
+  expected[BandParamId(1, BandField::kBypass)] = 1;
+  expected[BandParamId(2, BandField::kType)] =
+      static_cast<int>(BandType::kLowShelf);
+  expected[BandParamId(2, BandField::kX)] = 0.25;
+  REQUIRE(*v == expected);
+}
+
 TEST_CASE("Dyn On decides whether a band follows its group", "[state]") {
   ParamValues v = DefaultParamValues();
   for (int b = 0; b < kNumBands; ++b) {

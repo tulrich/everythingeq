@@ -30,8 +30,9 @@ void MigrateState(int version, nlohmann::json& params) {
     }
   }
   if (version < 3) {
-    // Version 3 inserted Band Shelf after High Shelf in the Type enum.
-    constexpr int kBandShelfIndex = static_cast<int>(BandType::kBandShelf);
+    // Version 3 inserted Band Shelf after High Shelf in the Type enum (at
+    // index 4, after Off, Peak, Low Shelf and High Shelf).
+    constexpr int kBandShelfIndex = 4;
     for (int b = 0; b < kNumBands; ++b) {
       const auto it = params.find("band" + std::to_string(b + 1) + ".type");
       if (it == params.end() || !it->is_number()) continue;
@@ -51,8 +52,7 @@ void MigrateState(int version, nlohmann::json& params) {
       if (type == 5 || type == 6) {
         params[k + "option"] = static_cast<int>(FilterSlope::k12);
       } else if (type == 9 || type == 10) {
-        *it = type == 9 ? static_cast<int>(BandType::kLp)
-                        : static_cast<int>(BandType::kHp);
+        *it = type == 9 ? 5 : 6;  // v4 LP and HP.
         params[k + "option"] = static_cast<int>(FilterSlope::k24);
         params[k + "z"] = kSlotDefault;  // Q 0.707: LR4.
       } else if (type > 10) {
@@ -80,6 +80,27 @@ void MigrateState(int version, nlohmann::json& params) {
     if (it != params.end() && it->is_number() &&
         std::lround(it->get<double>()) == 2) {
       *it = static_cast<int>(OutputMode::kSplitLr);
+    }
+  }
+  if (version < 7) {
+    // Version 7 dropped the Off band type (index 0).  An Off band becomes
+    // the default layout's band, bypassed.
+    const std::vector<ParamSpec>& table = ParamTable();
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::string k = "band" + std::to_string(b + 1) + ".";
+      const auto it = params.find(k + "type");
+      if (it == params.end() || !it->is_number()) continue;
+      const int type = static_cast<int>(std::lround(it->get<double>()));
+      if (type > 0) {
+        *it = type - 1;
+        continue;
+      }
+      for (const BandField f : {BandField::kType, BandField::kX, BandField::kY,
+                                BandField::kZ, BandField::kOption}) {
+        const ParamSpec& s = table[BandParamId(b, f)];
+        params[s.key] = s.default_value;
+      }
+      params[k + "bypass"] = 1.0;
     }
   }
 }

@@ -11,8 +11,11 @@ inline constexpr int kNumChannels = 2;
 inline constexpr int kControlBlock = 16;  // samples per control sub-block
 inline constexpr double kMaxLookaheadMs = 10.0;
 
+// A band's filter type.  Every band always has one of the types before
+// kOff; kOff (no filter) is internal: what a bypassed band fades to, and a
+// band a preset file leaves out.  The Type parameter's index is the enum
+// value, so kOff stays last.
 enum class BandType {
-  kOff,
   kPeak,
   kLowShelf,
   kHighShelf,
@@ -27,7 +30,9 @@ enum class BandType {
   kKWeight,
   kVintageLow,
   kVintageHigh,
+  kOff,
 };
+inline constexpr int kNumBandTypes = static_cast<int>(BandType::kOff);
 
 enum class DynTarget { kGain, kFreq, kMorph };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };

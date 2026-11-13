@@ -100,7 +100,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     group_active_.fill(false);
     group_gain_db_.fill(0.f);
     for (const BandParams& bp : params_.bands) {
-      if (bp.type == BandType::kOff || bp.bypass) continue;
+      if (bp.bypass) continue;
       for (int g = 0; g < kNumGroups; ++g) {
         if (!SubscribesTo(bp, g)) continue;
         any_dynamic_ = true;
@@ -289,14 +289,16 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   void OnMouseDblClick(float x, float y,
                        const iplug::igraphics::IMouseMod& mod) override {
+    // Adds a band: the first bypassed one becomes a Peak at the click.
     if (HitNode(x, y) >= 0) return;
     for (int b = 0; b < kNumBands; ++b) {
-      if (params_.bands[b].type != BandType::kOff) continue;
+      if (!params_.bands[b].bypass) continue;
       const SlotMapping freq = *SlotMappingFor(BandType::kPeak, Slot::kX);
       const SlotMapping gain = *SlotMappingFor(BandType::kPeak, Slot::kY);
       const int type_id = BandParamId(b, BandField::kType);
       model_.SetValueGesture(type_id, static_cast<double>(BandType::kPeak) /
                                           ParamTable()[type_id].max);
+      model_.SetValueGesture(BandParamId(b, BandField::kBypass), 0.0);
       model_.SetValueGesture(BandParamId(b, BandField::kX),
                              SlotFromPhysical(freq, XToFreq(x)));
       const double k = params_.global.global_scale;
@@ -436,7 +438,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     live_marker_hz_.fill(0.0);
     for (int b = 0; b < kNumBands; ++b) {
       const BandParams& bp = params_.bands[b];
-      if (bp.type == BandType::kOff || bp.bypass) continue;
+      if (bp.bypass) continue;
       const auto m = SlotMappingFor(bp.type, Slot::kX);
       if (!m || std::string(m->unit) != "Hz") continue;
       auto control = [&](int group) {

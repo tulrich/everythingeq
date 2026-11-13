@@ -429,16 +429,12 @@ void Editor::Connect(int slot) {
 
 void Editor::LayoutCards(const ParamValues& v, bool force) {
   const int band = std::max(0, model_.SelectedBand());
-  const bool off =
-      static_cast<BandType>(Int(v[BandParamId(band, BandField::kType)])) ==
-      BandType::kOff;
   std::array<bool, 2> used{}, gain{};
   for (int slot = 0; slot < 2; ++slot) {
     const bool a = slot == 0;
     const auto target = static_cast<DynTarget>(Int(v[BandParamId(
         band, a ? BandField::kDynTarget : BandField::kDynBTarget)]));
     used[slot] =
-        !off &&
         v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     gain[slot] = used[slot] && target == DynTarget::kGain;
   }
@@ -448,8 +444,8 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   const bool compact = layout_.strip.compact;
   std::array<int, 2> state{};
   for (int slot = 0; slot < 2; ++slot) {
-    state[slot] = used[slot] | (compact << 1) | (show << 2) | (off << 3) |
-                  ((makeup_slot == slot) << 4);
+    state[slot] = used[slot] | (compact << 1) | (show << 2) |
+                  ((makeup_slot == slot) << 3);
   }
   if (!force && state == card_state_) return;
   card_state_ = state;
@@ -471,7 +467,6 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
     const float y = in.t + 17.f;
     Place(c.connect, show && !used[slot],
           ig::IRECT(in.l, y, in.r, std::min(in.b, y + 40.f)));
-    c.connect->SetDisabled(off);
     if (!compact) {
       // Group and target share a row; Range and Makeup below, as dials
       // when they fit.
@@ -656,7 +651,6 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   }
   const auto type =
       static_cast<BandType>(Int(v[BandParamId(band, BandField::kType)]));
-  const bool off = type == BandType::kOff;
   const int group = Int(v[BandParamId(band, BandField::kDynGroup)]);
   const auto target =
       static_cast<DynTarget>(Int(v[BandParamId(band, BandField::kDynTarget)]));
@@ -676,7 +670,7 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   }
   const ig::IColor color = theme::BandColor(band);
   for (const BandFieldControl& f : band_fields_) {
-    bool enabled = !off || f.field == BandField::kType;
+    bool enabled = true;
     std::optional<SlotMapping> m;
     switch (f.field) {
       case BandField::kX:
@@ -727,10 +721,10 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   };
   const GroupControls live = model_.LiveControls();
   std::string now_a, now_b;
-  if (!off && range != 0.0) {
+  if (range != 0.0) {
     now_a = FormatSlotValue(range_mapping, live[group] * range * scale(target));
   }
-  if (!off && range_b != 0.0) {
+  if (range_b != 0.0) {
     now_b = FormatSlotValue(range_b_mapping,
                             live[group_b] * range_b * scale(target_b));
   }
@@ -747,21 +741,17 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   cards_[0].panel->SetHighlight(!now_a.empty() && hover_group == group);
   cards_[1].panel->SetHighlight(!now_b.empty() && hover_group == group_b);
   for (Card& c : cards_) {
-    c.connect->SetLabel(off ? "Band is off"
-                            : "+ Connect to G" +
-                                  std::to_string(selected_group_ + 1));
+    c.connect->SetLabel("+ Connect to G" + std::to_string(selected_group_ + 1));
   }
 
   // The small tiers' label: number, type and its settings.
   std::string mini = std::to_string(band + 1) + " \xc2\xb7 " +
                      ParamTable()[BandParamId(band, BandField::kType)]
                          .enum_labels[static_cast<size_t>(type)];
-  if (!off) {
-    for (const auto [field, slot] : {std::pair{BandField::kX, Slot::kX},
-                                     std::pair{BandField::kY, Slot::kY}}) {
-      if (SlotMappingFor(type, slot)) {
-        mini += "  " + Display(BandParamId(band, field));
-      }
+  for (const auto [field, slot] : {std::pair{BandField::kX, Slot::kX},
+                                   std::pair{BandField::kY, Slot::kY}}) {
+    if (SlotMappingFor(type, slot)) {
+      mini += "  " + Display(BandParamId(band, field));
     }
   }
   mini_label_->Set(color, mini);

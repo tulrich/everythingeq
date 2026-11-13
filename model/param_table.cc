@@ -111,9 +111,9 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kBypass) = Bool(k + "bypass", n + "Bypass", g, d.bypass);
     at(BandField::kType) =
         Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
-             {"Off", "Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP",
-              "HP", "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel",
-              "K-Weight", "Vintage Low", "Vintage High"});
+             {"Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP", "HP",
+              "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel", "K-Weight",
+              "Vintage Low", "Vintage High"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
@@ -334,6 +334,11 @@ ParamValues ValuesFromEngineParams(const EngineParams& p) {
   for (int b = 0; b < kNumBands; ++b) {
     auto set = [&](BandField f, double x) { v[BandParamId(b, f)] = x; };
     const BandParams& bp = p.bands[b];
+    if (bp.type == BandType::kOff) {
+      // A band the preset leaves out: the default layout's, bypassed.
+      set(BandField::kBypass, 1.0);
+      continue;
+    }
     set(BandField::kType, static_cast<int>(bp.type));
     set(BandField::kX, NormalizedSlot(bp.type, Slot::kX, bp.x));
     set(BandField::kY, NormalizedSlot(bp.type, Slot::kY, bp.y));

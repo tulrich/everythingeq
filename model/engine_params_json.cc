@@ -188,9 +188,17 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
 EngineParams ParseEngineParams(const json& j) {
   EngineParams p;
   ApplyEngineParamsJson(j, p);
-  // Older presets named only groups other than the band's default.
+  const EngineParams defaults = BuildEngineParams(DefaultParamValues(), false);
   for (int b = 0; b < kNumBands; ++b) {
     BandParams& bp = p.bands[b];
+    // A band left out (or Off, in older presets) is the default layout's
+    // band, bypassed.
+    if (bp.type == BandType::kOff) {
+      bp = defaults.bands[b];
+      bp.bypass = true;
+      continue;
+    }
+    // Older presets named only groups other than the band's default.
     if (bp.dyn_group < 0 && bp.dyn_range != 0.0) {
       bp.dyn_group = DefaultDynGroup(b);
     }

@@ -73,7 +73,6 @@ class BandRibbon final : public iplug::igraphics::IControl {
       const ig::IRECT cell = Cell(b);
       const int type =
           static_cast<int>(std::lround(v[BandParamId(b, BandField::kType)]));
-      const bool off = type == 0;
       const bool bypassed = v[BandParamId(b, BandField::kBypass)] >= 0.5;
       const bool is_selected = b == selected;
       const bool in_selection = is_selected || extra_[b];
@@ -84,7 +83,7 @@ class BandRibbon final : public iplug::igraphics::IControl {
                                      : theme::kBorder,
                       cell, 3.f, nullptr, in_selection ? 1.5f : 1.f);
       const ig::IColor color = theme::BandColor(b);
-      const float a = off || bypassed ? 0.35f : 1.f;
+      const float a = bypassed ? 0.35f : 1.f;
       g.FillRect(color.WithOpacity(a), cell.GetFromLeft(4.f).GetVPadded(-4.f));
       ig::IRECT content = cell.GetReducedFromLeft(7.f);
       if (show_power_) {
@@ -96,22 +95,15 @@ class BandRibbon final : public iplug::igraphics::IControl {
         g.DrawLine(theme::kGrid, power.L, power.T + 3.f, power.L,
                    power.B - 3.f);
         const float cx = power.MW(), cy = power.MH();
-        if (!off && !bypassed) g.FillCircle(color, cx, cy, 5.f);
-        g.DrawCircle(off        ? theme::kBorder
-                     : bypassed ? theme::kTextDim
-                                : color,
-                     cx, cy, 4.f, nullptr, 2.f);
+        if (!bypassed) g.FillCircle(color, cx, cy, 5.f);
+        g.DrawCircle(bypassed ? theme::kTextDim : color, cx, cy, 4.f, nullptr,
+                     2.f);
       }
-      // The type's curve, as large as the cell allows; Off is a dash.
+      // The type's curve, as large as the cell allows.
       const ig::IRECT icon = content.GetPadded(-4.f, -5.f, -4.f, -5.f);
-      if (off) {
-        g.DrawLine(theme::kBorder, icon.MW() - 6.f, icon.MH(), icon.MW() + 6.f,
-                   icon.MH(), nullptr, 1.5f);
-      } else {
-        DrawIcon(g, static_cast<BandType>(type), icon, color.WithOpacity(a),
-                 1.75f);
-      }
-      if (bypassed && !off) {
+      DrawIcon(g, static_cast<BandType>(type), icon, color.WithOpacity(a),
+               1.75f);
+      if (bypassed) {
         g.DrawLine(theme::kTextDim, content.L + 2.f, content.B - 5.f,
                    content.R - 2.f, content.T + 5.f);
       }
@@ -184,7 +176,6 @@ class BandRibbon final : public iplug::igraphics::IControl {
   bool IsDirty() override { return true; }  // Cheap; follows param changes.
 
  private:
-  static constexpr int kNumTypes = static_cast<int>(BandType::kVintageHigh) + 1;
   static constexpr int kIconPoints = 24;
   static constexpr double kIconRangeDb = 15.0;  // Half height.
 
@@ -192,9 +183,9 @@ class BandRibbon final : public iplug::igraphics::IControl {
   // with a gain), 20 Hz - 20 kHz, in dB.
   static const std::array<float, kIconPoints>& IconCurve(BandType type) {
     static const auto curves = [] {
-      std::array<std::array<float, kIconPoints>, kNumTypes> c{};
+      std::array<std::array<float, kIconPoints>, kNumBandTypes> c{};
       const std::vector<double> freqs = DisplayFrequencies(kIconPoints);
-      for (int t = 1; t < kNumTypes; ++t) {
+      for (int t = 0; t < kNumBandTypes; ++t) {
         BandParams bp;
         bp.type = static_cast<BandType>(t);
         if (const auto m = SlotMappingFor(bp.type, Slot::kX)) bp.x = m->mid;
@@ -291,11 +282,9 @@ class BandRibbon final : public iplug::igraphics::IControl {
 
   // Bypass every target to the opposite of the clicked band's state.
   void TogglePower(int band, const ParamValues& v) {
-    if (std::lround(v[BandParamId(band, BandField::kType)]) == 0) return;
     const bool bypass = v[BandParamId(band, BandField::kBypass)] < 0.5;
     ParamValues next = v;
     for (int b : TargetsFor(band)) {
-      if (std::lround(v[BandParamId(b, BandField::kType)]) == 0) continue;
       next[BandParamId(b, BandField::kBypass)] = bypass ? 1.0 : 0.0;
     }
     model_.SetValuesGesture(next);
@@ -308,7 +297,6 @@ class BandRibbon final : public iplug::igraphics::IControl {
     kPasteDynamics,
     kSep1,
     kBypassItem,
-    kTurnOff,
     kSep2,
     kSelectAll,
   };
@@ -330,7 +318,6 @@ class BandRibbon final : public iplug::igraphics::IControl {
                           paste_flags);
     context_menu_.AddSeparator();
     context_menu_.AddItem(("Bypass " + where).c_str());
-    context_menu_.AddItem(("Turn Off " + where).c_str());
     context_menu_.AddSeparator();
     context_menu_.AddItem("Select All Bands");
     menu_band_ = band;
@@ -352,10 +339,6 @@ class BandRibbon final : public iplug::igraphics::IControl {
         break;
       case kBypassItem:
         for (int b : targets) next[BandParamId(b, BandField::kBypass)] = 1.0;
-        model_.SetValuesGesture(next);
-        break;
-      case kTurnOff:
-        for (int b : targets) next[BandParamId(b, BandField::kType)] = 0.0;
         model_.SetValuesGesture(next);
         break;
       case kSelectAll:

@@ -129,8 +129,6 @@ class RoutingMap final : public iplug::igraphics::IControl {
   Port PortOf(const ParamValues& v, int band, int slot) const {
     Port p;
     const bool a = slot == 0;
-    const auto type = static_cast<BandType>(
-        std::lround(v[BandParamId(band, BandField::kType)]));
     p.group = static_cast<int>(std::lround(v[BandParamId(
         band, a ? BandField::kDynGroup : BandField::kDynBGroup)]));
     p.target = static_cast<DynTarget>(std::lround(v[BandParamId(
@@ -139,7 +137,6 @@ class RoutingMap final : public iplug::igraphics::IControl {
         DynRangeMapping(p.target),
         v[BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange)]);
     p.on =
-        type != BandType::kOff &&
         v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     return p;
   }
@@ -378,10 +375,6 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
 
   // Faint dots where the crossings are; band lines cover the joined ones.
   for (int b = 0; b < kNumBands; ++b) {
-    const bool off =
-        static_cast<BandType>(
-            std::lround(v[BandParamId(b, BandField::kType)])) == BandType::kOff;
-    if (off) continue;
     for (int s = 0; s < 2; ++s) {
       for (int gi = 0; gi < kNumGroups; ++gi) {
         g.FillCircle(theme::kTextDim.WithOpacity(0.4f), PortX(b, s), GroupY(gi),
@@ -398,10 +391,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
              ig::IRECT(mRECT.L + kHeadL, LabelY(1), mRECT.L + kBandsL - 4.f,
                        LabelY(1) + 9.f));
   auto band_color = [&](int b) {
-    const bool off =
-        static_cast<BandType>(
-            std::lround(v[BandParamId(b, BandField::kType)])) == BandType::kOff;
-    float a = off ? 0.45f : 1.f;
+    float a = 1.f;
     if (any_hover && !BandLit(v, b)) a *= 0.3f;
     if (v[BandParamId(b, BandField::kBypass)] >= 0.5) a *= 0.55f;
     return theme::BandColor(b).WithOpacity(a);
@@ -422,7 +412,6 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   for (int b = 0; b < kNumBands; ++b) {
     const auto type =
         static_cast<BandType>(std::lround(v[BandParamId(b, BandField::kType)]));
-    const bool off = type == BandType::kOff;
     const bool bypassed = v[BandParamId(b, BandField::kBypass)] >= 0.5;
     const ig::IColor color = band_color(b);
     const ig::IColor halo = b == sel_band   ? theme::kPanelRaised
@@ -434,13 +423,12 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       if (!p.on) {
         // The selected band's unconnected ports show, faintly, the group
         // they join if a range is dragged on the graph.
-        if (b == sel_band && !off) {
+        if (b == sel_band) {
           g.DrawDottedLine(theme::BandColor(b).WithOpacity(0.5f), x,
                            GroupY(std::clamp(p.group, 0, kNumGroups - 1)), x,
                            py - 6.f, nullptr, 1.2f, 3.f);
         }
-        g.DrawCircle(theme::kGridStrong.WithOpacity(off ? 0.5f : 1.f), x,
-                     py - 3.f, 2.5f);
+        g.DrawCircle(theme::kGridStrong, x, py - 3.f, 2.5f);
         continue;
       }
       const float y = lane_y[b][s];
@@ -471,26 +459,18 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
                            LabelY(s) + 9.f));
     }
     const ig::IRECT icon = IconRect(b);
-    if (off) {
-      g.DrawLine(theme::kBorder, icon.MW() - 4.f, icon.MH(), icon.MW() + 4.f,
-                 icon.MH());
-    } else {
-      BandRibbon::DrawIcon(
-          g, type, icon,
-          theme::BandColor(b).WithOpacity(bypassed ? 0.4f : 1.f));
-    }
+    BandRibbon::DrawIcon(
+        g, type, icon, theme::BandColor(b).WithOpacity(bypassed ? 0.4f : 1.f));
   }
 
   // "+" on a hovered empty crossing; a ring on a hovered source crossing.
   if (hover_.part == Part::kCrossing) {
-    const auto type = static_cast<BandType>(
-        std::lround(v[BandParamId(hover_.band, BandField::kType)]));
     const Port& p = ports[hover_.band][hover_.slot];
     const float x = PortX(hover_.band, hover_.slot), y = GroupY(hover_.group);
     const float hw = std::min(cw * 0.25f, 7.f);
     const ig::IRECT cell(x - hw, y - 7.f, x + hw, y + 7.f);
     g.DrawRoundRect(theme::kText.WithOpacity(0.35f), cell, 2.f);
-    if (type != BandType::kOff && !(p.on && p.group == hover_.group)) {
+    if (!(p.on && p.group == hover_.group)) {
       g.DrawText(theme::Text(11.f, theme::kText, ig::EAlign::Center), "+",
                  cell);
     }
@@ -520,9 +500,6 @@ inline void RoutingMap::OnMouseDown(float x, float y,
       break;
     }
     case Part::kCrossing: {
-      const auto type = static_cast<BandType>(
-          std::lround(v[BandParamId(h.band, BandField::kType)]));
-      if (type == BandType::kOff) break;
       const bool a = h.slot == 0;
       const Port p = PortOf(v, h.band, h.slot);
       const int on_id =

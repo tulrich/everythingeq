@@ -18,12 +18,12 @@ namespace eeq {
 // Applies `j` on top of `params`.  Throws std::runtime_error on bad values.
 void ApplyEngineParamsJson(const nlohmann::json& j, EngineParams& params);
 
-// As ApplyEngineParamsJson on defaults.  An assignment with a nonzero range
-// and no group (from older presets) follows the band's default group.
+// As ApplyEngineParamsJson on defaults.  A band left out (or "Off") is the
+// default layout's band, bypassed.  An assignment with a nonzero range and no
+// group (from older presets) follows the band's default group.
 EngineParams ParseEngineParams(const nlohmann::json& j);
 
-// Writes every non-default field; Off bands and unused trailing groups are
-// omitted.
+// Writes every non-default field; unused trailing groups are omitted.
 nlohmann::json EngineParamsToJson(const EngineParams& params);
 
 }  // namespace eeq
