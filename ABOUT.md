@@ -113,6 +113,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 v1 has **one main input, one optional sidechain input, and one output** in every format, with no multi-output buses. Logic Pro only offers multiple outputs to instrument plugins, so a split is either encoded into the single stereo output (`Split L/R`) or played one part per instance (`Split`, `Residual`).
 
 * **Supported layouts:** stereo → stereo, mono → stereo, and mono → mono. The sidechain may be mono or stereo in each layout (a mono sidechain feeds both detector channels).
+  * *Sidechain silence in Logic:* soloing the track with the plug-in silences the sidechain source (Logic mutes it), so External SC groups see nothing. Solo the source too, or make it solo-safe. The group panel's SC meter shows what the detector receives.
   * *Mono → stereo:* the input is copied to both channels, then everything behaves as in stereo → stereo. Per-band `Chan` = `Side` (or `L`/`R` on identical channels) is legal but has the obvious effect.
   * *Mono → mono:* the engine runs one channel. `Split L/R` plays the split side plus the residual, the two halves summed back together, so a split preset still sounds like the whole instrument (`Split` and `Residual` work as usual, for one half per instance or send); per-band `Chan` is ignored; `Link` has no effect.
 
