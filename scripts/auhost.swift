@@ -5,12 +5,12 @@
 // Logic hosts an AUv3 out of process.
 //
 //   xcrun swiftc -O scripts/auhost.swift -o build-auv3/auhost
-//   build-auv3/auhost EvE3 [bypass|state|mono]
+//   build-auv3/auhost EvE3 [bypass|state|mono|sc]
 //
 // Expect a peak of about 0.126 (0.5 with bypass) on both channels, latency
 // 0.005 s after Lookahead is set to 5 ms, and the restored values to match.
 // `mono` feeds a mono input bus and a silent sidechain (mono -> stereo, as
-// on a mono Logic track).
+// on a mono Logic track); `sc` puts a quieter 1 kHz sine on that sidechain.
 import AVFoundation
 
 func fourcc(_ s: String) -> FourCharCode {
@@ -37,16 +37,17 @@ print("loaded:", au.auAudioUnit.audioUnitName ?? "?", "inputs:", au.auAudioUnit.
 let mode = args.count > 2 ? args[2] : ""
 let fmt = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
 let inFmt = AVAudioFormat(standardFormatWithSampleRate: 48000,
-                          channels: mode == "mono" ? 1 : 2)!
+                          channels: mode == "mono" || mode == "sc" ? 1 : 2)!
 let engine = AVAudioEngine()
 try engine.enableManualRenderingMode(.offline, format: fmt, maximumFrameCount: 512)
 let player = AVAudioPlayerNode()
 engine.attach(player)
 engine.attach(au)
 engine.connect(player, to: au, format: inFmt)
-// Like Logic, `mono` also connects the sidechain bus (here, to silence).
+// Like Logic, `mono` also connects the sidechain bus (here, to silence);
+// `sc` plays a quieter 1 kHz sine on it.
 let scPlayer = AVAudioPlayerNode()
-if mode == "mono" {
+if mode == "mono" || mode == "sc" {
   engine.attach(scPlayer)
   engine.connect(scPlayer, to: au, fromBus: 0, toBus: 1, format: inFmt)
 }
@@ -62,7 +63,13 @@ for c in 0..<Int(inFmt.channelCount) {
 }
 player.scheduleBuffer(sine, completionHandler: nil)
 player.play()
-if mode == "mono" { scPlayer.play() }
+if mode == "sc" {
+  let scBuf = AVAudioPCMBuffer(pcmFormat: inFmt, frameCapacity: n)!
+  scBuf.frameLength = n
+  for i in 0..<Int(n) { scBuf.floatChannelData![0][i] = 0.25 * sinf(Float(i) * 2 * .pi * 1000 / 48000) }
+  scPlayer.scheduleBuffer(scBuf, completionHandler: nil)
+}
+if mode == "mono" || mode == "sc" { scPlayer.play() }
 func param(_ unit: AUAudioUnit, _ name: String) -> AUParameter? {
   unit.parameterTree?.allParameters.first(where: { $0.displayName == name })
 }
