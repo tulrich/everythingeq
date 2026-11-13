@@ -16,7 +16,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 
 1. **Snare Attack vs. Ring Splitting (Single-Interface Drum Sculpting):**
    * *Setup:* Group 1 set to Transient Mode ($\alpha = 1.0$). Band 1 is a dynamic BP band (static gain at the `-60 dB` floor, which means silence, and DynRange `+60 dB`) at the stick-attack region, so it splits off only the attack; Band 5 shapes or notches the fundamental boxiness/ring of the residual body (factory preset *Snare Attack Split*).
-   * *Routing:* With Output Mode `Split L/R`, the transient stream arrives on the left channel and the residual body (`Dry - Attack`) on the right. Duplicate the track in the DAW and isolate each side (e.g. Logic's Direction Mixer / Gain plugin), or use two instances (or two sends) set to `Split Side` and `Residual`, which keep stereo, and place clippers, gates, or reverbs on each before blending back phase-accurately.
+   * *Routing:* With Output Mode `Split L/R`, the transient stream arrives on the left channel and the residual body (`Dry - Attack`) on the right. Duplicate the track in the DAW and isolate each side (e.g. Logic's Direction Mixer / Gain plugin), or use two instances (or two sends) set to `Split` and `Residual`, which keep stereo, and place clippers, gates, or reverbs on each before blending back phase-accurately.
 2. **Note-Tracking Bass Crossover & Upper-Harmonic Fuzz/Growl:**
    * *Setup:* Group 1 tracks pitch. Band 1 is an LP at 24 dB/oct (Linkwitz-Riley) at 67.4 Hz with Dyn Target Freq and DynRange `+8 oct`, so the crossover sits at $\sqrt{6}\,f_0$ of whatever note is playing, between its 2nd and 3rd harmonics: every note's fundamental and 2nd harmonic go to the split side and the 3rd harmonic and up to the residual. Lower the band's Freq to move the split down (38.9 Hz puts it between the fundamental and the 2nd harmonic). A fixed crossover, by contrast, puts the split in a different place in the harmonic series for every note. Band 5, a dynamic Vowel band on a level group, adds articulation to the harmonics (factory preset *Bass Note-Tracking Crossover*).
    * *Routing:* In `Split L/R` mode, put fuzz/drive on the residual (right) side in the DAW, so the fundamental stays free of intermodulation mud. The pitch tracker reads 30 Hz – 1.5 kHz, which covers a 5-string bass's low B (31 Hz); on unpitched or very quiet input the crossover holds where the last tracked note put it.
@@ -110,20 +110,20 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * `DynRange`: Modulates Formant Gain ($\pm\text{dB}$) or sweeps the Vowel Morph index, per `Dyn Target`.
 
 ### D. Routing, Split & Output Modes
-v1 has **one main input, one optional sidechain input, and one output** in every format, with no multi-output buses. Logic Pro only offers multiple outputs to instrument plugins, so a split is either encoded into the single stereo output (`Split L/R`) or played one part per instance (`Split Side`, `Residual`).
+v1 has **one main input, one optional sidechain input, and one output** in every format, with no multi-output buses. Logic Pro only offers multiple outputs to instrument plugins, so a split is either encoded into the single stereo output (`Split L/R`) or played one part per instance (`Split`, `Residual`).
 
 * **Supported layouts:** stereo → stereo, mono → stereo, and mono → mono. The sidechain may be mono or stereo in each layout (a mono sidechain feeds both detector channels).
   * *Mono → stereo:* the input is copied to both channels, then everything behaves as in stereo → stereo. Per-band `Chan` = `Side` (or `L`/`R` on identical channels) is legal but has the obvious effect.
-  * *Mono → mono:* the engine runs one channel. `Split L/R` plays the split side plus the residual, the two halves summed back together (`Split Side` and `Residual` work as usual); per-band `Chan` is ignored; `Link` has no effect.
+  * *Mono → mono:* the engine runs one channel. `Split L/R` plays the split side plus the residual, the two halves summed back together, so a split preset still sounds like the whole instrument (`Split` and `Residual` work as usual, for one half per instance or send); per-band `Chan` is ignored; `Link` has no effect.
 
-* **Series chain:** in `Stereo` output mode, bands 1→8 process in series.
+* **Series chain:** in `Normal` output mode, bands 1→8 process in series.
 * **Split** (the other output modes): bands 1–4 (in series) pick the **split side** $A$ from the input $x$, and bands 5–8 (in series) shape the **residual** $B$, which starts as $x - A$. With no band on (and not bypassed) among 1–4, nothing is split off ($A = 0$). If the only band on among 1–4 is an LP or HP at 24 dB/oct (Linkwitz-Riley), the residual instead starts as its complementary LR band, for a steep crossover. Use filter types (LP, HP, BP, Notch) to pick the split side; a gain-type band there splits off the whole signal with its boost or cut.
   * *Recombination identities (unit-tested):* with bands 5–8 flat, $A + B = x$ to floating-point precision (or the LR all-pass, for a lone crossover band); the residual is exactly bands 5–8 applied to $x - A$.
 * **Output Mode** (global):
-  * `Stereo` (default): stereo processing through all 8 bands.
-  * `Split L/R`: input summed to mono; $L = A$, $R = B$.
-  * `Split Side`: $A$ only, in stereo.
-  * `Residual`: $B$ only, in stereo. Two instances (or two sends) set to `Split Side` and `Residual`, with the same settings, recombine to the input.
+  * `Normal` (default): stereo processing through all 8 bands in series. On a split preset this plays bands 1–4 as plain EQ (e.g. a crossover's LP filters the whole signal).
+  * `Split L/R`: input summed to mono; $L = A$, $R = B$. On a mono output, $A + B$.
+  * `Split`: $A$ only, in stereo.
+  * `Residual`: $B$ only, in stereo. Two instances (or two sends) set to `Split` and `Residual`, with the same settings, recombine to the input.
   * The graph draws $A$ (yellow) and $B$ (white) instead of the chain's curve, dimming the one the mode doesn't play; the ribbon shows a bar between bands 4 and 5, and the band strip tags the selected band SPLIT or RESIDUAL.
 * **Per-band `Chan`** (`Stereo`, `L`, `R`, `Mid`, `Side`): ignored in `Split L/R` (mono). On the split side, the components a band doesn't touch pass to the split side unchanged.
 * **Delta listen `[Δ]`:** outputs (processed − dry) so you hear only what the plugin changes.
@@ -226,7 +226,7 @@ The layout reads left to right like the signal: the dynamics (routing and groups
 |---------------------------------| [CHAN    ]  AH 2.0 +9 dB 1.00x | [Gain|Freq|Morph]  | [Gain|Freq|Morph] |
 | ■ G2  Vowel · External SC  D 50%| [BYP] [SOLO]                    | RANGE  [+4.0]      | RANGE  [-9 dB]    |
 | [ detector scope              ] +----------------------------------------------------------------------------+
-| ▾ BALLISTICS                    | OUTPUT [Stereo v]  LOOKAHEAD [0.0 ms]  SCALE [100%]                         |
+| ▾ BALLISTICS                    | OUTPUT [Normal v]  LOOKAHEAD [0.0 ms]  SCALE [100%]                         |
 | Attack [10 ms]  Hold [0 ms]     | [Δ] [BYPASS]  ANALYZER [Pre+Post v]  TILT [0 dB]       48.0 kHz  2 in ... |
 | ▸ TRIGGER   not used: ...       |                                                                         ⟋ |
 +---------------------------------+----------------------------------------------------------------------------+
@@ -252,7 +252,7 @@ The layout reads left to right like the signal: the dynamics (routing and groups
 | # | Decision | Rationale |
 | :--- | :--- | :--- |
 | D1 | Framework: **iPlug2**; formats AU (macOS), VST3 (macOS + Windows), CLAP. | Permissive license compatible with this repo's Apache-2.0; JUCE 8 would force AGPL or a commercial license. |
-| D2 | No multi-output buses in v1; the split side and residual are encoded into stereo via `Split L/R`, or played one per instance with `Split Side` / `Residual`. | Logic Pro offers multiple outputs only to instrument plugins; one bus layout works in every host. |
+| D2 | No multi-output buses in v1; the split side and residual are encoded into stereo via `Split L/R`, or played one per instance with `Split` / `Residual`. | Logic Pro offers multiple outputs only to instrument plugins; one bus layout works in every host. |
 | D3 | A fixed split: bands 1–4 pick the split side, bands 5–8 shape the residual ($x - A$, or the LR complement of a lone crossover band), with tested recombination identities. State version 6 dropped the earlier per-band `Tap` (delta / split / crossover taps anywhere in the chain) and `Split M/S` (which becomes `Split L/R`). | One rule, no per-band routing parameter, and it covers the use cases (transient extraction, crossovers, including pitch-tracking ones); "Dry − Band" is only meaningful for filter types, and LR complements sum to an all-pass, not to dry. |
 | D4 | `Threshold` + `Rise` blended by α. | Scaling a single threshold by (1−α) left the α = 1 threshold with no sensitivity control. |
 | D5 | `sigA` fixed at τ = 1 ms in v1. | It was unspecified; exposing it can come later. |

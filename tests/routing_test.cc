@@ -90,7 +90,7 @@ TEST_CASE("Split side plus residual recombines to the input", "[routing]") {
   EngineParams p = RandomChain(rng);
   for (int b = kSplitBands; b < kNumBands; ++b)
     p.bands[b].type = BandType::kOff;
-  p.global.output_mode = OutputMode::kSplitSide;
+  p.global.output_mode = OutputMode::kSplit;
   const Stereo side = Render(p, x);
   p.global.output_mode = OutputMode::kResidual;
   const Stereo residual = Render(p, x);
@@ -103,7 +103,7 @@ TEST_CASE("Bands after the split shape only the residual", "[routing]") {
   EngineParams p;
   p.bands[0] = {BandType::kLp, 400.0, 0.0, 0.7071};
   p.bands[kSplitBands] = {BandType::kHighShelf, 2000.0, 6.0, 0.7071};
-  p.global.output_mode = OutputMode::kSplitSide;
+  p.global.output_mode = OutputMode::kSplit;
   const Stereo side = Render(p, x);
   p.global.output_mode = OutputMode::kResidual;
   const Stereo residual = Render(p, x);
@@ -117,8 +117,8 @@ TEST_CASE("Bands after the split shape only the residual", "[routing]") {
     err = std::max(err, std::abs(shelf.Process(x.l[i] - y) - residual.l[i]));
   }
   REQUIRE(err < 1e-5);
-  // Stereo mode runs all the bands in series.
-  p.global.output_mode = OutputMode::kStereo;
+  // Normal mode runs all the bands in series.
+  p.global.output_mode = OutputMode::kNormal;
   const Stereo stereo = Render(p, x);
   lp.Reset();
   shelf.Reset();
@@ -136,7 +136,7 @@ TEST_CASE("A lone crossover band splits into LR bands", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 6);
   EngineParams p;
   p.bands[1] = {BandType::kHp, 150.0, 0.0, kButterworthQ, kSlope24};
-  p.global.output_mode = OutputMode::kSplitSide;
+  p.global.output_mode = OutputMode::kSplit;
   const Stereo side = Render(p, x);
   p.global.output_mode = OutputMode::kResidual;
   const Stereo residual = Render(p, x);
@@ -162,7 +162,7 @@ TEST_CASE("Split L/R carries the split side and residual of a mono input",
   p.bands[5] = {BandType::kLowShelf, 80.0, 4.0, 0.7071};
   p.global.output_mode = OutputMode::kSplitLr;
   const Stereo lr = Render(p, x);
-  p.global.output_mode = OutputMode::kSplitSide;
+  p.global.output_mode = OutputMode::kSplit;
   const Stereo side = Render(p, Mono(x));
   p.global.output_mode = OutputMode::kResidual;
   const Stereo residual = Render(p, Mono(x));
@@ -181,7 +181,7 @@ TEST_CASE("With no band on the split side, nothing is split off", "[routing]") {
   p.bands[1].bypass = true;
   p.bands[6] = {BandType::kPeak, 1000.0, 6.0, 1.0};
   const Stereo stereo = Render(p, x);
-  p.global.output_mode = OutputMode::kSplitSide;
+  p.global.output_mode = OutputMode::kSplit;
   REQUIRE(MaxAbsDiff(Render(p, x), Stereo(kLen)) == 0.0);
   p.global.output_mode = OutputMode::kResidual;
   REQUIRE(MaxAbsDiff(Render(p, x), stereo) < 1e-6);

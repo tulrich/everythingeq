@@ -64,11 +64,15 @@ const std::pair<const char*, DetectMode> kDetectModes[] = {
 const std::pair<const char*, TriggerMode> kModes[] = {
     {"Above", TriggerMode::kAbove}, {"Below", TriggerMode::kBelow}};
 const std::pair<const char*, OutputMode> kOutputModes[] = {
-    {"Stereo", OutputMode::kStereo},
+    {"Normal", OutputMode::kNormal},
     {"SplitLR", OutputMode::kSplitLr},
-    {"SplitSide", OutputMode::kSplitSide},
+    {"Split", OutputMode::kSplit},
     {"Residual", OutputMode::kResidual},
-    {"SplitMS", OutputMode::kSplitLr}};  // Legacy: Split M/S was dropped.
+    // Legacy names, read only: Split M/S was dropped, and Normal and Split
+    // were called Stereo and Split Side.
+    {"SplitMS", OutputMode::kSplitLr},
+    {"Stereo", OutputMode::kNormal},
+    {"SplitSide", OutputMode::kSplit}};
 
 template <typename E, size_t N>
 void ReadEnum(const json& j, const char* key,

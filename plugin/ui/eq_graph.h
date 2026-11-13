@@ -743,7 +743,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     const ChainResponse& c = any_dynamic_ ? live_curves_ : static_;
     const OutputMode mode = params_.global.output_mode;
     const float split_a = mode == OutputMode::kResidual ? 0.3f : 1.f;
-    const float rest_a = mode == OutputMode::kSplitSide ? 0.3f : 1.f;
+    const float rest_a = mode == OutputMode::kSplit ? 0.3f : 1.f;
     StrokeCurve(g, c.residual_db, kResidualColor.WithOpacity(rest_a), 2.f);
     StrokeCurve(g, c.split_db, kSplitColor.WithOpacity(split_a), 2.f);
     const bool lr = mode == OutputMode::kSplitLr;

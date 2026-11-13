@@ -59,7 +59,7 @@ class Engine {
   Frame DetectorInputFrame(int g, const Frame& dry, const Frame& sc);
   // Runs the band chain.  In the split modes, `split` gets what bands
   // 1..kSplitBands pick and `rest` the residual after the other bands; in
-  // Stereo, `split` is silent and `rest` is the whole chain.
+  // Normal, `split` is silent and `rest` is the whole chain.
   void ProcessChain(const Frame& chain_in, Frame& split, Frame& rest,
                     Frame& solo, bool& any_solo);
   Frame Encode(const Frame& split, const Frame& rest) const;

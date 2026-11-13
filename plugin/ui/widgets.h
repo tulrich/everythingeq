@@ -232,7 +232,7 @@ class StripPanel final : public iplug::igraphics::IControl {
     const bool split =
         static_cast<OutputMode>(std::lround(
             model_.Values()[GlobalParamId(GlobalField::kOutputMode)])) !=
-        OutputMode::kStereo;
+        OutputMode::kNormal;
     if (band != shown_ || split != split_) {
       shown_ = band;
       split_ = split;

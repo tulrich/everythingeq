@@ -69,7 +69,7 @@ TEST_CASE("Chain response matches the engine's impulse response", "[curves]") {
 
   // The split modes' two outputs.
   for (const OutputMode mode :
-       {OutputMode::kSplitSide, OutputMode::kResidual}) {
+       {OutputMode::kSplit, OutputMode::kResidual}) {
     EngineParams q = p;
     q.global.output_mode = mode;
     Engine es;
@@ -79,7 +79,7 @@ TEST_CASE("Chain response matches the engine's impulse response", "[curves]") {
     const std::vector<double> hs(ys.l.begin(), ys.l.end());
     ComputeChainResponse(q, GroupControls{}, kFs, freqs, curves);
     const std::vector<float>& c =
-        mode == OutputMode::kSplitSide ? curves.split_db : curves.residual_db;
+        mode == OutputMode::kSplit ? curves.split_db : curves.residual_db;
     REQUIRE(c.size() == freqs.size());
     for (size_t i = 0; i < freqs.size(); ++i) {
       const double measured = MagDb(DftAt(hs, freqs[i], kFs));

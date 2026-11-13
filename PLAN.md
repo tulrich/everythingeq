@@ -113,7 +113,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 ## Phase 3 — Chain, routing & output modes (§3.D)
 1. Series chain of 10 slots with per-band Bypass and Chan (Stereo/L/R/Mid/Side via M/S encode/decode around the band).
 2. Split: bands 1–4 pick the split side, bands 5–8 shape the residual (x − split, or the LR complement of a lone crossover band). Replaced the original per-band taps (delta / split / LR crossover) in November 2026.
-3. Output modes: Stereo, Split L/R (mono-sum input), Split Side, Residual.
+3. Output modes: Normal, Split L/R (mono-sum input), Split, Residual.
 4. Delta listen, band Solo (detector filter), global Bypass (crossfaded), Output Gain.
 
 **Tests (property-based, random parameter sets):**

@@ -144,7 +144,7 @@ void Engine::ProcessDetectors(const Frame& dry, const Frame& sc) {
 void Engine::ProcessChain(const Frame& chain_in, Frame& split, Frame& rest,
                           Frame& solo, bool& any_solo) {
   const OutputMode mode = params_.global.output_mode;
-  const bool split_mode = mode != OutputMode::kStereo;
+  const bool split_mode = mode != OutputMode::kNormal;
   // Split L/R plays a mono signal, so per-band Chan doesn't apply.
   const bool use_chan = mode != OutputMode::kSplitLr;
   const double split_gain = split_gain_.Next();
@@ -208,7 +208,7 @@ void Engine::ProcessChain(const Frame& chain_in, Frame& split, Frame& rest,
 
 Engine::Frame Engine::Encode(const Frame& split, const Frame& rest) const {
   switch (params_.global.output_mode) {
-    case OutputMode::kStereo:
+    case OutputMode::kNormal:
       return rest;
     case OutputMode::kSplitLr:
       if (params_.global.sum_split) {
@@ -216,7 +216,7 @@ Engine::Frame Engine::Encode(const Frame& split, const Frame& rest) const {
         return {sum, sum};
       }
       return {split[0], rest[0]};
-    case OutputMode::kSplitSide:
+    case OutputMode::kSplit:
       return split;
     case OutputMode::kResidual:
       return rest;

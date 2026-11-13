@@ -222,6 +222,21 @@ TEST_CASE("Mono output plays Split L/R as split side plus residual",
   REQUIRE(MaxAbsDiff(y2, x) > 0.01);
 }
 
+TEST_CASE("Preset JSON reads old output mode names", "[params]") {
+  const std::pair<const char*, OutputMode> cases[] = {
+      {"Normal", OutputMode::kNormal},   {"Stereo", OutputMode::kNormal},
+      {"Split", OutputMode::kSplit},     {"SplitSide", OutputMode::kSplit},
+      {"SplitLR", OutputMode::kSplitLr}, {"SplitMS", OutputMode::kSplitLr}};
+  for (const auto& [name, mode] : cases) {
+    CAPTURE(name);
+    const nlohmann::json j = {{"global", {{"outputMode", name}}}};
+    REQUIRE(ParseEngineParams(j).global.output_mode == mode);
+  }
+  EngineParams p;
+  p.global.output_mode = OutputMode::kSplit;
+  REQUIRE(EngineParamsToJson(p)["global"]["outputMode"] == "Split");
+}
+
 TEST_CASE("Display text follows the band type", "[params]") {
   ParamValues v = DefaultParamValues();
   const int type = BandParamId(0, BandField::kType);

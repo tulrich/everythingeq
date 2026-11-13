@@ -200,7 +200,7 @@ std::vector<ParamSpec> MakeTable() {
   auto at = [&](GlobalField f) -> ParamSpec& { return t[GlobalParamId(f)]; };
   at(GlobalField::kOutputMode) =
       Enum("global.output_mode", "Output Mode", g, 0,
-           {"Stereo", "Split L/R", "Split Side", "Residual"});
+           {"Normal", "Split L/R", "Split", "Residual"});
   at(GlobalField::kGlobalScale) = Continuous(
       "global.global_scale", "Scale", g, -100.0, 200.0, 100.0, "%", false, 1.0);
   at(GlobalField::kDelta) = Bool("global.delta", "Delta", g, false);

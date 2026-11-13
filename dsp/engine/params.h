@@ -45,7 +45,7 @@ enum class TriggerMode { kAbove, kBelow };
 enum class DetectMode { kLevel, kVowel, kPitch };
 // Output modes (ABOUT.md section 3.D).  In the split modes, bands
 // 1..kSplitBands pick the split side and the rest shape the residual.
-enum class OutputMode { kStereo, kSplitLr, kSplitSide, kResidual };
+enum class OutputMode { kNormal, kSplitLr, kSplit, kResidual };
 inline constexpr int kSplitBands = 4;
 
 // Physical (unnormalized) band parameters.  Meaning of x/y/z by type:
@@ -109,7 +109,7 @@ struct GroupParams {
 };
 
 struct GlobalParams {
-  OutputMode output_mode = OutputMode::kStereo;
+  OutputMode output_mode = OutputMode::kNormal;
   // Split L/R into a mono output: play the split side plus the residual (on
   // both channels) instead of one per channel.
   bool sum_split = false;

@@ -120,7 +120,7 @@ class BandRibbon final : public iplug::igraphics::IControl {
     // bands that shape the residual.
     if (static_cast<OutputMode>(
             std::lround(v[GlobalParamId(GlobalField::kOutputMode)])) !=
-        OutputMode::kStereo) {
+        OutputMode::kNormal) {
       const float x = 0.5f * (Cell(kSplitBands - 1).R + Cell(kSplitBands).L);
       g.DrawLine(theme::kGain, x, mRECT.T, x, mRECT.B, nullptr, 2.f);
     }

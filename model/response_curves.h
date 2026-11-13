@@ -24,7 +24,7 @@ struct ChainResponse {
   // Magnitude in dB of each band's own output (empty for Off bands).
   // Bypassed bands still get a curve; they are left out of `total_db`.
   std::array<std::vector<float>, kNumBands> band_db;
-  // The whole chain (what Stereo output mode plays; in the split modes, the
+  // The whole chain (what Normal output mode plays; in the split modes, the
   // split side plus the residual), excluding Output Gain.  Per-band Chan
   // routing is not modeled: every band is drawn as if it processed both
   // channels.

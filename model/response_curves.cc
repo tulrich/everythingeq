@@ -46,7 +46,7 @@ void ComputeChainResponse(const EngineParams& params,
                           ChainResponse& out) {
   const size_t n = freqs.size();
   out.total_db.assign(n, 0.0f);
-  const bool split_mode = params.global.output_mode != OutputMode::kStereo;
+  const bool split_mode = params.global.output_mode != OutputMode::kNormal;
   const SplitSide side = SplitSideOf(params);
   // As the engine's chain (ABOUT.md section 3.D).
   std::vector<std::complex<double>> main(n, 1.0), split(n, 0.0),
