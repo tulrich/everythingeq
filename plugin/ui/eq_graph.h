@@ -287,29 +287,9 @@ class EqGraph final : public iplug::igraphics::IControl {
     Refresh();
   }
 
-  void OnMouseDblClick(float x, float y,
-                       const iplug::igraphics::IMouseMod& mod) override {
-    // Adds a band: the first bypassed one becomes a Peak at the click.
-    if (HitNode(x, y) >= 0) return;
-    for (int b = 0; b < kNumBands; ++b) {
-      if (!params_.bands[b].bypass) continue;
-      const SlotMapping freq = *SlotMappingFor(BandType::kPeak, Slot::kX);
-      const SlotMapping gain = *SlotMappingFor(BandType::kPeak, Slot::kY);
-      const int type_id = BandParamId(b, BandField::kType);
-      model_.SetValueGesture(type_id, static_cast<double>(BandType::kPeak) /
-                                          ParamTable()[type_id].max);
-      model_.SetValueGesture(BandParamId(b, BandField::kBypass), 0.0);
-      model_.SetValueGesture(BandParamId(b, BandField::kX),
-                             SlotFromPhysical(freq, XToFreq(x)));
-      const double k = params_.global.global_scale;
-      const double db = std::abs(k) >= kMinDragGainScale ? YToDb(y) / k : 0.0;
-      model_.SetValueGesture(BandParamId(b, BandField::kY),
-                             SlotFromPhysical(gain, db));
-      model_.SelectBand(b);
-      Refresh();
-      return;
-    }
-  }
+  // Double-click does nothing (not IControl's reset to default).
+  void OnMouseDblClick(float, float,
+                       const iplug::igraphics::IMouseMod&) override {}
 
  private:
   // Cmd on Mac (which iPlug reports as both buttons) or Ctrl.
