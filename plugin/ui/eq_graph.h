@@ -29,7 +29,7 @@ namespace eeq {
 // K-Weight has no node.  The wheel adjusts Q (Tract Scale for Vowel, Width for
 // Band Shelf).  A selected Band Shelf also shows handles at its edges (the
 // half-gain points); dragging one moves that edge and keeps the other fixed.
-// Double-clicking empty space adds a Peak band in the first free slot.
+// Double-clicking a node turns its band on or off (Bypass).
 //
 // The selected band shows where each Dyn assignment takes it at full
 // dynamics as a ring labeled A or B; dragging the ring sets that Dyn Range
@@ -287,9 +287,17 @@ class EqGraph final : public iplug::igraphics::IControl {
     Refresh();
   }
 
-  // Double-click does nothing (not IControl's reset to default).
-  void OnMouseDblClick(float, float,
-                       const iplug::igraphics::IMouseMod&) override {}
+  // Double-clicking a node turns its band on or off (Bypass), as in
+  // FabFilter Pro-Q; elsewhere it does nothing (not IControl's reset).
+  void OnMouseDblClick(float x, float y,
+                       const iplug::igraphics::IMouseMod&) override {
+    const int band = HitNode(x, y);
+    if (band < 0) return;
+    const int id = BandParamId(band, BandField::kBypass);
+    model_.SetValueGesture(id, values_[id] >= 0.5 ? 0.0 : 1.0);
+    model_.SelectBand(band);
+    Refresh();
+  }
 
  private:
   // Cmd on Mac (which iPlug reports as both buttons) or Ctrl.
