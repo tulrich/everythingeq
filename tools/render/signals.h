@@ -134,6 +134,39 @@ inline std::vector<double> Vocal(Gen& g) {
   return x;
 }
 
+// Sung vowels: a 150 Hz glottal pulse train through cascaded formant
+// resonators (as a vocal tract filters it), one vowel per 0.5 s syllable
+// (OO, OH, AH, EH, EE, then around again) with a short gap between.
+inline std::vector<double> SungVowels(Gen& g) {
+  std::vector<double> x(g.n, 0.0);
+  eeq::SvfCell f[3];
+  double phase = 0.0;
+  for (size_t i = 0; i < g.n; ++i) {
+    const double t = g.Time(i);
+    const int syllable = static_cast<int>(t / 0.5);
+    if (i % 64 == 0) {
+      const eeq::Formants fm = eeq::VowelFormants(syllable % 5);
+      for (int k = 0; k < 3; ++k)
+        f[k].SetTarget(
+            eeq::DesignSvf(eeq::SvfShape::kLowPass, fm.hz[k], 8.0, 0, g.fs),
+            64);
+    }
+    phase += 150.0 / g.fs;
+    double v = 0.0;
+    if (phase >= 1.0) phase -= 1.0, v = 1.0;
+    for (eeq::SvfCell& c : f) v = c.Process(v);
+    const double u = t - 0.5 * syllable;  // Time within the syllable.
+    const double gate =
+        std::clamp(std::min(u / 0.02, (0.4 - u) / 0.02), 0.0, 1.0);
+    x[i] = v * gate;
+  }
+  double peak = 0.0;
+  for (double v : x) peak = std::max(peak, std::abs(v));
+  if (peak > 0.0)
+    for (double& v : x) v *= 0.3 / peak;
+  return x;
+}
+
 // Kick drum over a constant low rumble.
 inline std::vector<double> KickRumble(Gen& g, double bpm) {
   std::vector<double> x(g.n, 0.0);
@@ -195,6 +228,7 @@ inline wav::Audio Generate(const std::string& kind, double fs, double seconds,
   if (kind == "levelSteps") return Mono(LevelSteps(g), fs);
   if (kind == "keys") return Mono(Keys(g), fs);
   if (kind == "vocal") return Mono(Vocal(g), fs);
+  if (kind == "sungVowels") return Mono(SungVowels(g), fs);
   if (kind == "kickRumble") return Mono(KickRumble(g, bpm), fs);
   if (kind == "pluck") return Mono(Pluck(g, bpm), fs);
   if (kind == "pulses") return Mono(Pulses(g, bpm, 2.0), fs);

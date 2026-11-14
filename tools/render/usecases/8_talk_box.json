@@ -1,0 +1,12 @@
+{
+  "description": "Use case 8: talk box. A keys chord takes on the vowels sung on the sidechain (OO, OH, AH, EH, EE): a Vowel band (+6 dB formants, +12 dB more while the singer sings) follows the tracked vowel.",
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/13_talk_box.json",
+  "input": {
+    "generate": "keys"
+  },
+  "sidechain": {
+    "generate": "sungVowels"
+  }
+}

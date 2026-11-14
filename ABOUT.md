@@ -40,6 +40,9 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
    * *Setup:* Start from the factory preset *Harmonic EQ*: G1 tracks pitch, G2 level, and band n is a Peak that sits on harmonic n of whatever note is playing. Turn band 1's `DynRange` down a little (e.g. `−3 dB`) to tame the fundamental, and bands 4–8 up (e.g. `+3` to `+6 dB`) to bring out the upper harmonics.
    * *Why:* For most bass notes the 4th harmonic and up land around 150–500 Hz, which carries the note on small speakers and is often where a bass EQ leaves a hole. A static boost there lifts a different harmonic on every note (the fundamental of one note, the 5th harmonic of another), so the timbre changes as the line moves. Because these bands follow the root, every note gets the same harmonic balance: the EQ responds to the bass line instead of to fixed frequencies.
    * *Range:* The pitch tracker reads 30 Hz – 1.5 kHz, so it follows every note of a 4- or 5-string bass, down to the low B (31 Hz).
+8. **Talk Box (Vowels from a Sung Sidechain):**
+   * *Setup:* Factory preset *Talk Box (SC)* on a synth, keys or guitar track, with a vocal track as the sidechain. G1 tracks the sung vowel (`Detect = Vowel`) and G2 the vocal's level, both on `External SC`. Band 1 is a Vowel band with +6 dB formants: Dyn A (Morph +4, on G1) moves it to the sung vowel, and Dyn B (Gain +12 dB, on G2) raises the formants while the singer sings, so the instrument "speaks" and falls back to a muffled OO between phrases. Output Gain −6 dB offsets the boost.
+   * *Notes:* The vocal can be kept out of the mix with its fader or output, but not by soloing the instrument (section 3.D). Only vowels along the OO–OH–AH–EH–EE path come through; consonants and nasals don't, unlike a real talk box or a vocoder.
 
 ---
 

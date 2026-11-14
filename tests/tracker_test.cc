@@ -156,6 +156,40 @@ TEST_CASE("Vocal Vowel Carve preset follows a sung vowel on the sidechain",
   REQUIRE(e.group(1).control(0) > 0.9);
 }
 
+TEST_CASE("Talk Box preset follows a sung vowel and opens while singing",
+          "[tracker]") {
+  const double fs = 48000.0;
+  const Preset* preset = nullptr;
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == "Talk Box (SC)") preset = &p;
+  }
+  REQUIRE(preset != nullptr);
+  Engine e;
+  e.SetParams(preset->params);
+  e.Prepare(fs);
+  const std::vector<double> vocal = SungVowel(1.0, 150.0, 0.4, fs);  // OH
+  const Stereo keys = Noise(vocal.size(), 0.2, 5);
+  std::vector<float> sc(vocal.begin(), vocal.end());
+  Stereo out(vocal.size());
+  const float* in[2] = {keys.l.data(), keys.r.data()};
+  const float* side[2] = {sc.data(), sc.data()};
+  float* o[2] = {out.l.data(), out.r.data()};
+  e.Process(in, side, o, static_cast<int>(vocal.size()));
+  REQUIRE(std::abs(e.group(0).control(0) * kVowelMorphMax - 1.0) < 0.35);
+  REQUIRE(e.group(1).control(0) > 0.9);
+  // Once the singer stops, the level group closes and the vowel holds.
+  const double held = e.group(0).control(0);
+  std::vector<float> silence(static_cast<size_t>(0.5 * fs), 0.f);
+  const Stereo keys_tail = Noise(silence.size(), 0.2, 6);
+  Stereo tail(silence.size());
+  const float* tin[2] = {keys_tail.l.data(), keys_tail.r.data()};
+  const float* tside[2] = {silence.data(), silence.data()};
+  float* to[2] = {tail.l.data(), tail.r.data()};
+  e.Process(tin, tside, to, static_cast<int>(silence.size()));
+  REQUIRE(e.group(1).control(0) < 0.05);
+  REQUIRE(std::abs(e.group(0).control(0) - held) < 1e-9);
+}
+
 TEST_CASE("Harmonic EQ preset puts band n on harmonic n", "[tracker]") {
   const double fs = 48000.0;
   const Preset* preset = nullptr;
