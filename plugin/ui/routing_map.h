@@ -21,8 +21,8 @@ namespace eeq {
 
 // The dynamics routing, drawn like a subway map (ABOUT.md section 4).
 // Bands are columns, left to right like the ribbon above the graph; groups
-// are rows.  Three source lines at the left (Input, Band Sum, Sidechain)
-// each feed a group's head.  An assignment is a line in the band's color
+// are rows.  Each group's feed drops from its source's label at the top left
+// (Input, Band Sum, Sidechain) and turns right into the group's head.  An assignment is a line in the band's color
 // that runs right from the head in its own lane, then turns down with a
 // rounded corner and drops to the band's port at the bottom,
 // ending in an arrowhead (filled = Dyn A, the left port; hollow = Dyn B,
@@ -264,41 +264,73 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Source lines, labeled on top.
+  // Sources, drawn like the band side: each group's feed is its own line
+  // from its source's label down to the group's row, turning right into the
+  // head.  A source no group uses shows only its label.  Feeds from one
+  // source run side by side, the topmost group's on the right, so each
+  // turns off without crossing the ones continuing down.
   static const char* const kSources[] = {"IN", "SUM", "SC"};
   const ig::IColor sc_color =
       sc_connected_ ? theme::kTextDim : theme::kCaution.WithOpacity(0.7f);
-  const float bus_t = mRECT.T + 12.f, bus_b = GroupY(kNumGroups - 1) + 9.f;
-  for (int s = 0; s < 3; ++s) {
-    const ig::IColor c = s == 2 ? sc_color : theme::kTextDim;
-    const float x = BusX(s);
-    if (s == 2 && !sc_connected_) {
-      g.DrawDottedLine(c, x, bus_t, x, bus_b, nullptr, 2.5f, 4.f);
-    } else {
-      g.DrawLine(c, x, bus_t, x, bus_b, nullptr, 2.5f);
+  const float bus_t = mRECT.T + 12.f;
+  std::array<float, kNumGroups> feed_x{};
+  std::array<bool, kNumGroups> used{};  // Some band follows the group.
+  for (int b = 0; b < kNumBands; ++b) {
+    for (int s = 0; s < 2; ++s) {
+      if (ports[b][s].on)
+        used[std::clamp(ports[b][s].group, 0, kNumGroups - 1)] = true;
     }
-    g.DrawText(theme::Text(8.f, c, ig::EAlign::Center), kSources[s],
-               ig::IRECT(x - 10.f, mRECT.T, x + 10.f, mRECT.T + 10.f));
   }
-
-  // Each group's feed leaves its source, filleted on both sides, and runs
-  // right into its head, breaking the lines it crosses.
-  for (int gi = 0; gi < kNumGroups; ++gi) {
-    const float x = BusX(input[gi]), y = GroupY(gi);
-    const float head_l = Head(gi).L;
-    const bool sc = input[gi] == 2;
-    const ig::IColor c = sc ? sc_color : theme::kTextDim;
-    g.DrawLine(background_, x + kCorner, y, head_l, y, nullptr, 7.f);
-    for (const float side : {-1.f, 1.f}) {
-      g.PathClear();
-      g.PathMoveTo(x, y + side * kCorner);
-      g.PathQuadraticBezierTo(x, y, x + kCorner, y);
-      g.PathStroke(c, 2.5f);
+  // An unused group's feed is dark, like its stub on the band side.
+  auto feed_color = [&](int gi) {
+    if (!used[gi]) return theme::kGridStrong;
+    return input[gi] == 2 ? sc_color : theme::kTextDim;
+  };
+  for (int s = 0; s < 3; ++s) {
+    std::array<int, kNumGroups> fed{};
+    int n = 0;
+    for (int gi = 0; gi < kNumGroups; ++gi) {
+      if (input[gi] == s) fed[n++] = gi;
     }
+    for (int k = 0; k < n; ++k) {
+      feed_x[fed[k]] = BusX(s) + (0.5f * (n - 1) - k) * 3.f;
+    }
+    const ig::IColor c = s == 2 ? sc_color : theme::kTextDim;
+    g.DrawText(
+        theme::Text(8.f, n > 0 ? c : c.WithOpacity(0.5f), ig::EAlign::Center),
+        kSources[s],
+        ig::IRECT(BusX(s) - 10.f, mRECT.T, BusX(s) + 10.f, mRECT.T + 10.f));
+    // Faint dots where a group could listen to this source.
+    for (int gi = 0; gi < kNumGroups; ++gi) {
+      g.FillCircle(theme::kTextDim.WithOpacity(0.4f), BusX(s), GroupY(gi),
+                   1.6f);
+    }
+  }
+  // Drops first, so the feeds' runs break the drops they cross.
+  for (int gi = 0; gi < kNumGroups; ++gi) {
+    const bool sc = input[gi] == 2;
+    const ig::IColor c = feed_color(gi);
+    const float x = feed_x[gi], y = GroupY(gi);
     if (sc && !sc_connected_) {
-      g.DrawDottedLine(c, x + kCorner, y, head_l, y, nullptr, 2.5f, 4.f);
+      g.DrawDottedLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f, 4.f);
     } else {
-      g.DrawLine(c, x + kCorner, y, head_l, y, nullptr, 2.5f);
+      g.DrawLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f);
+    }
+  }
+  for (int gi = 0; gi < kNumGroups; ++gi) {
+    const bool sc = input[gi] == 2;
+    const ig::IColor c = feed_color(gi);
+    const float x = feed_x[gi], y = GroupY(gi);
+    const float head_l = Head(gi).L;
+    g.DrawLine(background_, x + kCorner, y, head_l, y, nullptr, 4.5f);
+    g.PathClear();
+    g.PathMoveTo(x, y - kCorner);
+    g.PathQuadraticBezierTo(x, y, x + kCorner, y);
+    g.PathStroke(c, 2.f);
+    if (sc && !sc_connected_) {
+      g.DrawDottedLine(c, x + kCorner, y, head_l, y, nullptr, 2.f, 4.f);
+    } else {
+      g.DrawLine(c, x + kCorner, y, head_l, y, nullptr, 2.f);
     }
   }
 
@@ -393,7 +425,8 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   auto band_color = [&](int b) {
     float a = 1.f;
     if (any_hover && !BandLit(v, b)) a *= 0.3f;
-    if (v[BandParamId(b, BandField::kBypass)] >= 0.5) a *= 0.55f;
+    // Bypassed bands' lines are darker (not dashed, which distracts).
+    if (v[BandParamId(b, BandField::kBypass)] >= 0.5) a *= 0.4f;
     return theme::BandColor(b).WithOpacity(a);
   };
   auto line_width = [&](int b) {
@@ -434,12 +467,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const float y = lane_y[b][s];
       const float w = line_width(b);
       g.DrawLine(halo, x, y + kCorner, x, py - kArrow, nullptr, w + 2.5f);
-      if (bypassed) {
-        g.DrawDottedLine(color, x, y + kCorner, x, py - kArrow, nullptr, w,
-                         3.f);
-      } else {
-        g.DrawLine(color, x, y + kCorner, x, py - kArrow, nullptr, w);
-      }
+      g.DrawLine(color, x, y + kCorner, x, py - kArrow, nullptr, w);
       g.PathClear();
       g.PathMoveTo(x - kCorner, y);
       g.PathQuadraticBezierTo(x, y, x, y + kCorner);

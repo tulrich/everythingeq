@@ -225,6 +225,9 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.
 * Tracking detectors (user idea, 2026-10-27): **done** as group `Detect` = Vowel / Pitch (`dsp/dynamics/tracker.h`, ABOUT.md 3.B). A second Dyn assignment per band (Dyn B) is done too, in a fourth band-editor row for now (to be laid out properly in the UI polish pass); factory preset *Vocal Vowel Carve (SC)*.
+* Vintage Boost/Atten link (user idea, 2026-11-14). The Vintage types' Boost (Y) and Atten (Z) are separate dials; the classic trick sets both together.
+  - UI: a short line joining the two dials with a link/chain icon between them; dragging the icon up or down moves both dials by the same amount (keeping their offset), and the dials still drag separately.
+  - Dynamics: Dyn Target Gain on a Vintage band moves only Boost today. Moving both (or Atten alone) needs another setting, e.g. a per-band "Dyn Gain moves: Boost / Atten / Both" or making the link state apply to dynamics too. To decide before building.
 * More tracking use cases (user ideas, 2026-10-28). Each could be written up in ABOUT.md §2 and get a factory preset:
   - **Talk box** (**done**: factory preset *Talk Box (SC)*, ABOUT.md use case 8). A vocal track feeds the sidechain, possibly while it's muted or pulled down in the mix. A Vowel band on a synth or guitar (positive Formant Gain, Dyn A Morph +4 on a Vowel group) follows the sung vowels. A Level group on the same sidechain, with Dyn B Gain, opens the band only while the singer is singing. Open questions:
     - Does Logic still send a muted track's audio to sidechains, or is a fader at −∞ or an unused output bus needed? (Soloing another track does silence it, 2026-11-13.)
