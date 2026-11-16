@@ -31,6 +31,9 @@ constexpr SlotMapping kAtten{0.0, 2.0, 18.0, false, "Atten", "dB"};
 constexpr SlotMapping kCombFreq{kCombMinHz, 220.0,  kCombMaxHz,
                                 true,       "Freq", "Hz"};
 constexpr SlotMapping kCombQ{kCombMinQ, 20.0, kCombMaxQ, true, "Q", ""};
+constexpr SlotMapping kVocoderShift{0.5, 1.0, 2.0, true, "Shift", "x"};
+constexpr SlotMapping kVocoderAmount{0.0, 100.0, 200.0, false, "Amount", "%"};
+constexpr SlotMapping kVocoderRange{6.0, 24.0, 60.0, true, "Range", "dB"};
 
 double Lerp(double a, double b, double t, bool log) {
   return log ? a * std::pow(b / a, t) : a + (b - a) * t;
@@ -87,6 +90,10 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kX) return kCombFreq;
       if (slot == Slot::kY) return kGain;
       return kCombQ;
+    case BandType::kVocoder:
+      if (slot == Slot::kX) return kVocoderShift;
+      if (slot == Slot::kY) return kVocoderAmount;
+      return kVocoderRange;
     case BandType::kOff:
       return std::nullopt;
   }
@@ -104,6 +111,8 @@ const char* OptionName(BandType type) {
       return "Atten Sel";
     case BandType::kComb:
       return "Harmonics";
+    case BandType::kVocoder:
+      return "Source";
     default:
       return "";
   }
@@ -120,6 +129,8 @@ std::vector<std::string> OptionLabels(BandType type) {
       return {"5 kHz", "10 kHz", "20 kHz"};  // VintageAtten
     case BandType::kComb:
       return {"All", "Odd", "Even"};  // CombHarmonics
+    case BandType::kVocoder:
+      return {"Group 1", "Group 2", "Group 3", "Group 4"};  // Source group
     default:
       return {};
   }
@@ -134,6 +145,8 @@ int OptionCount(BandType type) {
     case BandType::kVintageHigh:
     case BandType::kComb:
       return 3;
+    case BandType::kVocoder:
+      return kNumGroups;
     default:
       return 0;
   }

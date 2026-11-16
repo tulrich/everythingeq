@@ -34,10 +34,11 @@ namespace eeq {
 // The selected band shows where each Dyn assignment takes it at full
 // dynamics as a ring labeled A or B; dragging the ring sets that Dyn Range
 // along the target's axis: vertical for Gain, horizontal for Freq and
-// Morph; the other axis moves the node.  While the ring is too close to the node to grab (e.g. Range 0), a
-// small A or B tab beside the node takes its place; dragging it away from 0
-// assigns the band to its Dyn Group.  Option-dragging a node also sets its
-// Dyn Range, and Cmd-dragging (Ctrl on Windows) its Dyn B Range.
+// Morph; the other axis moves the node.  While the ring is too close to the
+// node to grab (e.g. Range 0), a small A or B tab beside the node takes its
+// place; dragging it away from 0 assigns the band to its Dyn Group.
+// Option-dragging a node also sets its Dyn Range, and Cmd-dragging (Ctrl on
+// Windows) its Dyn B Range.
 class EqGraph final : public iplug::igraphics::IControl {
  public:
   static inline const iplug::igraphics::IColor kSplitColor = theme::kGain;
@@ -82,13 +83,16 @@ class EqGraph final : public iplug::igraphics::IControl {
   void Refresh() {
     const ParamValues v = model_.Values();
     const GroupControls live = model_.LiveControls();
+    const VocoderShapes shapes = model_.LiveVocoderShapes();
     const int points = std::max(32, static_cast<int>(mRECT.W() / 2.f));
     const bool changed = v != values_ || live != live_ ||
+                         shapes != live_shapes_ ||
                          freqs_.size() != static_cast<size_t>(points) ||
                          model_.SampleRate() != sample_rate_;
     if (!changed) return;
     values_ = v;
     live_ = live;
+    live_shapes_ = shapes;
     sample_rate_ = model_.SampleRate();
     if (freqs_.size() != static_cast<size_t>(points)) {
       freqs_ = DisplayFrequencies(points, kMinHz, kMaxHz);
@@ -101,6 +105,8 @@ class EqGraph final : public iplug::igraphics::IControl {
     group_gain_db_.fill(0.f);
     for (const BandParams& bp : params_.bands) {
       if (bp.bypass) continue;
+      // A Vocoder moves with its source.
+      if (bp.type == BandType::kVocoder) any_dynamic_ = true;
       for (int g = 0; g < kNumGroups; ++g) {
         if (!SubscribesTo(bp, g)) continue;
         any_dynamic_ = true;
@@ -111,7 +117,8 @@ class EqGraph final : public iplug::igraphics::IControl {
       GroupControls full;
       full.fill(1.0);
       ComputeChainResponse(params_, full, sample_rate_, freqs_, ghost_);
-      ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_);
+      ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_,
+                           &live_shapes_);
       ComputeGroupGains();
     }
     ComputeLiveMarkers();
@@ -662,6 +669,9 @@ class EqGraph final : public iplug::igraphics::IControl {
       case BandType::kVowel:
         hz = VowelFormants(bp.x).hz[1] * bp.z;  // F2.
         break;
+      case BandType::kVocoder:
+        hz = 1000.0 * bp.x;  // Its Shift, about the middle of the bank.
+        break;
       default:
         hz = bp.x;
         break;
@@ -811,6 +821,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::vector<float> spectrum_pre_, spectrum_post_;
   ParamValues values_{};
   GroupControls live_{};
+  VocoderShapes live_shapes_{};
   double sample_rate_ = 0.0;
   EngineParams params_{};
   std::vector<double> freqs_;

@@ -233,14 +233,32 @@ void BandSlot::Update(BandType type,
     if (initialized_ && !type_changed && !Changed(p[ch], last_[ch])) continue;
     last_[ch] = p[ch];
     design_[ch] = DesignResolvedBand(type, p[ch], fs_);
-    if (type_changed) {
-      cur_[ch] = BandProcessor{};
-      if (!comb_buf_[ch].empty()) {
-        cur_[ch].SetCombBuffer(comb_buf_[ch].data(),
-                               static_cast<int>(comb_buf_[ch].size()));
-      }
-    }
+    if (type_changed) cur_[ch] = FreshProcessor(ch);
     cur_[ch].Apply(design_[ch], snap_now ? 1 : kControlBlock);
+  }
+  type_ = type;
+  initialized_ = true;
+}
+
+BandProcessor BandSlot::FreshProcessor(int ch) {
+  BandProcessor p;
+  if (!comb_buf_[ch].empty()) {
+    p.SetCombBuffer(comb_buf_[ch].data(),
+                    static_cast<int>(comb_buf_[ch].size()));
+  }
+  return p;
+}
+
+void BandSlot::UpdateDesign(BandType type, const BandDesign& d, bool snap_now) {
+  const bool type_changed = initialized_ && type != type_;
+  if (type_changed) {
+    prev_ = cur_;
+    fade_ = kFadeSamples;
+  }
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    design_[ch] = d;
+    if (type_changed) cur_[ch] = FreshProcessor(ch);
+    cur_[ch].Apply(d, snap_now ? 1 : kControlBlock);
   }
   type_ = type;
   initialized_ = true;

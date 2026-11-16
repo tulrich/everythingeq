@@ -1,0 +1,23 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Vocoder Talk Box (SC)",
+  "params": {
+    "groups": [
+      {
+        "input": "ExternalSC",
+        "attackMs": 5,
+        "releaseMs": 40
+      }
+    ],
+    "bands": [
+      {
+        "type": "Vocoder",
+        "x": 1.0,
+        "y": 100,
+        "z": 24,
+        "sourceGroup": 0
+      }
+    ]
+  }
+}

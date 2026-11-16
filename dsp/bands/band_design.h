@@ -20,11 +20,14 @@ enum class BandTopology {
   kComb,
 };
 
+// The most SVF cells a band runs (a Vocoder's bank).
+inline constexpr int kMaxBandCells = 16;
+
 // Stateless description of one band (one channel's coefficients).
 struct BandDesign {
   BandTopology topology = BandTopology::kPassthrough;
   int num_cells = 0;
-  std::array<SvfCoeffs, 4> cells{};
+  std::array<SvfCoeffs, kMaxBandCells> cells{};
   double post_gain = 1.0;
   bool crossover_high = false;  // HP at 24 dB/oct: y is the high output
   // Comb topology.

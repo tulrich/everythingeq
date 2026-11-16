@@ -10,10 +10,6 @@
 namespace eeq {
 namespace {
 
-float ToDb(std::complex<double> h) {
-  return static_cast<float>(20.0 * std::log10(std::max(std::abs(h), 1e-9)));
-}
-
 double ControlFor(int group, const GroupControls& controls) {
   if (group < 0 || group >= kNumGroups) return 0.0;
   return std::clamp(controls[group], 0.0, 1.0);
@@ -43,8 +39,8 @@ std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
 
 void ComputeChainResponse(const EngineParams& params,
                           const GroupControls& controls, double sample_rate,
-                          const std::vector<double>& freqs,
-                          ChainResponse& out) {
+                          const std::vector<double>& freqs, ChainResponse& out,
+                          const VocoderShapes* vocoder_shapes) {
   const size_t n = freqs.size();
   const bool split_mode = params.global.output_mode != OutputMode::kNormal;
   const SplitSide side = SplitSideOf(params);
@@ -61,7 +57,9 @@ void ComputeChainResponse(const EngineParams& params,
     const ResolvedBand rb =
         ResolveBand(bp, ControlFor(bp.dyn_group, controls),
                     ControlFor(bp.dyn_b_group, controls), scale);
-    design[b] = DesignResolvedBand(bp.type, rb, sample_rate);
+    design[b] = bp.type == BandType::kVocoder && vocoder_shapes
+                    ? DesignVocoder(rb.x, (*vocoder_shapes)[b], sample_rate)
+                    : DesignResolvedBand(bp.type, rb, sample_rate);
     if (bp.type == BandType::kComb) {
       ++combs;
       comb = b;

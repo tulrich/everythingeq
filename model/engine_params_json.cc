@@ -32,7 +32,8 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"Vowel", BandType::kVowel},
     {"VintageLow", BandType::kVintageLow},
     {"VintageHigh", BandType::kVintageHigh},
-    {"Comb", BandType::kComb}};
+    {"Comb", BandType::kComb},
+    {"Vocoder", BandType::kVocoder}};
 const std::pair<const char*, DynTarget> kDynTargets[] = {
     {"Gain", DynTarget::kGain},
     {"Freq", DynTarget::kFreq},
@@ -187,6 +188,9 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
         auto harmonics = static_cast<CombHarmonics>(bp.option);
         ReadEnum(b, "harmonics", kCombHarmonics, harmonics);
         bp.option = static_cast<int>(harmonics);
+      } else if (bp.type == BandType::kVocoder) {
+        // "sourceGroup": 0..3.
+        Read(b, "sourceGroup", bp.option);
       }
       Read(b, "x", bp.x);
       Read(b, "y", bp.y);
@@ -292,6 +296,8 @@ json EngineParamsToJson(const EngineParams& p) {
         WriteEnum(j, "harmonics", kCombHarmonics,
                   static_cast<CombHarmonics>(bp.option),
                   static_cast<CombHarmonics>(bd.option));
+      } else if (bp.type == BandType::kVocoder) {
+        Write(j, "sourceGroup", bp.option, bd.option);
       }
       // An assignment is on when it names its group.
       Write(j, "dynGroup", bp.dyn_group, -1);

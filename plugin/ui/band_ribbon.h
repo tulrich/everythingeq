@@ -200,6 +200,14 @@ class BandRibbon final : public iplug::igraphics::IControl {
           bp.option = static_cast<int>(VowelWeighting::kFlat);
         }
         for (int i = 0; i < kIconPoints; ++i) {
+          if (bp.type == BandType::kVocoder) {
+            // Stylized: an uneven, voice-like envelope.
+            const double u = static_cast<double>(i) / (kIconPoints - 1);
+            c[t][i] = static_cast<float>(
+                9.0 * std::sin(2.0 * kPi * 2.3 * u) * std::sin(kPi * u) +
+                4.0 * std::sin(2.0 * kPi * 5.1 * u + 1.0));
+            continue;
+          }
           if (bp.type == BandType::kComb) {
             // Stylized: five even teeth (the real ones crowd together on
             // the log axis).

@@ -11,6 +11,7 @@ add_executable(eeq_tests
   response_curves_test.cc
   analyzer_test.cc
   tracker_test.cc
+  vocoder_test.cc
   editor_layout_test.cc
   band_clipboard_test.cc
 )

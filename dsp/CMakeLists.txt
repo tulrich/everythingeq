@@ -4,6 +4,7 @@ add_library(eeq_dsp STATIC
   bands/band_processor.cc
   bands/fletcher_munson.cc
   bands/iso226.cc
+  bands/vocoder.cc
   bands/vowel.cc
   dynamics/dynamics_group.cc
   dynamics/tracker.cc

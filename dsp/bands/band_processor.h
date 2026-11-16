@@ -38,7 +38,8 @@ struct BandOutput {
   double comp;  // complementary crossover output (Crossover topology only)
 };
 
-// One channel of a band: up to 4 SVF cells with coefficient ramps, or a
+// One channel of a band: up to kMaxBandCells SVF cells with coefficient
+// ramps, or a
 // comb on a delay line the owner provides (copies share it).
 class BandProcessor {
  public:
@@ -59,7 +60,7 @@ class BandProcessor {
   BandTopology topology_ = BandTopology::kPassthrough;
   int num_cells_ = 0;
   bool crossover_high_ = false;
-  std::array<SvfCell, 4> cells_{};
+  std::array<SvfCell, kMaxBandCells> cells_{};
   LinearRamp post_;
   // Comb.
   double ReadComb(double delay) const;
@@ -115,6 +116,9 @@ class BandSlot {
   // Called once per control sub-block.  `snap_now` jumps without ramping.
   void Update(BandType type, const std::array<ResolvedBand, kNumChannels>& p,
               bool snap_now);
+  // As Update, with a design computed elsewhere (a Vocoder's), applied to
+  // both channels every call.
+  void UpdateDesign(BandType type, const BandDesign& d, bool snap_now);
   // Process one channel sample.  Call Advance() once per frame afterwards.
   BandOutput Process(int ch, double x);
   void Advance() {
@@ -126,6 +130,8 @@ class BandSlot {
 
  private:
   static bool Changed(const ResolvedBand& a, const ResolvedBand& b);
+  // A fresh processor for channel ch (after a type change).
+  BandProcessor FreshProcessor(int ch);
 
   double fs_ = 48000.0;
   BandType type_ = BandType::kOff;

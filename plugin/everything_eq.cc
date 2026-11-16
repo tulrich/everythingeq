@@ -115,6 +115,16 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
 
 EverythingEq::~EverythingEq() = default;
 
+VocoderShapes EverythingEq::LiveVocoderShapes() const {
+  VocoderShapes s{};
+  for (int b = 0; b < kNumBands; ++b) {
+    for (int i = 0; i < kVocoderBands; ++i) {
+      s[b][i] = vocoder_shapes_[b][i].load(std::memory_order_relaxed);
+    }
+  }
+  return s;
+}
+
 GroupControls EverythingEq::LiveControls() const {
   GroupControls c{};
   for (int g = 0; g < kNumGroups; ++g) {
@@ -600,6 +610,12 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
 
   // Metering for the UI.
+  for (int b = 0; b < kNumBands; ++b) {
+    const VocoderShape& shape = engine_.vocoder_shape(b);
+    for (int i = 0; i < kVocoderBands; ++i) {
+      vocoder_shapes_[b][i].store(shape[i], std::memory_order_relaxed);
+    }
+  }
   DetectorFrame frame;
   frame.samples = num_frames;
   for (int g = 0; g < kNumGroups; ++g) {

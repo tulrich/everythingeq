@@ -24,6 +24,7 @@ void Engine::Prepare(double sample_rate) {
   for (DelayLine& d : delay_) d.Prepare(max_delay);
   for (BandSlot& s : slots_) s.Prepare(fs_);
   for (DynamicsGroup& g : groups_) g.Prepare(fs_);
+  for (VocoderAnalysis& v : vocoders_) v.Prepare(fs_);
   prepared_ = true;
   params_dirty_ = true;
   Reset();
@@ -37,6 +38,7 @@ void Engine::Reset() {
   idle_bypass_ = false;
   for (DetectorFilter& f : band_detectors_) f.Reset();
   for (DynamicsGroup& g : groups_) g.Reset();
+  for (VocoderAnalysis& v : vocoders_) v.Reset();
   ResetBands();
 }
 
@@ -71,6 +73,11 @@ void Engine::ApplyStaticDesigns(bool snap_now) {
     const DetectorDesign d = DesignDetector(bp.type, bp.x, bp.z, fs_);
     band_detectors_[b].Apply(d, ramp);
     solo_filters_[b].Apply(d, ramp);
+    if (bp.type == BandType::kVocoder) {
+      // The source group's ballistics shape the band envelopes.
+      const GroupParams& gp = params_.groups[VocoderSource(bp)];
+      vocoders_[b].SetBallistics(gp.attack_ms, gp.release_ms);
+    }
   }
   const SplitSide side = SplitSideOf(params_);
   split_xover_band_ = side.crossover;
@@ -108,7 +115,17 @@ void Engine::ControlUpdate(bool snap_now) {
     for (int ch = 0; ch < kNumChannels; ++ch) {
       r[ch] = ResolveBand(bp, dyn_a[ch], dyn_b[ch], scale);
     }
-    slots_[b].Update(EffectiveType(bp), r, snap_now);
+    const BandType type = EffectiveType(bp);
+    if (type == BandType::kVocoder) {
+      // Mono analysis: both channels take the same shape.
+      vocoder_shapes_[b] =
+          vocoders_[b].Shape(std::max(r[0].y, 0.0) / 100.0, r[0].z);
+      slots_[b].UpdateDesign(
+          type, DesignVocoder(r[0].x, vocoder_shapes_[b], fs_), snap_now);
+      continue;
+    }
+    vocoder_shapes_[b] = VocoderShape{};
+    slots_[b].Update(type, r, snap_now);
   }
 }
 
@@ -138,6 +155,12 @@ void Engine::ProcessDetectors(const Frame& dry, const Frame& sc) {
   for (int g = 0; g < kNumGroups; ++g) {
     const Frame d = DetectorInputFrame(g, dry, sc);
     groups_[g].Process(d[0], d[1]);
+  }
+  for (int b = 0; b < kNumBands; ++b) {
+    const BandParams& bp = params_.bands[b];
+    if (bp.type != BandType::kVocoder) continue;
+    const DynamicsGroup& g = groups_[VocoderSource(bp)];
+    vocoders_[b].Process(0.5 * (g.filtered(0) + g.filtered(1)));
   }
 }
 

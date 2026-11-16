@@ -5,6 +5,7 @@
 #include <complex>
 #include <vector>
 
+#include "dsp/bands/vocoder.h"
 #include "dsp/engine/params.h"
 
 namespace eeq {
@@ -19,6 +20,8 @@ std::vector<double> DisplayFrequencies(int count, double lo = 20.0,
 
 // Per-group dynamics control values D in [0, 1] (0 = static settings).
 using GroupControls = std::array<double, kNumGroups>;
+// Each Vocoder band's current shape (the engine's; flat when absent).
+using VocoderShapes = std::array<VocoderShape, kNumBands>;
 
 struct ChainResponse {
   // Magnitude in dB of each band's own output (empty for Off bands).
@@ -46,7 +49,8 @@ std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
 
 void ComputeChainResponse(const EngineParams& params,
                           const GroupControls& controls, double sample_rate,
-                          const std::vector<double>& freqs, ChainResponse& out);
+                          const std::vector<double>& freqs, ChainResponse& out,
+                          const VocoderShapes* vocoder_shapes = nullptr);
 
 }  // namespace eeq
 

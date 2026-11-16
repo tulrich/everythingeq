@@ -4,6 +4,7 @@
 #include <array>
 
 #include "dsp/bands/band_processor.h"
+#include "dsp/bands/vocoder.h"
 #include "dsp/dynamics/dynamics_group.h"
 #include "dsp/engine/delay_line.h"
 #include "dsp/engine/params.h"
@@ -44,6 +45,8 @@ class Engine {
   const DynamicsGroup& group(int g) const { return groups_[g]; }
   DynamicsGroup& mutable_group(int g) { return groups_[g]; }
   const BandSlot& band(int b) const { return slots_[b]; }
+  // A Vocoder band's current shape (flat for other types).
+  const VocoderShape& vocoder_shape(int b) const { return vocoder_shapes_[b]; }
 
  private:
   using Frame = std::array<double, kNumChannels>;
@@ -75,6 +78,10 @@ class Engine {
   std::array<DetectorFilter, kNumBands> band_detectors_{};
   std::array<DetectorFilter, kNumBands> solo_filters_{};
   std::array<DynamicsGroup, kNumGroups> groups_{};
+  // Each Vocoder band's analysis of its source group's input, and the
+  // shape last applied.
+  std::array<VocoderAnalysis, kNumBands> vocoders_{};
+  std::array<VocoderShape, kNumBands> vocoder_shapes_{};
   std::array<DelayLine, kNumChannels> delay_{};
 
   // 1 while any band on the split side is on (else nothing is split off),

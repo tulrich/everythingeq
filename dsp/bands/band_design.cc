@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "dsp/bands/fletcher_munson.h"
+#include "dsp/bands/vocoder.h"
 #include "dsp/bands/vowel.h"
 #include "dsp/common/math.h"
 
@@ -209,6 +210,9 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return DesignVintageHigh(x, y, z, option, fs);
     case BandType::kComb:
       return DesignComb(x, y, z, option, fs);
+    case BandType::kVocoder:
+      // Flat until the engine supplies the source's shape.
+      return DesignVocoder(x, VocoderShape{}, fs);
   }
   return {};
 }
@@ -293,6 +297,7 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
     case BandType::kTilt:
     case BandType::kFletcherMunson:
     case BandType::kComb:
+    case BandType::kVocoder:
       break;
   }
   return d;

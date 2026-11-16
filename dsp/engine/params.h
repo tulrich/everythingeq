@@ -30,6 +30,7 @@ enum class BandType {
   kVintageLow,
   kVintageHigh,
   kComb,
+  kVocoder,
   kOff,
 };
 inline constexpr int kNumBandTypes = static_cast<int>(BandType::kOff);
@@ -42,7 +43,7 @@ enum class FilterSlope { k12, k24 };          // LP, HP
 enum class VintageAtten { k5k, k10k, k20k };  // Vintage High
 // Which harmonics of f0 a Comb's teeth sit on.
 enum class CombHarmonics { kAll, kOdd, kEven };
-inline constexpr int kNumOptions = 3;
+inline constexpr int kNumOptions = 4;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
 enum class ScFilter { kOff, kBp, kLp, kHp, kTilt, kKWeight };
@@ -72,6 +73,9 @@ inline constexpr int kSplitBands = 4;
 //                        (a shelf at the Option's VintageAtten frequency)
 //   Comb:                x = f0 Hz, y = tooth gain dB, z = tooth Q; teeth on
 //                        the Option's CombHarmonics of f0
+//   Vocoder:             x = formant shift (ratio), y = amount (%), z = range
+//                        dB; follows the spectrum of the group the Option
+//                        names (0..3)
 struct BandParams {
   BandType type = BandType::kOff;
   double x = 1000.0;
@@ -135,6 +139,13 @@ struct EngineParams {
 };
 
 inline constexpr double kBpOffDb = -60.0;
+
+// The group whose input a Vocoder band follows (its Option).
+inline int VocoderSource(const BandParams& bp) {
+  return bp.option < 0             ? 0
+         : bp.option >= kNumGroups ? kNumGroups - 1
+                                   : bp.option;
+}
 
 // Whether either of a band's dynamics assignments uses group g.
 inline bool SubscribesTo(const BandParams& bp, int g) {
