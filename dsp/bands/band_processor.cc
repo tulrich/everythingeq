@@ -30,7 +30,6 @@ bool HasFreq(BandType t) {
     case BandType::kOff:
     case BandType::kFletcherMunson:
     case BandType::kVowel:
-    case BandType::kKWeight:
       return false;
     default:
       return true;

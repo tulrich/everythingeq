@@ -47,6 +47,19 @@ inline constexpr double kMaxWidthOct = 10.0;
 BandDesign DesignBand(BandType type, double x, double y, double z, int option,
                       double sample_rate);
 
+// ITU-R BS.1770 K-weighting (a +4 dB high shelf and a 38 Hz high-pass): the
+// group SC filter's K-Weight.
+inline constexpr double kKWeightShelfHz = 1681.974450955533;
+inline constexpr double kKWeightShelfDb = 3.999843853973347;
+inline constexpr double kKWeightShelfQ = 0.7071752369554196;
+inline constexpr double kKWeightHpHz = 38.13547087602444;
+inline constexpr double kKWeightHpQ = 0.5003270373238773;
+BandDesign DesignKWeighting(double sample_rate);
+// The K-weighting shelf as this EQ's High Shelf band (within 0.01 dB; the
+// High Shelf's frequency sits at a different point on the slope).
+inline constexpr double kKWeightHighShelfHz = 1500.0;
+inline constexpr double kKWeightHighShelfQ = 0.71;
+
 // A fixed two-shelf tilt (Q 0.5 shelves at hz): the group SC filter's Tilt.
 BandDesign DesignShelfTilt(double hz, double tilt_db, double sample_rate);
 

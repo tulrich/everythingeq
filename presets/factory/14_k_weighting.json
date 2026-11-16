@@ -1,0 +1,21 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "K-Weighting (BS.1770)",
+  "params": {
+    "bands": [
+      {
+        "type": "HP",
+        "slope": "12",
+        "x": 38.135,
+        "z": 0.5003
+      },
+      {
+        "type": "HighShelf",
+        "x": 1500,
+        "y": 4.0,
+        "z": 0.71
+      }
+    ]
+  }
+}

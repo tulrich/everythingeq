@@ -229,7 +229,7 @@ TEST_CASE("K-weighting matches ITU-R BS.1770 at 48 kHz", "[bands]") {
   const double a1[3] = {1.0, -1.69065929318241, 0.73248077421585};
   const double b2[3] = {1.0, -2.0, 1.0};
   const double a2[3] = {1.0, -1.99004745483398, 0.99007225036621};
-  const BandDesign d = DesignBand(BandType::kKWeight, 0, 0, 0, 0, fs);
+  const BandDesign d = DesignKWeighting(fs);
   for (double f : LogFreqs(20.0, 20000.0, 50)) {
     CAPTURE(f);
     const auto ref =
@@ -239,9 +239,9 @@ TEST_CASE("K-weighting matches ITU-R BS.1770 at 48 kHz", "[bands]") {
 }
 
 TEST_CASE("K-weighting is consistent across sample rates", "[bands]") {
-  const BandDesign ref = DesignBand(BandType::kKWeight, 0, 0, 0, 0, 192000.0);
+  const BandDesign ref = DesignKWeighting(192000.0);
   for (double fs : {44100.0, 48000.0, 96000.0}) {
-    const BandDesign d = DesignBand(BandType::kKWeight, 0, 0, 0, 0, fs);
+    const BandDesign d = DesignKWeighting(fs);
     for (double f : LogFreqs(20.0, 16000.0, 40)) {
       CAPTURE(fs, f);
       REQUIRE(std::abs(MagDb(BandResponse(d, f, fs)) -

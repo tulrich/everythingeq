@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
+#include "dsp/bands/band_design.h"
 #include "model/slot_mapping.h"
 
 namespace eeq {
@@ -101,6 +102,30 @@ void MigrateState(int version, nlohmann::json& params) {
         params[s.key] = s.default_value;
       }
       params[k + "bypass"] = 1.0;
+    }
+  }
+  if (version < 8) {
+    // Version 8 dropped the K-Weight band type (v7 index 11; the
+    // K-Weighting preset replaces it).  A K-Weight band becomes its main
+    // part, a +4 dB high shelf at 1.68 kHz.
+    constexpr int kV7KWeight = 11;
+    for (int b = 0; b < kNumBands; ++b) {
+      const std::string k = "band" + std::to_string(b + 1) + ".";
+      const auto it = params.find(k + "type");
+      if (it == params.end() || !it->is_number()) continue;
+      const int type = static_cast<int>(std::lround(it->get<double>()));
+      if (type > kV7KWeight) {
+        *it = type - 1;
+      } else if (type == kV7KWeight) {
+        constexpr BandType kShelf = BandType::kHighShelf;
+        *it = static_cast<int>(kShelf);
+        params[k + "x"] = SlotFromPhysical(*SlotMappingFor(kShelf, Slot::kX),
+                                           kKWeightHighShelfHz);
+        params[k + "y"] = SlotFromPhysical(*SlotMappingFor(kShelf, Slot::kY),
+                                           kKWeightShelfDb);
+        params[k + "z"] = SlotFromPhysical(*SlotMappingFor(kShelf, Slot::kZ),
+                                           kKWeightHighShelfQ);
+      }
     }
   }
 }

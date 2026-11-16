@@ -46,7 +46,7 @@ void DynamicsGroup::DesignScFilter(bool snap_now) {
       d = DesignShelfTilt(hz, kScTiltDb, fs_);
       break;
     case ScFilter::kKWeight:
-      d = DesignBand(BandType::kKWeight, 0.0, 0.0, 0.0, 0, fs_);
+      d = DesignKWeighting(fs_);
       break;
   }
   for (BandProcessor& f : sc_) f.Apply(d, snap_now ? 1 : kControlBlock);

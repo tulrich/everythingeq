@@ -24,20 +24,6 @@ BandDesign MakeSerial(std::initializer_list<SvfCoeffs> cells,
   return d;
 }
 
-// ITU-R BS.1770 K-weighting expressed exactly as two SVF cells.
-BandDesign DesignKWeighting(double fs) {
-  const double shelf_hz = 1681.974450955533;
-  const double shelf_q = 0.7071752369554196;
-  const double vh = std::pow(10.0, 3.999843853973347 / 20.0);
-  const double vb = std::pow(vh, 0.4996667741545416);
-  const SvfCoeffs shelf =
-      MakeSvf(shelf_hz, 1.0 / shelf_q, vh, (vb - vh) / shelf_q, 1.0 - vh, fs);
-  const double hp_q = 0.5003270373238773;
-  const SvfCoeffs hp =
-      MakeSvf(38.13547087602444, 1.0 / hp_q, 1.0, -1.0 / hp_q, -1.0, fs);
-  return MakeSerial({shelf, hp});
-}
-
 BandDesign DesignFletcherMunson(double phon_delta, double fs) {
   phon_delta = std::clamp(phon_delta, -kMaxPhonDelta, kMaxPhonDelta);
   BandDesign d = MakeSerial({});
@@ -95,6 +81,17 @@ BandDesign DesignVintageHigh(double hz, double boost_db, double atten_db,
 }
 
 }  // namespace
+
+// ITU-R BS.1770 K-weighting expressed exactly as two SVF cells.
+BandDesign DesignKWeighting(double fs) {
+  const double vh = std::pow(10.0, kKWeightShelfDb / 20.0);
+  const double vb = std::pow(vh, 0.4996667741545416);
+  const SvfCoeffs shelf = MakeSvf(kKWeightShelfHz, 1.0 / kKWeightShelfQ, vh,
+                                  (vb - vh) / kKWeightShelfQ, 1.0 - vh, fs);
+  const SvfCoeffs hp = MakeSvf(kKWeightHpHz, 1.0 / kKWeightHpQ, 1.0,
+                               -1.0 / kKWeightHpQ, -1.0, fs);
+  return MakeSerial({shelf, hp});
+}
 
 BandDesign DesignShelfTilt(double hz, double tilt_db, double fs) {
   const double half = std::clamp(tilt_db, -kMaxTiltDb, kMaxTiltDb) / 2.0;
@@ -177,8 +174,6 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return DesignFletcherMunson(y, fs);
     case BandType::kVowel:
       return DesignVowel(x, y, z, option, fs);
-    case BandType::kKWeight:
-      return DesignKWeighting(fs);
     case BandType::kVintageLow:
       return DesignVintageLow(x, y, z, fs);
     case BandType::kVintageHigh:
@@ -261,7 +256,6 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
     case BandType::kOff:
     case BandType::kTilt:
     case BandType::kFletcherMunson:
-    case BandType::kKWeight:
       break;
   }
   return d;

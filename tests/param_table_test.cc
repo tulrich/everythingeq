@@ -4,11 +4,13 @@
 #include "model/param_table.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <complex>
 #include <fstream>
 #include <random>
 #include <set>
 #include <string>
 
+#include "dsp/bands/band_design.h"
 #include "model/engine_params_json.h"
 #include "model/presets.h"
 #include "model/slot_mapping.h"
@@ -139,7 +141,7 @@ TEST_CASE("Host values survive engine params and back", "[params]") {
 
 TEST_CASE("Factory presets parse and are representable", "[params]") {
   const std::vector<Preset>& presets = FactoryPresets();
-  REQUIRE(presets.size() == 14);
+  REQUIRE(presets.size() == 15);
   REQUIRE(presets[0].name == "Init");
   REQUIRE(NearlyEqual(presets[0].params,
                       BuildEngineParams(DefaultParamValues(), false)));
@@ -154,6 +156,29 @@ TEST_CASE("Factory presets parse and are representable", "[params]") {
         BuildEngineParams(ValuesFromEngineParams(preset.params), false);
     REQUIRE(NearlyEqual(preset.params, round_trip));
   }
+}
+
+TEST_CASE("K-Weighting preset follows the BS.1770 filter", "[params]") {
+  const Preset* preset = nullptr;
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == "K-Weighting (BS.1770)") preset = &p;
+  }
+  REQUIRE(preset != nullptr);
+  const double fs = 48000.0;
+  const BandDesign ref = DesignKWeighting(fs);
+  double worst = 0.0;
+  for (double f : LogFreqs(20.0, 20000.0, 60)) {
+    std::complex<double> h = 1.0;
+    for (const BandParams& bp : preset->params.bands) {
+      if (bp.bypass) continue;
+      h *= BandResponse(DesignBand(bp.type, bp.x, bp.y, bp.z, bp.option, fs), f,
+                        fs);
+    }
+    worst =
+        std::max(worst, std::abs(MagDb(h) - MagDb(BandResponse(ref, f, fs))));
+  }
+  CAPTURE(worst);
+  REQUIRE(worst < 0.05);
 }
 
 TEST_CASE("Mono output ignores Chan", "[params]") {

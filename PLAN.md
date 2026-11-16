@@ -101,7 +101,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 ## Phase 2 — Band types (§3.A, §3.C)
 1. LP24_LR / HP24_LR (2× Butterworth SVF). Test: LP+HP magnitude flat within 0.01 dB, phase equals the 2nd-order all-pass.
 2. Tilt (inverse shelves around f0). Test: target dB/oct slope, 0 dB at f0.
-3. K-Weighting. Test: matches BS.1770 reference response within 0.1 dB, 20 Hz–20 kHz, at all supported sample rates.
+3. K-Weighting. Test: matches BS.1770 reference response within 0.1 dB, 20 Hz–20 kHz, at all supported sample rates. (2026-11-16: no longer a band type; the group SC filter keeps it, and the factory preset *K-Weighting (BS.1770)* builds it from an HP and a High Shelf.)
 4. Fletcher-Munson: offline fit (tools/) of the 3-cell cascade to ISO 226:2003 contour differences for several phon deltas. Store fitted parameters as a small table interpolated by Phon Delta, with 0 dB at 1 kHz enforced. Test: fit error report; 1 kHz anchor within 0.1 dB.
 5. Vowel: morph table, log-frequency interpolation, Tract Scale, Natural/Flat weighting, fixed Qs. Test: formant centers land within 1% for each anchor and intermediate morph value.
 6. `BandSlot`: polymorphic wrapper (a variant/switch, no virtual calls per sample) with up to 4 cells. Changing type resets state smoothly by crossfading 16–64 samples between old and new configuration to avoid clicks.

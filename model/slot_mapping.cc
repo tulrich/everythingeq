@@ -79,7 +79,6 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       if (slot == Slot::kY) return kBoost;
       return kAtten;
     case BandType::kOff:
-    case BandType::kKWeight:
       return std::nullopt;
   }
   return std::nullopt;

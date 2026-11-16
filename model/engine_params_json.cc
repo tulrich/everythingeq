@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "dsp/bands/band_design.h"
 #include "model/param_table.h"
 
 namespace eeq {
@@ -29,7 +30,6 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"Tilt", BandType::kTilt},
     {"FletcherMunson", BandType::kFletcherMunson},
     {"Vowel", BandType::kVowel},
-    {"KWeight", BandType::kKWeight},
     {"VintageLow", BandType::kVintageLow},
     {"VintageHigh", BandType::kVintageHigh}};
 const std::pair<const char*, DynTarget> kDynTargets[] = {
@@ -150,8 +150,17 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
     for (size_t i = 0; i < j["bands"].size() && i < kNumBands; ++i) {
       const json& b = j["bands"][i];
       BandParams& bp = p.bands[i];
-      ReadEnum(b, "type", kBandTypes, bp.type);
       const std::string type_name = b.value("type", "");
+      if (type_name == "KWeight") {
+        // K-Weight was a band type until state version 8; its main part is
+        // a +4 dB high shelf (the K-Weighting preset adds the high-pass).
+        bp.type = BandType::kHighShelf;
+        bp.x = kKWeightHighShelfHz;
+        bp.y = kKWeightShelfDb;
+        bp.z = kKWeightHighShelfQ;
+      } else {
+        ReadEnum(b, "type", kBandTypes, bp.type);
+      }
       if (type_name == "LP24_LR" || type_name == "HP24_LR") {
         bp.option = static_cast<int>(FilterSlope::k24);
       }

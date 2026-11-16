@@ -33,7 +33,6 @@ EngineParams RandomChain(std::mt19937& rng) {
                             BandType::kTilt,
                             BandType::kVowel,
                             BandType::kFletcherMunson,
-                            BandType::kKWeight,
                             BandType::kVintageLow,
                             BandType::kVintageHigh};
   std::uniform_int_distribution<int> type(0, std::size(types) - 1);

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <random>
 
+#include "dsp/bands/band_design.h"
 #include "model/param_table.h"
 #include "model/preset_library.h"
 #include "model/presets.h"
@@ -94,8 +95,9 @@ TEST_CASE("Version 2 band types shift past Band Shelf", "[state]") {
           static_cast<int>(BandType::kHighShelf));
   REQUIRE((*v)[BandParamId(1, BandField::kType)] ==
           static_cast<int>(BandType::kLp));
+  // K-Weight, a high shelf since version 8.
   REQUIRE((*v)[BandParamId(2, BandField::kType)] ==
-          static_cast<int>(BandType::kKWeight));
+          static_cast<int>(BandType::kHighShelf));
 }
 
 TEST_CASE("Version 3 LR crossovers become 24 dB/oct LP and HP", "[state]") {
@@ -115,7 +117,8 @@ TEST_CASE("Version 3 LR crossovers become 24 dB/oct LP and HP", "[state]") {
   REQUIRE(at(2, BandField::kType) == static_cast<int>(BandType::kHp));
   REQUIRE(at(2, BandField::kOption) == static_cast<int>(FilterSlope::k24));
   REQUIRE(at(3, BandField::kType) == static_cast<int>(BandType::kTilt));
-  REQUIRE(at(4, BandField::kType) == static_cast<int>(BandType::kKWeight));
+  // K-Weight, a high shelf since version 8.
+  REQUIRE(at(4, BandField::kType) == static_cast<int>(BandType::kHighShelf));
 }
 
 TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {
@@ -170,6 +173,23 @@ TEST_CASE("Version 6 Off bands become bypassed default bands", "[state]") {
       static_cast<int>(BandType::kLowShelf);
   expected[BandParamId(2, BandField::kX)] = 0.25;
   REQUIRE(*v == expected);
+}
+
+TEST_CASE("Version 7 K-Weight bands become high shelves", "[state]") {
+  // v7 Type indices: ... 10 Vowel, 11 K-Weight, 12 Vintage Low, 13 Vintage
+  // High.
+  const std::optional<ParamValues> v = DeserializeState(R"({
+      "format": "everythingeq-state", "version": 7,
+      "params": {"band1.type": 11, "band2.type": 12, "band3.type": 13,
+                 "band4.type": 10}})");
+  REQUIRE(v.has_value());
+  const EngineParams p = BuildEngineParams(*v, false);
+  REQUIRE(p.bands[0].type == BandType::kHighShelf);
+  REQUIRE(std::abs(p.bands[0].x - kKWeightHighShelfHz) < 0.01);
+  REQUIRE(std::abs(p.bands[0].y - kKWeightShelfDb) < 0.01);
+  REQUIRE(p.bands[1].type == BandType::kVintageLow);
+  REQUIRE(p.bands[2].type == BandType::kVintageHigh);
+  REQUIRE(p.bands[3].type == BandType::kVowel);
 }
 
 TEST_CASE("Dyn On decides whether a band follows its group", "[state]") {

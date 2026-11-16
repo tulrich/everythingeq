@@ -454,13 +454,6 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const Port& p = ports[b][s];
       const float x = PortX(b, s);
       if (!p.on) {
-        // The selected band's unconnected ports show, faintly, the group
-        // they join if a range is dragged on the graph.
-        if (b == sel_band) {
-          g.DrawDottedLine(theme::BandColor(b).WithOpacity(0.5f), x,
-                           GroupY(std::clamp(p.group, 0, kNumGroups - 1)), x,
-                           py - 6.f, nullptr, 1.2f, 3.f);
-        }
         g.DrawCircle(theme::kGridStrong, x, py - 3.f, 2.5f);
         continue;
       }

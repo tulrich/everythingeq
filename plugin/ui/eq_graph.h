@@ -25,8 +25,8 @@ namespace eeq {
 //
 // Nodes: frequency bands drag frequency (horizontal, in Hz) and gain
 // (vertical, in dB); filters sit on their curve at the cutoff; Vowel drags
-// Morph and Formant Gain; Fletcher-Munson is pinned at 1 kHz and drags Phon;
-// K-Weight has no node.  The wheel adjusts Q (Tract Scale for Vowel, Width for
+// Morph and Formant Gain; Fletcher-Munson is pinned at 1 kHz and drags
+// Phon.  The wheel adjusts Q (Tract Scale for Vowel, Width for
 // Band Shelf).  A selected Band Shelf also shows handles at its edges (the
 // half-gain points); dragging one moves that edge and keeps the other fixed.
 // Double-clicking a node turns its band on or off (Bypass).
@@ -159,7 +159,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     }
     if (selected >= 0) DrawDynNodes(g, selected);
     for (int b = 0; b < kNumBands; ++b) {
-      const std::optional<ig::IVec2> p = NodePosition(b);
+      const std::optional<ig::IVec2> p = ShownNodePosition(b);
       if (!p) continue;
       const ig::IColor color = theme::BandColor(b);
       const bool bypassed = params_.bands[b].bypass;
@@ -376,7 +376,7 @@ class EqGraph final : public iplug::igraphics::IControl {
         ResolveBand(bp, dyn == 0 ? 1.0 : 0.0, dyn == 0 ? 0.0 : 1.0,
                     params_.global.global_scale);
     bp.x = rb.x, bp.y = rb.y, bp.z = rb.z;
-    return NodePosition(band, bp);
+    return ShownNodePosition(band, bp);
   }
 
   // The grab handle for a band's Dyn assignment `dyn`: its full-dynamics
@@ -390,7 +390,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::optional<DynHandle> DynHandlePosition(int band, int dyn) const {
     if (band < 0) return std::nullopt;
     if (params_.bands[band].bypass) return std::nullopt;
-    const std::optional<iplug::igraphics::IVec2> p = NodePosition(band);
+    const std::optional<iplug::igraphics::IVec2> p = ShownNodePosition(band);
     if (!p) return std::nullopt;
     const std::optional<iplug::igraphics::IVec2> q = DynNodePosition(band, dyn);
     if (q && std::hypot(q->x - p->x, q->y - p->y) >= 2.f * kNodeRadius + 4.f) {
@@ -417,7 +417,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   // The selected band's Dyn handles, joined to its node.
   void DrawDynNodes(iplug::igraphics::IGraphics& g, int band) {
     namespace ig = iplug::igraphics;
-    const std::optional<ig::IVec2> p = NodePosition(band);
+    const std::optional<ig::IVec2> p = ShownNodePosition(band);
     if (!p) return;
     const ig::IColor color = theme::BandColor(band);
     for (int dyn = 0; dyn < 2; ++dyn) {
@@ -613,7 +613,7 @@ class EqGraph final : public iplug::igraphics::IControl {
     // Topmost (highest index) first, but prefer the selected band.
     const int selected = model_.SelectedBand();
     auto hit = [&](int b) {
-      const auto p = NodePosition(b);
+      const auto p = ShownNodePosition(b);
       return p && std::hypot(p->x - x, p->y - y) <= kNodeRadius + 3.f;
     };
     if (selected >= 0 && hit(selected)) return selected;
@@ -631,6 +631,19 @@ class EqGraph final : public iplug::igraphics::IControl {
     return NodePosition(band, bp);
   }
 
+  // Where the node is drawn and grabbed: as NodePosition, but kept inside
+  // the plot (e.g. a Notch's node, on its own curve at the notch depth).
+  // Drags start from the true position, so grabbing it doesn't jump.
+  std::optional<iplug::igraphics::IVec2> ShownNodePosition(
+      int band, std::optional<BandParams> bp = std::nullopt) const {
+    auto p = bp ? NodePosition(band, *bp) : NodePosition(band);
+    if (p) {
+      p->x = std::clamp(p->x, mRECT.L + kNodeRadius, mRECT.R - kNodeRadius);
+      p->y = std::clamp(p->y, mRECT.T + kNodeRadius, mRECT.B - kNodeRadius);
+    }
+    return p;
+  }
+
   double GainScale(int band) const {
     return GainScaleFor(params_.bands[band].type, params_.global.global_scale);
   }
@@ -642,7 +655,6 @@ class EqGraph final : public iplug::igraphics::IControl {
     double hz = 1000.0;
     switch (bp.type) {
       case BandType::kOff:
-      case BandType::kKWeight:
         return std::nullopt;
       case BandType::kFletcherMunson:
         hz = 1000.0;

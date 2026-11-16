@@ -27,7 +27,6 @@ enum class BandType {
   kTilt,
   kFletcherMunson,
   kVowel,
-  kKWeight,
   kVintageLow,
   kVintageHigh,
   kOff,
@@ -65,7 +64,6 @@ inline constexpr int kSplitBands = 4;
 //   FletcherMunson:      y = phon delta (positive = boost lows/highs)
 //   Vowel:               x = morph index 0..4, y = formant gain dB,
 //                        z = tract scale
-//   KWeight:             fixed (x, y, z unused)
 //   VintageLow:           x = Hz, y = boost dB, z = attenuation dB
 //   VintageHigh:          x = boost Hz, y = boost dB, z = attenuation dB
 //                        (a shelf at the Option's VintageAtten frequency)

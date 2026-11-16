@@ -176,7 +176,7 @@ class BandRibbon final : public iplug::igraphics::IControl {
   bool IsDirty() override { return true; }  // Cheap; follows param changes.
 
  private:
-  static constexpr int kIconPoints = 24;
+  static constexpr int kIconPoints = 72;
   static constexpr double kIconRangeDb = 15.0;  // Half height.
 
   // The curve of a band of `type` at typical settings (a boost for types
@@ -195,6 +195,10 @@ class BandRibbon final : public iplug::igraphics::IControl {
         }
         if (bp.type == BandType::kTilt) bp.z = 6.0;
         if (bp.type == BandType::kBp) bp.y = 6.0;
+        // Flat weighting, so the upper formants show as clearly as F1.
+        if (bp.type == BandType::kVowel) {
+          bp.option = static_cast<int>(VowelWeighting::kFlat);
+        }
         for (int i = 0; i < kIconPoints; ++i) {
           const double mag = std::abs(BandParamsResponse(
               bp, 0.0, 0.0, 1.0, freqs[i], 48000.0, nullptr));
