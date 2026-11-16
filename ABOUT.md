@@ -43,6 +43,9 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 8. **Talk Box (Vowels from a Sung Sidechain):**
    * *Setup:* Factory preset *Talk Box (SC)* on a synth, keys or guitar track, with a vocal track as the sidechain. G1 tracks the sung vowel (`Detect = Vowel`) and G2 the vocal's level, both on `External SC`. Band 1 is a Vowel band with +6 dB formants: Dyn A (Morph +4, on G1) moves it to the sung vowel, and Dyn B (Gain +12 dB, on G2) raises the formants while the singer sings, so the instrument "speaks" and falls back to a muffled OO between phrases. Output Gain −6 dB offsets the boost.
    * *Notes:* The vocal can be kept out of the mix with its fader or output, but not by soloing the instrument (section 3.D). Only vowels along the OO–OH–AH–EH–EE path come through; consonants and nasals don't, unlike a real talk box or a vocoder.
+9. **Pitch-Tracked Comb (Harmonic Resonance, Tonal/Noise Split):**
+   * *Setup:* A Comb band at 27.5 Hz with Dyn Target Freq and DynRange `+8 oct` on a Pitch group puts its teeth on every harmonic of the note being played. Boosted (*Harmonic Resonator (Pitch)*), it adds a tuned, ringing resonance like sympathetic strings; cut in band 1 with `Split L/R` (*Tonal-Noise Split*), it separates a monophonic source into its noise (breath, pick, bow and room; left) and its pitched part (right), to process or level each on its own.
+   * *Variations:* `Odd` harmonics boosted give a hollow, square-wave color; `Odd` cut leaves the even harmonics, so the note sounds an octave higher. On a Level group instead, Dyn Target Freq sweeps the teeth with the playing dynamics: a touch-sensitive flanger.
 
 ---
 
@@ -61,6 +64,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
   * *K-Weighting:* not a band type (it has no parameters) but the factory preset *K-Weighting (BS.1770)*: band 1 is the 38 Hz RLB high-pass (12 dB/oct, Q 0.5) and band 2 a +4 dB High Shelf (1.5 kHz, Q 0.71), within 0.01 dB of ITU-R BS.1770. The group SC Filter keeps an exact `K-Weight` (two fixed SVF stages). State version 8 turns an older K-Weight band into that High Shelf.
   * *Vintage Low:* the low section of a classic passive program EQ, after the Pulse Techniques EQP-1A (Pultec is a trademark of its owner; Everything EQ is not affiliated with or endorsed by it). 2x Low Shelf cells. The boost (the LC network) is a resonant shelf (Q 0.9) whose half-gain point is the selected frequency (20–200 Hz); the attenuation (the RC network) is a much broader shelf (Q 0.45) centered five times higher. With both up, the boost wins at the bottom and the attenuation above it: e.g. at 60 Hz, boost 8 dB and atten 4 dB give about +4 dB below 30 Hz and a dip of about −3.5 dB near 120 Hz. Equal boost and attenuation cancel at the very bottom, leaving mostly the dip. Shaped after published curves, not fitted to measurements.
   * *Vintage High:* a broad boost bell (Q 0.7, 2–20 kHz) plus a gentle attenuation High Shelf (Q 0.45) at 5, 10 or 20 kHz (the Option, "Atten Sel"), e.g. boost 10 kHz and attenuate at 20 kHz for the classic air lift. The factory preset "Vintage Low & High Tricks" sets up both.
+  * *Comb:* teeth on the harmonics of f0 (X, 20 Hz – 8 kHz): `All` of them, `Odd` only (a hollow, square-wave/clarinet color; as a cut, it leaves the even harmonics and the note sounds an octave up) or `Even` only (All an octave up). Gain (Y, ±30 dB) is the gain at every tooth, with 0 dB midway between teeth; Q (Z, 4–200) the teeth's sharpness. A feedback comb on a delay line (4-point Lagrange interpolation), normalized like a peaking EQ: $y = d\,x + w\,c$, $c[n] = x[n] \pm g\,c[n-D]$, $g = 1 - \pi/Q$. The delay glides to a new f0 (15 ms one-pole), so a tracked note change bends rather than clicks. With Dyn Target Freq on a Pitch group (X = 27.5 Hz, DynRange +8 oct) the teeth follow the note: factory presets *Harmonic Resonator (Pitch)* (+9 dB teeth: a tuned resonance on every harmonic) and *Tonal-Noise Split* (−30 dB teeth in `Split L/R`: the noise and breath on the left, the pitched part on the right). The graph shows teeth too dense to draw as their average effect.
 * **Efficiency & Nyquist Hygiene:**
   * Recalculate transcendental filter coefficients ($\tan$, $10^{\text{dB}/40}$) at a **control sub-block rate** (every 16 samples) with an epsilon dirty-check (`|ΔdB| > 0.005 dB`, or an equivalent relative frequency change), linearly interpolating $g$, $k$ and the output-mix weights across the sub-block when they are moving.
   * Use lightweight algebraic Q-prewarping near Nyquist to avoid high-shelf/bell cramping at 44.1/48 kHz without introducing oversampling latency.
@@ -157,12 +161,13 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 | Vowel | Morph (0–4) | Formant Gain (dB) | Tract Scale (×) | Weighting: Natural / Flat |
 | Vintage Low | Freq (20–200 Hz) | Boost (0–18 dB) | Atten (0–18 dB) | – |
 | Vintage High | Boost Freq (2–20 kHz) | Boost (0–18 dB) | Atten (0–18 dB) | Atten Sel: 5 / 10 / 20 kHz |
+| Comb | f0 (20 Hz – 8 kHz) | Gain (±30 dB, at the teeth) | Q (4–200) | Harmonics: All / Odd / Even |
 
 * **Ranges and defaults.** The host sees X, Y, Z and DynRange as normalized 0–1 parameters whose mapping to physical units depends on the band type (and, for DynRange, on `Dyn Target`); the normalized value is what persists across type changes. Each mapping is piecewise (logarithmic for frequency, Q and Tract Scale, linear otherwise) with the slot's default at normalized 0.5, so the defaults below agree whatever the type: 1 kHz, 0 dB, Q 0.707, Width 2 oct, Morph 2 (AH), Tract 1.0×, DynRange 0. The Vintage types have their own: 60 Hz (Low) or 8 kHz (High), Boost 4 dB, Atten 2 dB. Global Scale scales both Boost and Atten, and a Gain target moves the Boost. Dynamic modulation is clamped to the same ranges as the static value.
 
 | Parameter | Range | Default | Skew / notes |
 | :--- | :--- | :--- | :--- |
-| Type | 13 types | per the default band layout | LP/HP slope and Vintage High Atten Sel are the Option |
+| Type | 14 types | per the default band layout | LP/HP slope, Vintage High Atten Sel and Comb Harmonics are the Option |
 | Freq (X) | 20 Hz – 20 kHz | 1 kHz | log |
 | Gain (Y) | ±30 dB (BP: −60 … +30) | 0 dB | linear |
 | Q (Z) | 0.1 – 40 | 0.707 | log |

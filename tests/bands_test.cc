@@ -2,6 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <random>
+#include <vector>
 
 #include "dsp/bands/band_design.h"
 #include "dsp/bands/band_processor.h"
@@ -397,6 +399,70 @@ TEST_CASE("Global Scale scales the Vintage attenuation too", "[bands]") {
   REQUIRE(rb.y == 4.0);
   REQUIRE(rb.z == 2.0);
   REQUIRE(rb.x == 60.0);
+}
+
+TEST_CASE("Comb teeth sit on the chosen harmonics, 0 dB midway", "[bands]") {
+  const double fs = 48000.0, f0 = 200.0;
+  const double gain = GENERATE(12.0, -12.0, -30.0);
+  const double q = GENERATE(8.0, 20.0, 80.0);
+  CAPTURE(gain, q);
+  for (int option = 0; option < 3; ++option) {
+    CAPTURE(option);
+    const BandDesign d = DesignBand(BandType::kComb, f0, gain, q, option, fs);
+    for (int k = 1; k <= 20; ++k) {
+      // Which harmonics are teeth; the others sit midway between teeth.
+      const bool tooth = option == 0 || (option == 1) == (k % 2 == 1);
+      CAPTURE(k);
+      REQUIRE(std::abs(MagDb(BandResponse(d, k * f0, fs)) -
+                       (tooth ? gain : 0.0)) < 0.01);
+    }
+  }
+}
+
+TEST_CASE("Comb processor matches its design", "[bands]") {
+  const double fs = 48000.0;
+  // f0 = 240 Hz: an integer delay, so interpolation is exact.
+  const BandDesign d = DesignBand(BandType::kComb, 240.0, 9.0, 20.0, 0, fs);
+  for (double f : {240.0, 480.0, 600.0, 1000.0, 3000.0}) {
+    CAPTURE(f);
+    BandProcessor p;
+    std::vector<double> buf(4096);
+    p.SetCombBuffer(buf.data(), static_cast<int>(buf.size()));
+    p.Apply(d, 1);
+    double peak = 0.0;
+    for (int n = 0; n < static_cast<int>(fs); ++n) {
+      const double y = p.Process(std::sin(2.0 * kPi * f * n / fs)).y;
+      if (n > fs / 2) peak = std::max(peak, std::abs(y));
+    }
+    REQUIRE(std::abs(20.0 * std::log10(peak) - MagDb(BandResponse(d, f, fs))) <
+            0.05);
+  }
+}
+
+TEST_CASE("Comb glides to a new f0 without clicking", "[bands]") {
+  const double fs = 48000.0;
+  BandProcessor p;
+  std::vector<double> buf(4096);
+  p.SetCombBuffer(buf.data(), static_cast<int>(buf.size()));
+  p.Apply(DesignBand(BandType::kComb, 110.0, 12.0, 40.0, 0, fs), 1);
+  // A note change: f0 jumps from A2 to E3.
+  const BandDesign next = DesignBand(BandType::kComb, 164.8, 12.0, 40.0, 0, fs);
+  std::mt19937 rng(7);
+  std::uniform_real_distribution<double> noise(-0.1, 0.1);
+  double prev = 0.0, step_before = 0.0, step_after = 0.0;
+  const int change = static_cast<int>(fs);
+  for (int n = 0; n < 2 * change; ++n) {
+    if (n == change) p.Apply(next, kControlBlock);
+    const double y = p.Process(noise(rng)).y;
+    const double step = std::abs(y - prev);
+    prev = y;
+    if (n > change / 2 && n < change) step_before = std::max(step_before, step);
+    if (n >= change && n < change + 4800) {
+      step_after = std::max(step_after, step);
+    }
+  }
+  CAPTURE(step_before, step_after);
+  REQUIRE(step_after < 1.5 * step_before);
 }
 
 }  // namespace eeq::test

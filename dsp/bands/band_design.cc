@@ -80,7 +80,36 @@ BandDesign DesignVintageHigh(double hz, double boost_db, double atten_db,
                                kVintageAttenQ, -ClampGain(atten_db), fs)});
 }
 
+// Teeth on the harmonics of f0 (all, odd or even ones) with gain_db at
+// each tooth and 0 dB midway between: y = x + (G - 1) R x, where the
+// resonator R = (1 - g) / (1 - s g z^-D), rescaled to be 1 at the teeth
+// and 0 midway (where it is r = (1 - g) / (1 + g)).
+BandDesign DesignComb(double f0, double gain_db, double q, int option,
+                      double fs) {
+  const auto harmonics = static_cast<CombHarmonics>(std::clamp(option, 0, 2));
+  f0 = std::clamp(f0, kCombMinHz, kCombMaxHz);
+  BandDesign d;
+  d.topology = BandTopology::kComb;
+  // Odd: a negative comb at twice f0 (teeth at odd multiples of f0).  Even:
+  // a comb at twice f0.
+  const bool all = harmonics == CombHarmonics::kAll;
+  d.comb_delay = std::clamp(fs / (all ? f0 : 2.0 * f0), 2.0, fs / kCombMinHz);
+  d.comb_sign = harmonics == CombHarmonics::kOdd ? -1.0 : 1.0;
+  const double g = CombFeedback(q);
+  const double r = (1.0 - g) / (1.0 + g);
+  const double k = (DbToGain(ClampGain(gain_db)) - 1.0) / (1.0 - r);
+  d.comb_g = g;
+  d.comb_dry = 1.0 - k * r;
+  d.comb_wet = k * (1.0 - g);
+  d.comb_slew = 1.0 - std::exp(-1000.0 / (kCombGlideMs * fs));
+  return d;
+}
+
 }  // namespace
+
+double CombFeedback(double q) {
+  return 1.0 - kPi / std::clamp(q, kCombMinQ, kCombMaxQ);
+}
 
 // ITU-R BS.1770 K-weighting expressed exactly as two SVF cells.
 BandDesign DesignKWeighting(double fs) {
@@ -178,6 +207,8 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return DesignVintageLow(x, y, z, fs);
     case BandType::kVintageHigh:
       return DesignVintageHigh(x, y, z, option, fs);
+    case BandType::kComb:
+      return DesignComb(x, y, z, option, fs);
   }
   return {};
 }
@@ -206,6 +237,11 @@ std::complex<double> BandResponse(const BandDesign& d, double f, double fs) {
       std::complex<double> h = d.post_gain;
       for (int i = 0; i < d.num_cells; ++i) h *= SvfResponse(d.cells[i], f, fs);
       return h;
+    }
+    case BandTopology::kComb: {
+      const std::complex<double> zd =
+          std::polar(1.0, -2.0 * kPi * f * d.comb_delay / fs);
+      return d.comb_dry + d.comb_wet / (1.0 - d.comb_sign * d.comb_g * zd);
     }
   }
   return 1.0;
@@ -256,6 +292,7 @@ DetectorDesign DesignDetector(BandType type, double x, double z, double fs) {
     case BandType::kOff:
     case BandType::kTilt:
     case BandType::kFletcherMunson:
+    case BandType::kComb:
       break;
   }
   return d;

@@ -1,0 +1,9 @@
+{
+  "description": "Use case 9: a pitch-tracked Comb (+9 dB teeth, Q 40) resonates on every harmonic of each bass note, gliding between notes.",
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/15_harmonic_resonator.json",
+  "input": {
+    "generate": "bass"
+  }
+}

@@ -2,6 +2,7 @@
 #define EVERYTHINGEQ_DSP_BANDS_BAND_PROCESSOR_H_
 
 #include <array>
+#include <vector>
 
 #include "dsp/bands/band_design.h"
 #include "dsp/common/math.h"
@@ -37,9 +38,16 @@ struct BandOutput {
   double comp;  // complementary crossover output (Crossover topology only)
 };
 
-// One channel of a band: up to 4 SVF cells with coefficient ramps.
+// One channel of a band: up to 4 SVF cells with coefficient ramps, or a
+// comb on a delay line the owner provides (copies share it).
 class BandProcessor {
  public:
+  // The Comb topology's delay line: `size` (a power of two) samples, at
+  // least kCombMinHz's period plus 4.
+  void SetCombBuffer(double* buffer, int size) {
+    comb_buf_ = buffer;
+    comb_mask_ = size - 1;
+  }
   void Reset();
   // Apply a design.  If the topology or cell count changes, the processor
   // snaps (and should be crossfaded by the caller).
@@ -53,6 +61,14 @@ class BandProcessor {
   bool crossover_high_ = false;
   std::array<SvfCell, 4> cells_{};
   LinearRamp post_;
+  // Comb.
+  double ReadComb(double delay) const;
+  double* comb_buf_ = nullptr;
+  int comb_mask_ = 0;
+  int comb_w_ = 0;
+  double comb_d_ = 2.0, comb_d_target_ = 2.0;
+  double comb_slew_ = 1.0, comb_sign_ = 1.0;
+  LinearRamp comb_g_, comb_dry_, comb_wet_;
 };
 
 // Static band parameters resolved for one channel after dynamics.
@@ -89,6 +105,11 @@ class BandSlot {
  public:
   static constexpr int kFadeSamples = 64;
 
+  BandSlot() = default;
+  // Its processors point into its comb buffers.
+  BandSlot(const BandSlot&) = delete;
+  BandSlot& operator=(const BandSlot&) = delete;
+
   void Prepare(double sample_rate);
   void Reset();
   // Called once per control sub-block.  `snap_now` jumps without ramping.
@@ -113,6 +134,9 @@ class BandSlot {
   std::array<BandDesign, kNumChannels> design_{};
   std::array<BandProcessor, kNumChannels> cur_{};
   std::array<BandProcessor, kNumChannels> prev_{};
+  // One delay line per channel: at most one of cur_ and prev_ is a Comb
+  // (a crossfade only runs between different types).
+  std::array<std::vector<double>, kNumChannels> comb_buf_;
   int fade_ = 0;
 };
 

@@ -19,6 +19,7 @@ bool HasGain(BandType t) {
     case BandType::kVowel:
     case BandType::kVintageLow:
     case BandType::kVintageHigh:
+    case BandType::kComb:
       return true;
     default:
       return false;
@@ -111,12 +112,21 @@ BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
 
 void BandProcessor::Reset() {
   for (SvfCell& c : cells_) c.Reset();
+  if (comb_buf_) std::fill(comb_buf_, comb_buf_ + comb_mask_ + 1, 0.0);
+  comb_w_ = 0;
 }
 
 void BandProcessor::Apply(const BandDesign& d, int ramp_samples) {
+  const bool comb = d.topology == BandTopology::kComb;
   const bool structural = d.topology != topology_ ||
                           d.num_cells != num_cells_ ||
-                          d.crossover_high != crossover_high_;
+                          d.crossover_high != crossover_high_ ||
+                          (comb && d.comb_sign != comb_sign_);
+  if (comb) {
+    comb_d_target_ = d.comb_delay;
+    comb_slew_ = d.comb_slew;
+    comb_sign_ = d.comb_sign;
+  }
   if (structural) {
     topology_ = d.topology;
     num_cells_ = d.num_cells;
@@ -124,8 +134,15 @@ void BandProcessor::Apply(const BandDesign& d, int ramp_samples) {
     Reset();
     for (int i = 0; i < num_cells_; ++i) cells_[i].Snap(d.cells[i]);
     post_.Snap(d.post_gain);
+    comb_d_ = comb_d_target_;
+    comb_g_.Snap(d.comb_g);
+    comb_dry_.Snap(d.comb_dry);
+    comb_wet_.Snap(d.comb_wet);
     return;
   }
+  comb_g_.SetTarget(d.comb_g, ramp_samples);
+  comb_dry_.SetTarget(d.comb_dry, ramp_samples);
+  comb_wet_.SetTarget(d.comb_wet, ramp_samples);
   for (int i = 0; i < num_cells_; ++i)
     cells_[i].SetTarget(d.cells[i], ramp_samples);
   post_.SetTarget(d.post_gain, ramp_samples);
@@ -146,13 +163,45 @@ BandOutput BandProcessor::Process(double x) {
       const double high = cells_[2].Tick(s.high).high;
       return crossover_high_ ? BandOutput{high, low} : BandOutput{low, high};
     }
+    case BandTopology::kComb: {
+      if (!comb_buf_) return {x, 0.0};
+      // The delay glides to its target, so a jump in f0 bends rather than
+      // clicks.
+      comb_d_ += comb_slew_ * (comb_d_target_ - comb_d_);
+      const double c = x + comb_sign_ * comb_g_.Next() * ReadComb(comb_d_);
+      comb_buf_[comb_w_] = c;
+      comb_w_ = (comb_w_ + 1) & comb_mask_;
+      return {comb_dry_.Next() * x + comb_wet_.Next() * c, 0.0};
+    }
   }
   return {x, 0.0};
+}
+
+// c[n - delay] by 4-point Lagrange interpolation (delay >= 2), with
+// c[n - 1] at comb_w_ - 1.
+double BandProcessor::ReadComb(double delay) const {
+  const int i = static_cast<int>(delay);
+  const double f = delay - i;
+  auto at = [&](int k) { return comb_buf_[(comb_w_ - k) & comb_mask_]; };
+  const double ym1 = at(i - 1), y0 = at(i), y1 = at(i + 1), y2 = at(i + 2);
+  return -f * (f - 1.0) * (f - 2.0) / 6.0 * ym1 +
+         (f + 1.0) * (f - 1.0) * (f - 2.0) / 2.0 * y0 -
+         (f + 1.0) * f * (f - 2.0) / 2.0 * y1 +
+         (f + 1.0) * f * (f - 1.0) / 6.0 * y2;
 }
 
 void BandSlot::Prepare(double sample_rate) {
   fs_ = sample_rate;
   initialized_ = false;
+  int size = 1;
+  while (size < fs_ / kCombMinHz + 8) size *= 2;
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    comb_buf_[ch].assign(static_cast<size_t>(size), 0.0);
+    cur_[ch] = BandProcessor{};
+    prev_[ch] = BandProcessor{};
+    cur_[ch].SetCombBuffer(comb_buf_[ch].data(), size);
+    prev_[ch].SetCombBuffer(comb_buf_[ch].data(), size);
+  }
   Reset();
 }
 
@@ -184,7 +233,13 @@ void BandSlot::Update(BandType type,
     if (initialized_ && !type_changed && !Changed(p[ch], last_[ch])) continue;
     last_[ch] = p[ch];
     design_[ch] = DesignResolvedBand(type, p[ch], fs_);
-    if (type_changed) cur_[ch] = BandProcessor{};
+    if (type_changed) {
+      cur_[ch] = BandProcessor{};
+      if (!comb_buf_[ch].empty()) {
+        cur_[ch].SetCombBuffer(comb_buf_[ch].data(),
+                               static_cast<int>(comb_buf_[ch].size()));
+      }
+    }
     cur_[ch].Apply(design_[ch], snap_now ? 1 : kControlBlock);
   }
   type_ = type;

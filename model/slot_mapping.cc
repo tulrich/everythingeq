@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "dsp/bands/band_design.h"
+
 namespace eeq {
 namespace {
 
@@ -26,6 +28,9 @@ constexpr SlotMapping kVintageHighFreq{2000.0, 8000.0, 20000.0,
                                        true,   "Freq", "Hz"};
 constexpr SlotMapping kBoost{0.0, 4.0, 18.0, false, "Boost", "dB"};
 constexpr SlotMapping kAtten{0.0, 2.0, 18.0, false, "Atten", "dB"};
+constexpr SlotMapping kCombFreq{kCombMinHz, 220.0,  kCombMaxHz,
+                                true,       "Freq", "Hz"};
+constexpr SlotMapping kCombQ{kCombMinQ, 20.0, kCombMaxQ, true, "Q", ""};
 
 double Lerp(double a, double b, double t, bool log) {
   return log ? a * std::pow(b / a, t) : a + (b - a) * t;
@@ -78,6 +83,10 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       }
       if (slot == Slot::kY) return kBoost;
       return kAtten;
+    case BandType::kComb:
+      if (slot == Slot::kX) return kCombFreq;
+      if (slot == Slot::kY) return kGain;
+      return kCombQ;
     case BandType::kOff:
       return std::nullopt;
   }
@@ -93,6 +102,8 @@ const char* OptionName(BandType type) {
       return "Slope";
     case BandType::kVintageHigh:
       return "Atten Sel";
+    case BandType::kComb:
+      return "Harmonics";
     default:
       return "";
   }
@@ -107,6 +118,8 @@ std::vector<std::string> OptionLabels(BandType type) {
       return {"12 dB/oct", "24 dB/oct"};  // FilterSlope
     case BandType::kVintageHigh:
       return {"5 kHz", "10 kHz", "20 kHz"};  // VintageAtten
+    case BandType::kComb:
+      return {"All", "Odd", "Even"};  // CombHarmonics
     default:
       return {};
   }
@@ -119,6 +132,7 @@ int OptionCount(BandType type) {
     case BandType::kHp:
       return 2;
     case BandType::kVintageHigh:
+    case BandType::kComb:
       return 3;
     default:
       return 0;

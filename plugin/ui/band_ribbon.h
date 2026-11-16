@@ -200,6 +200,15 @@ class BandRibbon final : public iplug::igraphics::IControl {
           bp.option = static_cast<int>(VowelWeighting::kFlat);
         }
         for (int i = 0; i < kIconPoints; ++i) {
+          if (bp.type == BandType::kComb) {
+            // Stylized: five even teeth (the real ones crowd together on
+            // the log axis).
+            const double u = static_cast<double>(i) / (kIconPoints - 1);
+            c[t][i] = static_cast<float>(
+                12.0 *
+                std::pow(0.5 + 0.5 * std::cos(2.0 * kPi * 5.0 * u), 6.0));
+            continue;
+          }
           const double mag = std::abs(BandParamsResponse(
               bp, 0.0, 0.0, 1.0, freqs[i], 48000.0, nullptr));
           c[t][i] = static_cast<float>(20.0 * std::log10(std::max(mag, 1e-6)));

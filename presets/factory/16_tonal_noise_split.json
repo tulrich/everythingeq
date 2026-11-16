@@ -1,0 +1,29 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Tonal-Noise Split",
+  "params": {
+    "global": {
+      "outputMode": "SplitLR"
+    },
+    "groups": [
+      {
+        "detect": "Pitch",
+        "attackMs": 10,
+        "releaseMs": 10
+      }
+    ],
+    "bands": [
+      {
+        "type": "Comb",
+        "x": 27.5,
+        "y": -30,
+        "z": 30,
+        "harmonics": "All",
+        "dynGroup": 0,
+        "dynTarget": "Freq",
+        "dynRange": 8.0
+      }
+    ]
+  }
+}

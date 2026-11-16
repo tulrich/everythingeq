@@ -15,6 +15,9 @@ enum class BandTopology {
   // LR4: cell 0 is the Butterworth split, cell 1 the LP on the low output,
   // cell 2 the HP on the high output.
   kCrossover,
+  // y = comb_dry * x + comb_wet * c, c[n] = x[n] + comb_sign * comb_g *
+  // c[n - D]: teeth where comb_sign * z^-D = 1.
+  kComb,
 };
 
 // Stateless description of one band (one channel's coefficients).
@@ -24,6 +27,13 @@ struct BandDesign {
   std::array<SvfCoeffs, 4> cells{};
   double post_gain = 1.0;
   bool crossover_high = false;  // HP at 24 dB/oct: y is the high output
+  // Comb topology.
+  double comb_delay = 0.0;  // D, samples
+  double comb_g = 0.0;      // feedback, 0 <= g < 1
+  double comb_sign = 1.0;   // -1: teeth on odd multiples of fs / (2 D)
+  double comb_dry = 1.0;
+  double comb_wet = 0.0;
+  double comb_slew = 1.0;  // one-pole coefficient smoothing D per sample
 };
 
 // Legal parameter ranges (ABOUT.md section 3.E).
@@ -38,6 +48,15 @@ inline constexpr double kTiltShelfQ = 0.6;  // Monotonic at every width.
 // Vintage shapes (DesignBand).
 inline constexpr double kVintageBoostQ = 0.9;
 inline constexpr double kVintageAttenQ = 0.45;
+// Comb: f0 range (the delay line holds 1 / kCombMinHz), tooth Q range, and
+// how fast the delay follows f0 (no clicks when a tracked pitch jumps).
+inline constexpr double kCombMinHz = 20.0;
+inline constexpr double kCombMaxHz = 8000.0;
+inline constexpr double kCombMinQ = 4.0;
+inline constexpr double kCombMaxQ = 200.0;
+inline constexpr double kCombGlideMs = 15.0;
+// Comb feedback for a tooth Q: Q = pi / (1 - g).
+double CombFeedback(double q);
 inline constexpr double kVintageLowAttenRatio = 5.0;
 inline constexpr double kVintageHighBoostQ = 0.7;
 inline constexpr int kTiltCells = 4;

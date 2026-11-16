@@ -22,6 +22,9 @@ using GroupControls = std::array<double, kNumGroups>;
 
 struct ChainResponse {
   // Magnitude in dB of each band's own output (empty for Off bands).
+  // With a Comb in the chain, every curve is power-averaged over each
+  // display point's share of the axis, so teeth denser than the points show
+  // their average effect.
   // Bypassed bands still get a curve; they are left out of `total_db`.
   std::array<std::vector<float>, kNumBands> band_db;
   // The whole chain (what Normal output mode plays; in the split modes, the

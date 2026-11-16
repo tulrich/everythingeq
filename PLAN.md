@@ -225,6 +225,10 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
 * Formant Q values and F-M presence-bell center (tuning).
 * Post-v1: multi-output buses for VST3/CLAP hosts, an instrument variant for Logic multi-out, formant tracking.
 * Tracking detectors (user idea, 2026-10-27): **done** as group `Detect` = Vowel / Pitch (`dsp/dynamics/tracker.h`, ABOUT.md 3.B). A second Dyn assignment per band (Dyn B) is done too, in a fourth band-editor row for now (to be laid out properly in the UI polish pass); factory preset *Vocal Vowel Carve (SC)*.
+* Comb band type (user request, 2026-11-16): **done** (All / Odd / Even harmonics, 15 ms delay glide; presets *Harmonic Resonator (Pitch)* and *Tonal-Noise Split*; ABOUT.md use case 9). Later:
+  - More harmonic patterns: removing every Nth harmonic (N = 3, 4, ...) gives the timbre of a pulse wave of duty 1/N; doable as a comb at f0 times a notch comb at N f0. Keeping only every Nth is just a comb at N f0 (Even is N = 2). Keeping 3k+1 alone isn't a single comb (a real filter's teeth are symmetric); it would need a bank of resonators.
+  - Crossfade between two delay lines on large f0 jumps, if the glide's pitch bend on ringing teeth turns out audible.
+  - Fade the teeth out above a set frequency.
 * Vintage Boost/Atten link (user idea, 2026-11-14). The Vintage types' Boost (Y) and Atten (Z) are separate dials; the classic trick sets both together.
   - UI: a short line joining the two dials with a link/chain icon between them; dragging the icon up or down moves both dials by the same amount (keeping their offset), and the dials still drag separately.
   - Dynamics: Dyn Target Gain on a Vintage band moves only Boost today. Moving both (or Atten alone) needs another setting, e.g. a per-band "Dyn Gain moves: Boost / Atten / Both" or making the link state apply to dynamics too. To decide before building.

@@ -7,6 +7,7 @@
 #include <catch2/generators/catch_generators_range.hpp>
 #include <random>
 
+#include "model/presets.h"
 #include "tests/test_util.h"
 
 namespace eeq::test {
@@ -68,8 +69,7 @@ TEST_CASE("Chain response matches the engine's impulse response", "[curves]") {
   REQUIRE(curves.split_db.empty());
 
   // The split modes' two outputs.
-  for (const OutputMode mode :
-       {OutputMode::kSplit, OutputMode::kResidual}) {
+  for (const OutputMode mode : {OutputMode::kSplit, OutputMode::kResidual}) {
     EngineParams q = p;
     q.global.output_mode = mode;
     Engine es;
@@ -135,6 +135,28 @@ TEST_CASE("Scale is a gain scale", "[curves]") {
   ChainResponse curves;
   ComputeChainResponse(p, controls, kFs, freqs, curves);
   REQUIRE(std::abs(curves.total_db[0]) < 1e-3);
+}
+
+TEST_CASE("Comb curves show dense teeth as their average", "[curves]") {
+  const Preset* preset = nullptr;
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == "Tonal-Noise Split") preset = &p;
+  }
+  REQUIRE(preset != nullptr);
+  const std::vector<double> freqs = DisplayFrequencies(600, 20.0, 20000.0);
+  ChainResponse curves;
+  ComputeChainResponse(preset->params, GroupControls{}, kFs, freqs, curves);
+  // The split side and the residual add back up to the input.
+  for (float db : curves.total_db) REQUIRE(std::abs(db) < 0.01);
+  // Up high, where teeth (27.5 Hz apart) are denser than the points, the
+  // curves are smooth rather than aliased.
+  for (size_t i = 1; i < freqs.size(); ++i) {
+    if (freqs[i] < 4000.0) continue;
+    CAPTURE(freqs[i]);
+    REQUIRE(std::abs(curves.split_db[i] - curves.split_db[i - 1]) < 0.05);
+    REQUIRE(std::abs(curves.residual_db[i] - curves.residual_db[i - 1]) < 0.05);
+    REQUIRE(std::abs(curves.band_db[0][i] - curves.band_db[0][i - 1]) < 0.05);
+  }
 }
 
 }  // namespace eeq::test

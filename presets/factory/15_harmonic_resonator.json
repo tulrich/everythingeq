@@ -1,0 +1,29 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Harmonic Resonator (Pitch)",
+  "params": {
+    "global": {
+      "outputGainDb": -4
+    },
+    "groups": [
+      {
+        "detect": "Pitch",
+        "attackMs": 10,
+        "releaseMs": 10
+      }
+    ],
+    "bands": [
+      {
+        "type": "Comb",
+        "x": 27.5,
+        "y": 9,
+        "z": 40,
+        "harmonics": "All",
+        "dynGroup": 0,
+        "dynTarget": "Freq",
+        "dynRange": 8.0
+      }
+    ]
+  }
+}

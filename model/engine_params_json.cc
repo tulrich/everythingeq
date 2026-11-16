@@ -31,7 +31,8 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"FletcherMunson", BandType::kFletcherMunson},
     {"Vowel", BandType::kVowel},
     {"VintageLow", BandType::kVintageLow},
-    {"VintageHigh", BandType::kVintageHigh}};
+    {"VintageHigh", BandType::kVintageHigh},
+    {"Comb", BandType::kComb}};
 const std::pair<const char*, DynTarget> kDynTargets[] = {
     {"Gain", DynTarget::kGain},
     {"Freq", DynTarget::kFreq},
@@ -45,6 +46,10 @@ const std::pair<const char*, VowelWeighting> kWeightings[] = {
     {"Natural", VowelWeighting::kNatural}, {"Flat", VowelWeighting::kFlat}};
 const std::pair<const char*, FilterSlope> kSlopes[] = {
     {"12", FilterSlope::k12}, {"24", FilterSlope::k24}};
+const std::pair<const char*, CombHarmonics> kCombHarmonics[] = {
+    {"All", CombHarmonics::kAll},
+    {"Odd", CombHarmonics::kOdd},
+    {"Even", CombHarmonics::kEven}};
 const std::pair<const char*, VintageAtten> kVintageAttens[] = {
     {"5k", VintageAtten::k5k},
     {"10k", VintageAtten::k10k},
@@ -178,6 +183,10 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
         auto atten = static_cast<VintageAtten>(bp.option);
         ReadEnum(b, "attenSel", kVintageAttens, atten);
         bp.option = static_cast<int>(atten);
+      } else if (bp.type == BandType::kComb) {
+        auto harmonics = static_cast<CombHarmonics>(bp.option);
+        ReadEnum(b, "harmonics", kCombHarmonics, harmonics);
+        bp.option = static_cast<int>(harmonics);
       }
       Read(b, "x", bp.x);
       Read(b, "y", bp.y);
@@ -279,6 +288,10 @@ json EngineParamsToJson(const EngineParams& p) {
         WriteEnum(j, "attenSel", kVintageAttens,
                   static_cast<VintageAtten>(bp.option),
                   static_cast<VintageAtten>(bd.option));
+      } else if (bp.type == BandType::kComb) {
+        WriteEnum(j, "harmonics", kCombHarmonics,
+                  static_cast<CombHarmonics>(bp.option),
+                  static_cast<CombHarmonics>(bd.option));
       }
       // An assignment is on when it names its group.
       Write(j, "dynGroup", bp.dyn_group, -1);

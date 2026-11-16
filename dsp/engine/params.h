@@ -29,6 +29,7 @@ enum class BandType {
   kVowel,
   kVintageLow,
   kVintageHigh,
+  kComb,
   kOff,
 };
 inline constexpr int kNumBandTypes = static_cast<int>(BandType::kOff);
@@ -39,6 +40,8 @@ enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
 enum class VowelWeighting { kNatural, kFlat };
 enum class FilterSlope { k12, k24 };          // LP, HP
 enum class VintageAtten { k5k, k10k, k20k };  // Vintage High
+// Which harmonics of f0 a Comb's teeth sit on.
+enum class CombHarmonics { kAll, kOdd, kEven };
 inline constexpr int kNumOptions = 3;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
@@ -67,6 +70,8 @@ inline constexpr int kSplitBands = 4;
 //   VintageLow:           x = Hz, y = boost dB, z = attenuation dB
 //   VintageHigh:          x = boost Hz, y = boost dB, z = attenuation dB
 //                        (a shelf at the Option's VintageAtten frequency)
+//   Comb:                x = f0 Hz, y = tooth gain dB, z = tooth Q; teeth on
+//                        the Option's CombHarmonics of f0
 struct BandParams {
   BandType type = BandType::kOff;
   double x = 1000.0;
