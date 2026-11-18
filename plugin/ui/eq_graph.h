@@ -317,7 +317,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   void DragNodeY(float dy) {
     const BandParams& bp = params_.bands[drag_band_];
     const int y_id = BandParamId(drag_band_, BandField::kY);
-    if (DragsQ(bp.type)) {
+    if (DragsQ(bp)) {
       const SlotMapping q = *SlotMappingFor(bp.type, Slot::kZ);
       model_.SetEdit(
           BandParamId(drag_band_, BandField::kZ),
@@ -545,10 +545,11 @@ class EqGraph final : public iplug::igraphics::IControl {
   }
 
   // LP and HP nodes drag Q vertically (as in Logic's Channel EQ): the node
-  // sits at the curve's level at the cutoff, which is Q in dB per cell (two
-  // cells at 24 dB/oct).
-  static bool DragsQ(BandType type) {
-    return type == BandType::kLp || type == BandType::kHp;
+  // sits at the curve's level at the cutoff, which is Q in dB (per cell at
+  // 24 dB/oct, whose two cells share it).  6 dB/oct has no Q.
+  static bool DragsQ(const BandParams& bp) {
+    return (bp.type == BandType::kLp || bp.type == BandType::kHp) &&
+           bp.option != static_cast<int>(FilterSlope::k6);
   }
   double QDbScale(int band) const {
     return IsCrossover(params_.bands[band].type, params_.bands[band].option)
@@ -558,7 +559,7 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   std::vector<int> DragParams(int band) const {
     const int node_y = BandParamId(
-        band, DragsQ(params_.bands[band].type) ? BandField::kZ : BandField::kY);
+        band, DragsQ(params_.bands[band]) ? BandField::kZ : BandField::kY);
     if (drag_dyn_ >= 0) {
       return {DynRangeId(band, drag_dyn_), DynOnId(band, drag_dyn_),
               BandParamId(band, BandField::kX), node_y};
@@ -670,7 +671,7 @@ class EqGraph final : public iplug::igraphics::IControl {
         y = mRECT.B -
             static_cast<float>(SlotFromPhysical(*m, bp.y)) * mRECT.H();
       }
-    } else if (DragsQ(bp.type)) {
+    } else if (DragsQ(bp)) {
       y = DbToY(QDbScale(band) * std::log10(bp.z));
     } else {
       // Filters: sit on the band's own curve at the (static) cutoff, which

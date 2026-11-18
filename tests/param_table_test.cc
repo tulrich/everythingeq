@@ -291,13 +291,15 @@ TEST_CASE("Option text follows the band type", "[params]") {
   const int type = BandParamId(0, BandField::kType);
   const int option = BandParamId(0, BandField::kOption);
   v[type] = static_cast<int>(BandType::kLp);
-  REQUIRE(FormatParamValue(v, option, 1.0) == "24 dB/oct");
-  REQUIRE(ParseSlotText(v, option, "12 dB/oct") == 0.0);
-  REQUIRE(ParseSlotText(v, option, "24") == 1.0);
+  REQUIRE(FormatParamValue(v, option, 3.0) == "24 dB/oct");
+  REQUIRE(ParseSlotText(v, option, "12 dB/oct") == 1.0);
+  REQUIRE(ParseSlotText(v, option, "48") == 5.0);
   v[type] = static_cast<int>(BandType::kVowel);
   REQUIRE(FormatParamValue(v, option, 1.0) == "Flat");
   REQUIRE(ParseSlotText(v, option, "Natural") == 0.0);
   v[type] = static_cast<int>(BandType::kPeak);
+  REQUIRE(FormatParamValue(v, option, 1.0) == "Proportional");
+  v[type] = static_cast<int>(BandType::kTilt);
   REQUIRE(FormatParamValue(v, option, 1.0) == "-");
   REQUIRE_FALSE(ParseSlotText(v, option, "1").has_value());
 }

@@ -465,4 +465,72 @@ TEST_CASE("Comb glides to a new f0 without clicking", "[bands]") {
   REQUIRE(step_after < 1.5 * step_before);
 }
 
+TEST_CASE("LP and HP slopes", "[bands]") {
+  const double fs = 192000.0, fc = 100.0;
+  const double kDbPerOct[] = {6.0, 12.0, 18.0, 24.0, 36.0, 48.0};
+  for (int slope = 0; slope < 6; ++slope) {
+    for (const BandType type : {BandType::kLp, BandType::kHp}) {
+      CAPTURE(slope, static_cast<int>(type));
+      const BandDesign d = DesignBand(type, fc, 0, kButterworthQ, slope, fs);
+      const bool lp = type == BandType::kLp;
+      // Far into the stopband, each octave drops by the slope.
+      const double f = lp ? fc * 32.0 : fc / 32.0;
+      const double step = MagDb(BandResponse(d, f, fs)) -
+                          MagDb(BandResponse(d, lp ? 2.0 * f : f / 2.0, fs));
+      REQUIRE(std::abs(step - kDbPerOct[slope]) < 0.5);
+      // Flat passband; -3 dB at fc (-6 dB for the LR24 crossover).
+      REQUIRE(std::abs(MagDb(BandResponse(d, lp ? fc / 20.0 : fc * 20.0, fs))) <
+              0.05);
+      const double at_fc = MagDb(BandResponse(d, fc, fs));
+      REQUIRE(std::abs(at_fc - (slope == kSlope24 ? -6.02 : -3.01)) < 0.05);
+    }
+  }
+}
+
+TEST_CASE("Butterworth slopes resonate with Q", "[bands]") {
+  const double fs = 48000.0;
+  for (const int slope : {2, 5}) {  // 18 and 48 dB/oct.
+    const BandDesign flat =
+        DesignBand(BandType::kLp, 1000.0, 0, kButterworthQ, slope, fs);
+    const BandDesign peaky =
+        DesignBand(BandType::kLp, 1000.0, 0, 4.0, slope, fs);
+    double flat_max = -100.0, peak_max = -100.0;
+    for (double f : LogFreqs(100.0, 2000.0, 200)) {
+      flat_max = std::max(flat_max, MagDb(BandResponse(flat, f, fs)));
+      peak_max = std::max(peak_max, MagDb(BandResponse(peaky, f, fs)));
+    }
+    CAPTURE(slope, flat_max, peak_max);
+    REQUIRE(flat_max < 0.01);  // Butterworth: no overshoot.
+    REQUIRE(peak_max > 9.0);
+  }
+}
+
+TEST_CASE("Proportional Q narrows the bell as the gain grows", "[bands]") {
+  const double fs = 48000.0;
+  const int prop = static_cast<int>(PeakQ::kProportional);
+  // Bandwidth between the half-gain points, in octaves.
+  auto width = [&](double db, int option) {
+    const BandDesign d =
+        DesignBand(BandType::kPeak, 1000.0, db, 1.0, option, fs);
+    double lo = 1e9, hi = 0.0;
+    for (double f : LogFreqs(20.0, 20000.0, 2000)) {
+      if (std::abs(MagDb(BandResponse(d, f, fs))) > std::abs(db) / 2.0) {
+        lo = std::min(lo, f), hi = std::max(hi, f);
+      }
+    }
+    return std::log2(hi / lo);
+  };
+  // The set Q at 6 dB; twice as narrow 12 dB higher, either way.
+  REQUIRE(std::abs(width(6.0, prop) - width(6.0, 0)) < 0.02);
+  REQUIRE(width(18.0, prop) < 0.6 * width(18.0, 0));
+  REQUIRE(width(-18.0, prop) < 0.6 * width(-18.0, 0));
+  REQUIRE(width(2.0, prop) > width(2.0, 0));
+  REQUIRE(std::abs(ProportionalQ(1.0, 18.0) - 2.0) < 1e-12);
+  // Gain still lands on target.
+  REQUIRE(std::abs(MagDb(BandResponse(DesignBand(BandType::kPeak, 1000.0, -15.0,
+                                                 1.0, prop, fs),
+                                      1000.0, fs)) +
+                   15.0) < 0.01);
+}
+
 }  // namespace eeq::test

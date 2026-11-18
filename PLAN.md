@@ -109,6 +109,7 @@ scripts/             dependency setup, plugin validation, iPlug2 patches
    - **Vintage Low:** X = frequency (20–200 Hz, continuous), Y = boost, Z = attenuation. Resonant boost shelf at the frequency, broad attenuation shelf five times higher: the bump below, the dip above.
    - **Vintage High:** X = boost frequency (2–20 kHz), Y = boost, Z = attenuation, Option = Atten Sel (5 / 10 / 20 kHz). Bandwidth is fixed (broad, Q 0.7); a Peak band covers sharper boosts. kNumOptions grew to 3; options beyond a type's choices are clamped when building engine params.
    - Global Scale scales both Boost and Atten; a Gain target moves the Boost. Tests: shapes at the documented points, Atten Sel placement, scaling, preset round-trip.
+8. Workhorse additions (user request, 2026-11-18; done). LP/HP slopes 6, 12, 18, 24 (LR), 36 and 48 dB/oct (Butterworth, the band's Q on the sharpest cell); Peak Q Mode `Proportional` (Q doubles every 12 dB of gain, set Q at 6 dB); analog-matched bells and shelves (Vicanek 2016; high shelf as G / low shelf; shelves above Q 2 stay bilinear). Tests: slopes and −3 dB points, resonance, proportional widths, error against the analog prototypes near Nyquist, cuts mirroring boosts, stability sweep.
 
 ## Phase 3 — Chain, routing & output modes (§3.D)
 1. Series chain of 10 slots with per-band Bypass and Chan (Stereo/L/R/Mid/Side via M/S encode/decode around the band).

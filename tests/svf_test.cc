@@ -160,4 +160,71 @@ TEST_CASE("Silence after noise decays without denormals", "[svf]") {
   }
 }
 
+namespace {
+
+// The bilinear-free analog prototypes the matched cells follow.
+double AnalogDb(SvfShape shape, double f0, double q, double db, double f) {
+  const double a = std::pow(10.0, db / 40.0), k = 1.0 / q;
+  const std::complex<double> p(0.0, f / f0);
+  std::complex<double> h;
+  if (shape == SvfShape::kBell) {
+    h = (p * p + p * (a / q) + 1.0) / (p * p + p / (a * q) + 1.0);
+  } else if (shape == SvfShape::kLowShelf) {
+    const std::complex<double> s = p * std::sqrt(a);
+    h = 1.0 + (k * (a - 1.0) * s + (a * a - 1.0)) / (s * s + k * s + 1.0);
+  } else {
+    const std::complex<double> s = p / std::sqrt(a);
+    h = a * a + (k * (1.0 - a) * a * s + (1.0 - a * a)) / (s * s + k * s + 1.0);
+  }
+  return MagDb(h);
+}
+
+double WorstAnalogErrorDb(SvfShape shape, double f0, double q, double db,
+                          double fs) {
+  const SvfCoeffs c = DesignSvf(shape, f0, q, db, fs);
+  double worst = 0.0;
+  for (double f : LogFreqs(20.0, std::min(20000.0, 0.499 * fs), 300)) {
+    worst = std::max(worst, std::abs(MagDb(SvfResponse(c, f, fs)) -
+                                     AnalogDb(shape, f0, q, db, f)));
+  }
+  return worst;
+}
+
+}  // namespace
+
+TEST_CASE("Bells and shelves don't cramp near Nyquist", "[svf]") {
+  const double fs = GENERATE(44100.0, 48000.0);
+  for (const SvfShape shape :
+       {SvfShape::kBell, SvfShape::kLowShelf, SvfShape::kHighShelf}) {
+    for (const double f0 : {1000.0, 5000.0, 10000.0, 15000.0}) {
+      for (const double db : {-12.0, 6.0, 12.0}) {
+        CAPTURE(fs, static_cast<int>(shape), f0, db);
+        // A bilinear 10 kHz bell at Q 0.7 is off by over 3 dB.
+        REQUIRE(WorstAnalogErrorDb(shape, f0, 0.7071, db, fs) < 1.2);
+        if (shape == SvfShape::kBell) {
+          REQUIRE(WorstAnalogErrorDb(shape, f0, 4.0, db, fs) < 0.8);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Matched cuts mirror boosts", "[svf]") {
+  const double fs = 48000.0;
+  for (const SvfShape shape :
+       {SvfShape::kBell, SvfShape::kLowShelf, SvfShape::kHighShelf}) {
+    for (const double q : {0.5, 2.0, 10.0}) {
+      const SvfCoeffs boost = DesignSvf(shape, 12000.0, q, 9.0, fs);
+      const SvfCoeffs cut = DesignSvf(shape, 12000.0, q, -9.0, fs);
+      REQUIRE(cut.g > 0.0);
+      REQUIRE(cut.k > 0.0);
+      for (double f : LogFreqs(20.0, 0.49 * fs, 40)) {
+        CAPTURE(static_cast<int>(shape), q, f);
+        REQUIRE(std::abs(MagDb(SvfResponse(boost, f, fs)) +
+                         MagDb(SvfResponse(cut, f, fs))) < 1e-6);
+      }
+    }
+  }
+}
+
 }  // namespace eeq::test

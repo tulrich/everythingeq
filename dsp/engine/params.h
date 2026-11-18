@@ -41,13 +41,17 @@ enum class DynTarget { kGain, kFreq, kMorph, kShape };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
 // The per-band Option, by band type.
 enum class VowelWeighting { kNatural, kFlat };
-enum class FilterSlope { k12, k24 };          // LP, HP
+// LP, HP.  24 is Linkwitz-Riley (a crossover); the others are Butterworth.
+enum class FilterSlope { k6, k12, k18, k24, k36, k48 };
+// Peak: Proportional narrows the bell as its gain grows
+// (dsp/bands/band_design.h).
+enum class PeakQ { kConstant, kProportional };
 enum class VintageAtten { k5k, k10k, k20k };  // Vintage High
 // Which harmonics of f0 a Comb's teeth sit on.
 enum class CombHarmonics { kAll, kOdd, kEven };
 // How a Vocoder follows its source (dsp/bands/vocoder.h).
 enum class VocoderMode { kShape, kLevel };
-inline constexpr int kNumOptions = 3;
+inline constexpr int kNumOptions = 6;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
 enum class ScFilter { kOff, kBp, kLp, kHp, kTilt, kKWeight };
@@ -94,9 +98,9 @@ struct BandParams {
   double x = 1000.0;
   double y = 0.0;
   double z = 0.70710678118654752440;
-  int option = 0;  // Vowel: VowelWeighting; LP, HP: FilterSlope;
-                   // Vintage High: VintageAtten; Comb: CombHarmonics;
-                   // Vocoder: VocoderMode
+  int option = 0;  // Peak: PeakQ; Vowel: VowelWeighting; LP, HP:
+                   // FilterSlope; Vintage High: VintageAtten; Comb:
+                   // CombHarmonics; Vocoder: VocoderMode
   // -1 = none, else 0..kNumGroups-1 (see SubscribesTo).  A band can follow
   // a group with dyn_range 0, e.g. a preset set up for the user to turn up.
   int dyn_group = -1;

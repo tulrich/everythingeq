@@ -60,7 +60,8 @@ ParamSpec Bool(std::string key, std::string name, std::string group, bool def) {
 }
 
 // The per-band Option: its labels depend on the band type (OptionLabels).
-ParamSpec OptionParam(std::string key, std::string name, std::string group) {
+ParamSpec OptionParam(std::string key, std::string name, std::string group,
+                      int def) {
   ParamSpec s;
   s.key = std::move(key);
   s.name = std::move(name);
@@ -68,6 +69,7 @@ ParamSpec OptionParam(std::string key, std::string name, std::string group) {
   s.kind = ParamKind::kOption;
   s.min = 0.0;
   s.max = kNumOptions - 1;
+  s.default_value = def;
   s.step = 1.0;
   return s;
 }
@@ -82,6 +84,13 @@ ParamSpec SlotParam(std::string key, std::string name, std::string group) {
   s.max = 1.0;
   s.default_value = kSlotDefault;
   return s;
+}
+
+// 12 dB/oct for LP and HP; the first choice otherwise.
+int DefaultOption(BandType type) {
+  return type == BandType::kLp || type == BandType::kHp
+             ? static_cast<int>(FilterSlope::k12)
+             : 0;
 }
 
 // The default band layout: a conventional 8-band EQ.  The HP and LP bands
@@ -136,7 +145,8 @@ std::vector<ParamSpec> MakeTable() {
                                       0, {"Gain", "Freq", "Morph", "Shape"});
     at(BandField::kDynBRange) =
         SlotParam(k + "dyn_b_range", n + "Dyn B Range", g);
-    at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
+    at(BandField::kOption) =
+        OptionParam(k + "option", n + "Option", g, DefaultOption(d.type));
     at(BandField::kChan) =
         Enum(k + "chan", n + "Chan", g, 0, {"Stereo", "L", "R", "Mid", "Side"});
     at(BandField::kSolo) = Bool(k + "solo", n + "Solo", g, false);

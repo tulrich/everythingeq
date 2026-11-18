@@ -101,6 +101,8 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
 
 const char* OptionName(BandType type) {
   switch (type) {
+    case BandType::kPeak:
+      return "Q Mode";
     case BandType::kVowel:
       return "Weighting";
     case BandType::kLp:
@@ -119,11 +121,14 @@ const char* OptionName(BandType type) {
 
 std::vector<std::string> OptionLabels(BandType type) {
   switch (type) {
+    case BandType::kPeak:
+      return {"Constant", "Proportional"};  // PeakQ
     case BandType::kVowel:
       return {"Natural", "Flat"};  // VowelWeighting
     case BandType::kLp:
     case BandType::kHp:
-      return {"12 dB/oct", "24 dB/oct"};  // FilterSlope
+      return {"6 dB/oct",  "12 dB/oct", "18 dB/oct",
+              "24 dB/oct", "36 dB/oct", "48 dB/oct"};  // FilterSlope
     case BandType::kVintageHigh:
       return {"5 kHz", "10 kHz", "20 kHz"};  // VintageAtten
     case BandType::kComb:
@@ -137,11 +142,13 @@ std::vector<std::string> OptionLabels(BandType type) {
 
 int OptionCount(BandType type) {
   switch (type) {
+    case BandType::kPeak:
     case BandType::kVowel:
-    case BandType::kLp:
-    case BandType::kHp:
     case BandType::kVocoder:
       return 2;
+    case BandType::kLp:
+    case BandType::kHp:
+      return 6;
     case BandType::kVintageHigh:
     case BandType::kComb:
       return 3;

@@ -28,6 +28,8 @@ struct SvfCoeffs {
 enum class SvfShape {
   kLowPass,
   kHighPass,
+  kLowPass1,  // First order (6 dB/oct); Q is ignored.
+  kHighPass1,
   kBandPass,  // unit gain at the center frequency
   kNotch,
   kAllPass,
@@ -37,8 +39,9 @@ enum class SvfShape {
 };
 
 // Design a single cell.  gain_db is used by Bell / LowShelf / HighShelf only.
-// Bell, BandPass and Notch Q values are prewarped so the digital bandwidth
-// (in octaves) matches the requested Q near Nyquist.
+// Bells and shelves are matched to their analog prototypes (no cramping
+// near Nyquist); BandPass and Notch Q values are prewarped so the digital
+// bandwidth (in octaves) matches the requested Q near Nyquist.
 SvfCoeffs DesignSvf(SvfShape shape, double freq_hz, double q, double gain_db,
                     double sample_rate);
 

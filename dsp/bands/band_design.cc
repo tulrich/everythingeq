@@ -106,7 +106,37 @@ BandDesign DesignComb(double f0, double gain_db, double q, int option,
   return d;
 }
 
+// An LP or HP of 6..48 dB/oct other than the 24 dB/oct crossover: a
+// Butterworth cascade (a first-order cell for odd orders), with the
+// resonance (Q / kButterworthQ) on its sharpest section.
+BandDesign DesignButterworth(bool high, double hz, double q, FilterSlope slope,
+                             double fs) {
+  static constexpr int kOrders[] = {1, 2, 3, 4, 6, 8};
+  const int order = kOrders[static_cast<int>(slope)];
+  const double f = ClampF(hz);
+  BandDesign d = MakeSerial({});
+  if (order % 2 == 1) {
+    d.cells[d.num_cells++] = DesignSvf(
+        high ? SvfShape::kHighPass1 : SvfShape::kLowPass1, f, 0.0, 0.0, fs);
+  }
+  for (int i = 0; i < order / 2; ++i) {
+    // The pole pairs' angles from the negative real axis, rising toward the
+    // last section; each section's Q is 1 / (2 cos(theta)).
+    const double theta = kPi * (2 * i + 1 + order % 2) / (2.0 * order);
+    double section_q = 1.0 / (2.0 * std::cos(theta));
+    if (i == order / 2 - 1) section_q *= ClampQ(q) / kButterworthQ;
+    d.cells[d.num_cells++] = DesignSvf(
+        high ? SvfShape::kHighPass : SvfShape::kLowPass, f, section_q, 0.0, fs);
+  }
+  return d;
+}
+
 }  // namespace
+
+double ProportionalQ(double q, double gain_db) {
+  return q * std::exp2((std::abs(gain_db) - kProportionalQAnchorDb) /
+                       kProportionalQDoublingDb);
+}
 
 double CombFeedback(double q) {
   return 1.0 - kPi / std::clamp(q, kCombMinQ, kCombMaxQ);
@@ -135,9 +165,13 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
   switch (type) {
     case BandType::kOff:
       return {};
-    case BandType::kPeak:
+    case BandType::kPeak: {
+      const double q = option == static_cast<int>(PeakQ::kProportional)
+                           ? ProportionalQ(ClampQ(z), ClampGain(y))
+                           : z;
       return MakeSerial(
-          {DesignSvf(SvfShape::kBell, ClampF(x), ClampQ(z), ClampGain(y), fs)});
+          {DesignSvf(SvfShape::kBell, ClampF(x), ClampQ(q), ClampGain(y), fs)});
+    }
     case BandType::kLowShelf:
       return MakeSerial({DesignSvf(SvfShape::kLowShelf, ClampF(x), ClampQ(z),
                                    ClampGain(y), fs)});
@@ -158,10 +192,9 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
     case BandType::kLp:
     case BandType::kHp: {
       const bool high = type == BandType::kHp;
-      if (option != static_cast<int>(FilterSlope::k24)) {
-        return MakeSerial(
-            {DesignSvf(high ? SvfShape::kHighPass : SvfShape::kLowPass,
-                       ClampF(x), ClampQ(z), 0.0, fs)});
+      const auto slope = static_cast<FilterSlope>(std::clamp(option, 0, 5));
+      if (slope != FilterSlope::k24) {
+        return DesignButterworth(high, x, z, slope, fs);
       }
       // Linkwitz-Riley (LR4 at Q 0.707): a split cell then a second LP or HP.
       BandDesign d;

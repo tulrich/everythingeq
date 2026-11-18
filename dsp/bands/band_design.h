@@ -63,6 +63,11 @@ double CombFeedback(double q);
 inline constexpr double kVintageLowAttenRatio = 5.0;
 inline constexpr double kVintageHighBoostQ = 0.7;
 inline constexpr int kTiltCells = 4;
+// Proportional Q: the bell's Q doubles for every kProportionalQDoublingDb of
+// gain, and is the set Q at kProportionalQAnchorDb.
+inline constexpr double kProportionalQAnchorDb = 6.0;
+inline constexpr double kProportionalQDoublingDb = 12.0;
+double ProportionalQ(double q, double gain_db);
 inline constexpr double kMinWidthOct = 0.1;
 inline constexpr double kMaxWidthOct = 10.0;
 

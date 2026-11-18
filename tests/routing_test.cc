@@ -101,6 +101,7 @@ TEST_CASE("Bands after the split shape only the residual", "[routing]") {
   const Stereo x = Noise(kLen, 0.5, 15);
   EngineParams p;
   p.bands[0] = {BandType::kLp, 400.0, 0.0, 0.7071};
+  p.bands[0].option = static_cast<int>(FilterSlope::k12);
   p.bands[kSplitBands] = {BandType::kHighShelf, 2000.0, 6.0, 0.7071};
   p.global.output_mode = OutputMode::kSplit;
   const Stereo side = Render(p, x);
