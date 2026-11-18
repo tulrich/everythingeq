@@ -69,12 +69,15 @@ class EqGraph final : public iplug::igraphics::IControl {
   // Display frequencies of the curves (also used for the analyzer).
   const std::vector<double>& freqs() const { return freqs_; }
 
-  // Spectra (dBFS, tilted) at freqs(); empty vectors hide them.
+  // Spectra (dBFS, tilted) at freqs(); empty vectors hide them.  `sc` is
+  // the sidechain's, shown whatever the mode.
   void SetSpectrum(AnalyzerMode mode, const std::vector<float>& pre,
-                   const std::vector<float>& post) {
+                   const std::vector<float>& post,
+                   const std::vector<float>& sc) {
     analyzer_mode_ = mode;
     spectrum_pre_ = pre;
     spectrum_post_ = post;
+    spectrum_sc_ = sc;
     SetDirty(false);
   }
 
@@ -712,19 +715,28 @@ class EqGraph final : public iplug::igraphics::IControl {
       g.PathClose();
       g.PathFill(theme::kText.WithOpacity(0.08f));
     }
-    if (post && spectrum_post_.size() == freqs_.size()) {
-      g.PathClear();
-      for (size_t i = 0; i < freqs_.size(); ++i) {
-        const float x = FreqToX(freqs_[i]), y = SpectrumToY(spectrum_post_[i]);
-        if (i == 0) {
-          g.PathMoveTo(x, y);
-        } else {
-          g.PathLineTo(x, y);
-        }
-      }
-      g.PathStroke(
-          iplug::igraphics::IColor(255, 160, 200, 255).WithOpacity(0.45f), 1.f);
+    if (post) {
+      StrokeSpectrum(
+          g, spectrum_post_,
+          iplug::igraphics::IColor(255, 160, 200, 255).WithOpacity(0.45f));
     }
+    StrokeSpectrum(g, spectrum_sc_, theme::kOn.WithOpacity(0.6f));
+  }
+
+  void StrokeSpectrum(iplug::igraphics::IGraphics& g,
+                      const std::vector<float>& spectrum,
+                      const iplug::igraphics::IColor& color) {
+    if (spectrum.size() != freqs_.size()) return;
+    g.PathClear();
+    for (size_t i = 0; i < freqs_.size(); ++i) {
+      const float x = FreqToX(freqs_[i]), y = SpectrumToY(spectrum[i]);
+      if (i == 0) {
+        g.PathMoveTo(x, y);
+      } else {
+        g.PathLineTo(x, y);
+      }
+    }
+    g.PathStroke(color, 1.f);
   }
 
   void DrawGrid(iplug::igraphics::IGraphics& g) {
@@ -805,7 +817,7 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   EditorModel& model_;
   AnalyzerMode analyzer_mode_ = AnalyzerMode::kPreAndPost;
-  std::vector<float> spectrum_pre_, spectrum_post_;
+  std::vector<float> spectrum_pre_, spectrum_post_, spectrum_sc_;
   ParamValues values_{};
   GroupControls live_{};
   LiveBands live_bands_{};

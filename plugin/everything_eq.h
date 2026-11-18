@@ -14,9 +14,11 @@
 #include "IPlug_include_in_plug_hdr.h"
 #include "dsp/common/spsc_ring.h"
 #include "dsp/engine/engine.h"
+#include "dsp/engine/gain_match.h"
 #include "model/lookahead_gate.h"
 #include "model/param_table.h"
 #include "model/preset_library.h"
+#include "model/state.h"
 #include "model/undo_history.h"
 #include "plugin/ui/editor_model.h"
 
@@ -44,7 +46,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   LiveBands LiveBandState() const override;
   std::array<SpectralLevels, kNumGroups> LiveSpectra() const override;
   std::array<Tracked, kNumGroups> LiveTracking() const override;
-  int PopAnalyzerSamples(bool post, float* dest, int max_count) override;
+  int PopAnalyzerSamples(AnalyzerSource source, float* dest,
+                         int max_count) override;
   int PopDetectorFrames(DetectorFrame* dest, int max_count) override;
   int SelectedBand() const override { return selected_band_; }
   void SelectBand(int band) override;
@@ -62,6 +65,12 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   bool CanRedo() const override { return undo_.CanRedo(); }
   void Undo() override;
   void Redo() override;
+  int CompareSlot() const override;
+  void SwitchCompare() override;
+  void CopyCompare() override;
+  bool GainMatchOn() const override { return gain_match_on_; }
+  void SetGainMatchOn(bool on) override { gain_match_on_ = on; }
+  float GainMatchDb() const override { return gain_match_db_; }
 
   // Edits from the UI (controls and EditorModel) are recorded for undo.
   void BeginInformHostOfParamChangeFromUI(int param_index) override;
@@ -111,6 +120,12 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   LookaheadGate lookahead_gate_;  // Audio thread.
   bool mono_output_ = false;
   bool host_bypassed_ = false;  // The host's bypass (audio thread).
+  // Bypass or a listen mode is on, which holds Gain Match (audio thread).
+  bool listening_ = false;
+  GainMatch gain_match_;  // Audio thread.
+  std::atomic<bool> gain_match_on_{false};
+  std::atomic<float> gain_match_db_{0.f};
+  std::atomic<int> compare_slot_{0};  // compare_.active, for the audio thread.
 
   std::array<bool, kMaxIn> in_connected_{};
   std::array<bool, kMaxOut> out_connected_{};
@@ -133,13 +148,15 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   std::atomic<bool> editor_open_{false};
   SpscRing<float, 32768> analyzer_pre_;
   SpscRing<float, 32768> analyzer_post_;
+  SpscRing<float, 32768> analyzer_sc_;
   SpscRing<DetectorFrame, 1024> detector_frames_;
   bool transport_was_running_ = false;
 
-  // The preset the settings came from; written by UnserializeState (any
-  // thread) and the UI.
+  // The preset the settings came from and the A/B comparison; written by
+  // UnserializeState (any thread) and the UI.
   mutable std::mutex preset_mutex_;
   PresetRef current_preset_;
+  AbState compare_;
   std::atomic<bool> state_restored_{false};
   // Bumped on every parameter change (any thread).
   std::atomic<unsigned> param_epoch_{0};
@@ -151,6 +168,7 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   unsigned modified_epoch_ = ~0u;
   bool modified_ = false;
   UndoHistory undo_;
+  UndoHistory other_undo_;  // The other A/B slot's.
   bool applying_undo_ = false;
   // Set while presets and undo apply values, which skip the UI detents.
   bool exact_values_ = false;

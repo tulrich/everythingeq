@@ -41,9 +41,11 @@ class EditorModel {
     bool voiced = false;
   };
   virtual std::array<Tracked, kNumGroups> LiveTracking() const = 0;
-  // Audio published since the last call (mono): the plugin input ("pre") or
-  // output ("post"), for the analyzer.  Returns the number of samples.
-  virtual int PopAnalyzerSamples(bool post, float* dest, int max_count) = 0;
+  // Audio published since the last call (mono) for the analyzer: the plugin
+  // input, its output or the sidechain.  Returns the number of samples.
+  enum class AnalyzerSource { kPre, kPost, kSidechain };
+  virtual int PopAnalyzerSamples(AnalyzerSource source, float* dest,
+                                 int max_count) = 0;
   virtual int PopDetectorFrames(DetectorFrame* dest, int max_count) = 0;
 
   virtual int SelectedBand() const = 0;
@@ -71,6 +73,19 @@ class EditorModel {
   virtual bool CanRedo() const = 0;
   virtual void Undo() = 0;
   virtual void Redo() = 0;
+
+  // A/B comparison: two sets of settings (each with its own preset name
+  // and undo history), 0 = A, 1 = B.  Switching is not an undo step.
+  virtual int CompareSlot() const = 0;
+  virtual void SwitchCompare() = 0;
+  // Copies the active slot's settings over the other slot's.
+  virtual void CopyCompare() = 0;
+
+  // Gain Match, a listening aid (not saved): the output plays at the
+  // input's loudness.  GainMatchDb() is the gain it applies now.
+  virtual bool GainMatchOn() const = 0;
+  virtual void SetGainMatchOn(bool on) = 0;
+  virtual float GainMatchDb() const = 0;
 
   // Moves every parameter to `values` (host values) as one undo step, with
   // exact values (no detents).

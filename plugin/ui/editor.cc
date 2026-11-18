@@ -222,6 +222,17 @@ void Editor::BuildFooter() {
       "the curve in dB, negative inverts it. Freq and Morph aren't scaled, "
       "so pitch and vowel tracking stay in tune.");
   footer_row1_.push_back(scale);
+  match_button_ = new TextButton(ig::IRECT(), "GAIN MATCH", [this] {
+    model_.SetGainMatchOn(!model_.GainMatchOn());
+  });
+  match_button_->SetTooltip(
+      "Gain Match, for fair comparisons: plays the output as loud as the "
+      "input (K-weighted, over a few seconds), so Bypass and A/B compare "
+      "the sound rather than the level. It cancels Output Gain while on, and "
+      "pauses in Bypass, Delta, Solo and SC Listen. Not saved: turn it off "
+      "before you bounce.");
+  graphics_.AttachControl(match_button_);
+  footer_row1_.push_back(match_button_);
 
   footer_row2_.push_back(field(GlobalField::kDelta, "\xce\x94", 0.f, kToggle));
   footer_row2_widths_.push_back(36.f);
@@ -244,6 +255,16 @@ void Editor::BuildFooter() {
   graphics_.AttachControl(tilt);
   footer_row2_.push_back(tilt);
   footer_row2_widths_.push_back(96.f);
+  sc_button_ = new TextButton(ig::IRECT(), "SC", [this] {
+    show_sc_ = !show_sc_;
+    sc_analyzer_.Clear();
+  });
+  sc_button_->SetTooltip(
+      "Show the sidechain's spectrum (amber) behind the curves, when a "
+      "sidechain is connected.");
+  graphics_.AttachControl(sc_button_);
+  footer_row2_.push_back(sc_button_);
+  footer_row2_widths_.push_back(36.f);
   status_ = new ig::ITextControl(
       ig::IRECT(), "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));
   graphics_.AttachControl(status_);
@@ -514,7 +535,7 @@ void Editor::LayoutFooter() {
           row1.SubRectHorizontal(4, static_cast<int>(i)).GetHPadded(-3.f));
   }
   ig::IRECT row2 = r.GetPadded(-4.f).GetFromBottom(kRow).GetHPadded(-3.f);
-  static const float kGapsBefore[] = {0.f, 6.f, 12.f, 6.f};
+  static const float kGapsBefore[] = {0.f, 6.f, 12.f, 6.f, 6.f};
   for (size_t i = 0; i < footer_row2_.size(); ++i) {
     row2.ReduceFromLeft(kGapsBefore[i]);
     Place(footer_row2_[i], show, row2.ReduceFromLeft(footer_row2_widths_[i]));
@@ -847,10 +868,14 @@ void Editor::Idle(const EditorIdleData& data) {
   for (int n; (n = model_.PopDetectorFrames(frames, 64)) > 0;) {
     for (int i = 0; i < n; ++i) history_.Add(frames[i], model_.SampleRate());
   }
-  for (int post = 0; post < 2; ++post) {
-    SpectrumAnalyzer& analyzer = post ? post_analyzer_ : pre_analyzer_;
+  using Source = EditorModel::AnalyzerSource;
+  for (const Source source :
+       {Source::kPre, Source::kPost, Source::kSidechain}) {
+    SpectrumAnalyzer& analyzer = source == Source::kPost        ? post_analyzer_
+                                 : source == Source::kSidechain ? sc_analyzer_
+                                                                : pre_analyzer_;
     for (int n; (n = model_.PopAnalyzerSamples(
-                     post == 1, samples_.data(),
+                     source, samples_.data(),
                      static_cast<int>(samples_.size()))) > 0;) {
       analyzer.AddSamples(samples_.data(), n);
     }
@@ -866,6 +891,7 @@ void Editor::Idle(const EditorIdleData& data) {
   const auto mode = static_cast<EqGraph::AnalyzerMode>(analyzer_mode_);
   spectrum_pre_.clear();
   spectrum_post_.clear();
+  spectrum_sc_.clear();
   if (!graph_->freqs().empty()) {
     if (mode == EqGraph::AnalyzerMode::kPre ||
         mode == EqGraph::AnalyzerMode::kPreAndPost) {
@@ -877,8 +903,21 @@ void Editor::Idle(const EditorIdleData& data) {
       post_analyzer_.Compute(graph_->freqs(), model_.SampleRate(),
                              tilt_db_per_octave_, dt, spectrum_post_);
     }
+    if (show_sc_ && sc_connected_) {
+      sc_analyzer_.Compute(graph_->freqs(), model_.SampleRate(),
+                           tilt_db_per_octave_, dt, spectrum_sc_);
+    }
   }
-  graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_);
+  graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_, spectrum_sc_);
+  sc_button_->SetOn(show_sc_);
+  if (model_.GainMatchOn()) {
+    char match[32];
+    std::snprintf(match, sizeof(match), "MATCH %+.1f dB", model_.GainMatchDb());
+    match_button_->SetLabel(match);
+  } else {
+    match_button_->SetLabel("GAIN MATCH");
+  }
+  match_button_->SetOn(model_.GainMatchOn());
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
 

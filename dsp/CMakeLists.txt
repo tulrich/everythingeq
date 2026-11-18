@@ -10,6 +10,7 @@ add_library(eeq_dsp STATIC
   dynamics/spectral_envelope.cc
   dynamics/tracker.cc
   engine/engine.cc
+  engine/gain_match.cc
 )
 
 # Includes are written relative to the repository root, e.g. "dsp/svf/svf.h".

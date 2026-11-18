@@ -59,6 +59,24 @@ TEST_CASE("State round-trips exactly and deterministically", "[state]") {
   }
 }
 
+TEST_CASE("State keeps the A/B comparison", "[state]") {
+  const ParamValues a = RandomValues(30), b = RandomValues(31);
+  std::optional<AbState> compare = AbState{};
+  // Unused (A active, B empty): left out, so it reads back as none.
+  const std::string plain = SerializeState(a, {"Init", false});
+  REQUIRE(SerializeState(a, {"Init", false}, AbState{}) == plain);
+  REQUIRE(DeserializeState(plain, nullptr, &compare) == a);
+  REQUIRE_FALSE(compare.has_value());
+
+  const AbState saved{1, a, {"Mine", true}};
+  PresetRef preset;
+  const std::string s = SerializeState(b, {"Init", false}, saved);
+  REQUIRE(DeserializeState(s, &preset, &compare) == b);
+  REQUIRE(preset == PresetRef{"Init", false});
+  REQUIRE(compare == saved);
+  REQUIRE(SerializeState(b, preset, *compare) == s);
+}
+
 TEST_CASE("Invalid state is rejected", "[state]") {
   REQUIRE_FALSE(DeserializeState(""));
   REQUIRE_FALSE(DeserializeState("{}"));

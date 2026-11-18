@@ -68,6 +68,13 @@ class TextButton final : public iplug::igraphics::IControl {
       SetDirty(false);
     }
   }
+  // A toggle's state: on draws lit.
+  void SetOn(bool on) {
+    if (on != on_) {
+      on_ = on;
+      SetDirty(false);
+    }
+  }
 
   void Draw(iplug::igraphics::IGraphics& g) override {
     namespace ig = iplug::igraphics;
@@ -76,7 +83,8 @@ class TextButton final : public iplug::igraphics::IControl {
       case Style::kBox:
         g.FillRoundRect(hover ? theme::kPanelRaised : theme::kPanel, mRECT,
                         3.f);
-        g.DrawRoundRect(theme::kBorder, mRECT, 3.f);
+        g.DrawRoundRect(on_ ? theme::kOn.WithOpacity(0.6f) : theme::kBorder,
+                        mRECT, 3.f);
         break;
       case Style::kOutline:
         if (hover) g.FillRoundRect(theme::kPanelRaised, mRECT, 3.f);
@@ -86,10 +94,12 @@ class TextButton final : public iplug::igraphics::IControl {
         if (hover) g.FillRoundRect(theme::kPanelRaised, mRECT, 3.f);
         break;
     }
-    g.DrawText(
-        theme::Text(style_ == Style::kGhost ? 12.f : 10.f,
-                    hover ? theme::kText : theme::kTextDim, ig::EAlign::Center),
-        label_.c_str(), mRECT);
+    g.DrawText(theme::Text(style_ == Style::kGhost ? 12.f : 10.f,
+                           on_     ? theme::kOn
+                           : hover ? theme::kText
+                                   : theme::kTextDim,
+                           ig::EAlign::Center),
+               label_.c_str(), mRECT);
   }
   void OnMouseDown(float, float, const iplug::igraphics::IMouseMod&) override {
     if (on_click_) on_click_();
@@ -108,6 +118,7 @@ class TextButton final : public iplug::igraphics::IControl {
   std::string label_;
   std::function<void()> on_click_;
   Style style_;
+  bool on_ = false;
 };
 
 // A foldable section title in the dynamics panel: click to fold or unfold.

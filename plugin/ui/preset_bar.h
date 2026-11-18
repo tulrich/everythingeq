@@ -14,20 +14,19 @@
 namespace eeq {
 
 // The preset bar (ABOUT.md section 4): the current preset's name (with "*" once
-// the settings differ from it) opening the preset menu, and Undo/Redo.  The
-// menu lists the factory and user presets and has Save, Save As, Rename and
-// Show Presets Folder; names are typed in place.
+// the settings differ from it) opening the preset menu, A/B compare (switch,
+// copy to the other slot) and Undo/Redo.  The menu lists the factory and user
+// presets and has Save, Save As, Rename and Show Presets Folder; names are
+// typed in place.
 class PresetBar final : public iplug::igraphics::IControl {
  public:
-  // Undo/Redo buttons beside the name (hidden in the small layouts).
+  // A/B and Undo/Redo buttons beside the name (hidden in the small
+  // layouts).
   void SetShowUndo(bool show) { show_undo_ = show; }
   PresetBar(const iplug::igraphics::IRECT& bounds, EditorModel& model)
       : IControl(bounds), model_(model), menu_("") {
     SetTextEntryLength(64);
-    SetTooltip(
-        "Presets: factory presets and your own (saved as files, so they work "
-        "in any host). * means the settings have changed since the preset was "
-        "loaded or saved.");
+    SetTooltip(kTooltip);
   }
 
   void Draw(iplug::igraphics::IGraphics& g) override {
@@ -48,6 +47,24 @@ class PresetBar final : public iplug::igraphics::IControl {
         ParamField::Fit(g, text, name + (modified_ ? " *" : ""), text_rect.W())
             .c_str(),
         text_rect);
+    // A/B: the active slot lit; copy to the other.
+    if (show_undo_) {
+      const int slot = model_.CompareSlot();
+      const ig::IRECT ab = AbRect();
+      DrawBox(g, ab, hover_ == kAb);
+      for (int i = 0; i < 2; ++i) {
+        g.DrawText(
+            theme::Text(11.f, i == slot ? theme::kAccent : theme::kTextDim,
+                        ig::EAlign::Center),
+            i ? "B" : "A", ab.SubRectHorizontal(2, i));
+      }
+      const ig::IRECT copy = CopyRect();
+      DrawBox(g, copy, hover_ == kCopy);
+      g.DrawText(
+          theme::Text(10.f, hover_ == kCopy ? theme::kText : theme::kTextDim,
+                      ig::EAlign::Center),
+          "COPY", copy);
+    }
     // Undo / Redo.
     for (const bool redo : {false, true}) {
       if (!show_undo_) break;
@@ -67,9 +84,11 @@ class PresetBar final : public iplug::igraphics::IControl {
     const PresetRef ref = model_.CurrentPreset();
     const bool modified = model_.PresetModified();
     const bool can_undo = model_.CanUndo(), can_redo = model_.CanRedo();
+    const int slot = model_.CompareSlot();
     if (!(ref == shown_) || modified != modified_ || can_undo != can_undo_ ||
-        can_redo != can_redo_) {
+        can_redo != can_redo_ || slot != slot_) {
       shown_ = ref;
+      slot_ = slot;
       modified_ = modified;
       can_undo_ = can_undo;
       can_redo_ = can_redo;
@@ -83,6 +102,11 @@ class PresetBar final : public iplug::igraphics::IControl {
     const Part part = PartAt(x, y);
     if (part != hover_) {
       hover_ = part;
+      SetTooltip(part == kAb     ? "A/B compare: switch to the other settings "
+                                   "(each slot keeps its own preset and undo)."
+                 : part == kCopy ? "Copy these settings over the other A/B "
+                                   "slot (A to B, or B to A)."
+                                 : kTooltip);
       SetDirty(false);
     }
   }
@@ -103,6 +127,12 @@ class PresetBar final : public iplug::igraphics::IControl {
         break;
       case kRedo:
         model_.Redo();
+        break;
+      case kAb:
+        model_.SwitchCompare();
+        break;
+      case kCopy:
+        model_.CopyCompare();
         break;
       case kNone:
         break;
@@ -153,7 +183,11 @@ class PresetBar final : public iplug::igraphics::IControl {
 
  private:
   bool show_undo_ = true;
-  enum Part { kNone, kName, kUndo, kRedo };
+  enum Part { kNone, kName, kAb, kCopy, kUndo, kRedo };
+  static constexpr const char* kTooltip =
+      "Presets: factory presets and your own (saved as files, so they work "
+      "in any host). * means the settings have changed since the preset was "
+      "loaded or saved.";
   // Menu actions other than loading preset i (>= 0).
   static constexpr int kNoAction = -1;
   static constexpr int kSave = -2;
@@ -173,14 +207,24 @@ class PresetBar final : public iplug::igraphics::IControl {
     if (!show_undo_) return RedoRect();
     return RedoRect().GetTranslated(-(kButtonWidth + kGap), 0.f);
   }
+  iplug::igraphics::IRECT CopyRect() const {
+    if (!show_undo_) return UndoRect();
+    return UndoRect().GetTranslated(-(kButtonWidth + 3.f * kGap), 0.f);
+  }
+  iplug::igraphics::IRECT AbRect() const {
+    if (!show_undo_) return UndoRect();
+    return CopyRect().GetTranslated(-(kButtonWidth + kGap), 0.f);
+  }
   iplug::igraphics::IRECT NameRect() const {
     if (!show_undo_) return mRECT;
-    return iplug::igraphics::IRECT(mRECT.L, mRECT.T, UndoRect().L - 2.f * kGap,
+    return iplug::igraphics::IRECT(mRECT.L, mRECT.T, AbRect().L - 2.f * kGap,
                                    mRECT.B);
   }
 
   Part PartAt(float x, float y) const {
     if (NameRect().Contains(x, y)) return kName;
+    if (show_undo_ && AbRect().Contains(x, y)) return kAb;
+    if (show_undo_ && CopyRect().Contains(x, y)) return kCopy;
     if (UndoRect().Contains(x, y)) return kUndo;
     if (RedoRect().Contains(x, y)) return kRedo;
     return kNone;
@@ -273,6 +317,7 @@ class PresetBar final : public iplug::igraphics::IControl {
   int entry_ = kSaveAs;       // What the text entry is for.
   Part hover_ = kNone;
   PresetRef shown_;
+  int slot_ = 0;
   bool modified_ = false;
   bool can_undo_ = false;
   bool can_redo_ = false;

@@ -149,6 +149,8 @@ class Editor {
   std::vector<iplug::igraphics::IControl*> footer_row1_;
   std::vector<iplug::igraphics::IControl*> footer_row2_;
   std::vector<float> footer_row2_widths_;
+  TextButton* sc_button_ = nullptr;
+  TextButton* match_button_ = nullptr;
   iplug::igraphics::ITextControl* status_ = nullptr;
   std::string status_text_;
 
@@ -172,10 +174,12 @@ class Editor {
   DetectorHistory history_;
   SpectrumAnalyzer pre_analyzer_;
   SpectrumAnalyzer post_analyzer_;
+  SpectrumAnalyzer sc_analyzer_;
+  bool show_sc_ = true;    // The sidechain's spectrum, when one is connected.
   int analyzer_mode_ = 3;  // EqGraph::AnalyzerMode::kPreAndPost.
   double tilt_db_per_octave_ = 0.0;
   std::vector<float> samples_ = std::vector<float>(4096);
-  std::vector<float> spectrum_pre_, spectrum_post_;
+  std::vector<float> spectrum_pre_, spectrum_post_, spectrum_sc_;
   std::chrono::steady_clock::time_point last_idle_ =
       std::chrono::steady_clock::now();
 };

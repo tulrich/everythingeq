@@ -160,8 +160,11 @@ std::array<EditorModel::Tracked, kNumGroups> EverythingEq::LiveTracking()
   return t;
 }
 
-int EverythingEq::PopAnalyzerSamples(bool post, float* dest, int max_count) {
-  auto& ring = post ? analyzer_post_ : analyzer_pre_;
+int EverythingEq::PopAnalyzerSamples(AnalyzerSource source, float* dest,
+                                     int max_count) {
+  auto& ring = source == AnalyzerSource::kPost        ? analyzer_post_
+               : source == AnalyzerSource::kSidechain ? analyzer_sc_
+                                                      : analyzer_pre_;
   return static_cast<int>(ring.Pop(dest, static_cast<size_t>(max_count)));
 }
 
@@ -262,8 +265,50 @@ void EverythingEq::SyncUiState() {
     // The host replaced the settings (project load, its preset menu): the
     // history no longer applies.
     undo_.Clear();
+    other_undo_.Clear();
     preset_values_.reset();
   }
+}
+
+int EverythingEq::CompareSlot() const {
+  std::lock_guard<std::mutex> lock(preset_mutex_);
+  return compare_.active;
+}
+
+void EverythingEq::SwitchCompare() {
+  SyncUiState();
+  undo_.EndAllGestures();
+  const ParamValues current = CurrentValues();
+  ParamValues next = current;  // A slot not used yet starts as a copy.
+  {
+    std::lock_guard<std::mutex> lock(preset_mutex_);
+    PresetRef next_preset = current_preset_;
+    if (compare_.other) {
+      next = *compare_.other;
+      next_preset = compare_.other_preset;
+    }
+    compare_.other = current;
+    compare_.other_preset = current_preset_;
+    compare_.active ^= 1;
+    current_preset_ = next_preset;
+    compare_slot_ = compare_.active;
+  }
+  std::swap(undo_, other_undo_);
+  std::vector<ParamChange> changes;
+  for (int id = 0; id < kNumParams; ++id) {
+    if (next[id] != current[id]) changes.push_back({id, next[id]});
+  }
+  ApplyChanges(changes);
+  preset_values_.reset();
+}
+
+void EverythingEq::CopyCompare() {
+  SyncUiState();
+  const ParamValues current = CurrentValues();
+  std::lock_guard<std::mutex> lock(preset_mutex_);
+  compare_.other = current;
+  compare_.other_preset = current_preset_;
+  other_undo_.Clear();
 }
 
 void EverythingEq::RefreshPresets() {
@@ -432,7 +477,9 @@ void EverythingEq::UpdateLatency() {
 }
 
 bool EverythingEq::SerializeState(iplug::IByteChunk& chunk) const {
-  chunk.PutStr(eeq::SerializeState(CurrentValues(), CurrentPreset()).c_str());
+  const ParamValues values = CurrentValues();
+  std::lock_guard<std::mutex> lock(preset_mutex_);
+  chunk.PutStr(eeq::SerializeState(values, current_preset_, compare_).c_str());
   return true;
 }
 
@@ -442,10 +489,20 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
   const int end_pos = chunk.GetStr(text, start_pos);
   if (end_pos < 0) return -1;
   PresetRef preset;
+  std::optional<AbState> compare;
   const std::optional<ParamValues> values =
-      DeserializeState(text.Get(), &preset);
+      DeserializeState(text.Get(), &preset, &compare);
   if (!values) return -1;
-  SetCurrentPreset(preset);
+  {
+    std::lock_guard<std::mutex> lock(preset_mutex_);
+    current_preset_ = preset;
+    // A state without a comparison (e.g. a preset) loads into the active
+    // slot and leaves the other one alone.
+    if (compare) {
+      compare_ = *compare;
+      compare_slot_ = compare_.active;
+    }
+  }
   state_restored_ = true;
   ENTER_PARAMS_MUTEX
   for (int id = 0; id < kNumParams; ++id) GetParam(id)->Set((*values)[id]);
@@ -484,6 +541,7 @@ void EverythingEq::OnReset() {
   const int max_block = std::max(GetBlockSize(), 1);
   for (auto& buffer : scratch_) buffer.assign(max_block, 0.f);
   engine_.Prepare(GetSampleRate());
+  gain_match_.Prepare(GetSampleRate());
   engine_.FadeInFromDry();  // The filters restart from silence.
   params_dirty_ = true;
   UpdateLatency();
@@ -622,9 +680,18 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
     params.global.lookahead_ms = lookahead;
     params.global.bypass = params.global.bypass || host_bypassed_;
     engine_.SetParams(params);
+    listening_ = params.global.bypass || params.global.delta;
+    for (const BandParams& b : params.bands) listening_ |= b.solo;
+    for (const GroupParams& g : params.groups) listening_ |= g.sc_listen;
   }
 
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
+  gain_match_.SelectSlot(compare_slot_.load(std::memory_order_relaxed));
+  gain_match_.Process(in, out, num_frames,
+                      gain_match_on_.load(std::memory_order_relaxed),
+                      listening_);
+  gain_match_db_.store(static_cast<float>(gain_match_.gain_db()),
+                       std::memory_order_relaxed);
 
   // Metering for the UI.
   for (int b = 0; b < kNumBands; ++b) {
@@ -669,6 +736,11 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
     for (int i = 0; i < num_frames; ++i)
       mono[i] = 0.5f * (out[0][i] + out[1][i]);
     analyzer_post_.Push(mono, num_frames);
+    if (sc_l || sc_r) {
+      for (int i = 0; i < num_frames; ++i)
+        mono[i] = 0.5f * (sc[0][i] + sc[1][i]);
+      analyzer_sc_.Push(mono, num_frames);
+    }
   }
 
   const int num_out = NOutChansConnected();
