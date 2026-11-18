@@ -7,36 +7,34 @@
 
 namespace eeq {
 
-// Gain Match, a listening aid for fair comparisons: measures the K-weighted
-// loudness of the input and of the output over a few seconds and scales the
-// output by the difference, so the processed sound plays as loud as the
-// input (and as loud as bypass).  Each A/B slot keeps its own output
-// measurement, so switching slots plays matched at once.
+// Gain Match, a one-shot measurement for fair comparisons: the K-weighted
+// loudness of the input against the output over a few seconds of playing
+// audio.  The plugin then moves Output Gain by the difference, so the
+// processed sound plays as loud as the input (and as loud as bypass).
 class GainMatch {
  public:
-  static constexpr double kMaxDb = 24.0;  // The largest correction.
-  static constexpr double kTauSeconds = 3.0;
-  static constexpr double kGlideSeconds = 0.05;
-  // Blocks quieter than this (K-weighted mean square) aren't measured.
+  static constexpr double kSeconds = 3.0;  // Of audio that counts.
+  // Blocks quieter than this (K-weighted mean square) don't count.
   static constexpr double kSilencePower = 1e-7;  // -70 dB.
+  static constexpr double kMaxDb = 60.0;         // Limits correction_db().
 
   void Prepare(double sample_rate);
-  // Forgets the measurements (the gain glides back to unity).
-  void Reset();
 
-  // The A/B slot (0 or 1) the output now comes from.  A slot not measured
-  // yet starts from the current slot's measurement.
-  void SelectSlot(int slot);
+  void Start();
+  void Cancel() { running_ = false; }
+  bool running() const { return running_; }
+  // How much of the measurement is done (0 to 1).
+  double progress() const;
 
-  // Measures in and out (stereo, n samples) and scales out in place.  While
-  // `hold` (bypass or a listen mode) the measurement pauses and the gain
-  // glides to unity; disabled, the gain glides to unity and turning it on
-  // again starts a new measurement.
-  void Process(const float* const in[2], float* const out[2], int n,
-               bool enabled, bool hold);
+  // Measures one block (stereo, n samples) while running.  Silent blocks
+  // and blocks with `hold` (bypass or a listen mode) don't count.  Returns
+  // true when this block completes the measurement.
+  bool Process(const float* const in[2], const float* const out[2], int n,
+               bool hold);
 
-  // The gain (dB) applied at the end of the last block.
-  double gain_db() const;
+  // The gain (dB) that brings the output to the input's loudness, from the
+  // last completed measurement.
+  double correction_db() const { return correction_db_; }
 
  private:
   double MeanSquare(BandProcessor* k, const float* const x[2], int n);
@@ -45,14 +43,11 @@ class GainMatch {
   // K-weighting: input L/R, output L/R.
   std::array<BandProcessor, 2> k_in_;
   std::array<BandProcessor, 2> k_out_;
-  // Exponential averages started from zero, and how far each has risen
-  // (1 - exp(-t / tau)), which unbiases them: power / weight.
-  double in_power_ = 0.0, in_weight_ = 0.0;
-  std::array<double, 2> out_power_{}, out_weight_{};
-  int slot_ = 0;
-  bool was_enabled_ = false;
-  double gain_ = 1.0;
-  double glide_ = 1.0;  // Per-sample one-pole coefficient.
+  BandDesign k_design_;
+  bool running_ = false;
+  double in_sum_ = 0.0, out_sum_ = 0.0;  // Of mean squares times samples.
+  double counted_ = 0.0;                 // Samples.
+  double correction_db_ = 0.0;
 };
 
 }  // namespace eeq

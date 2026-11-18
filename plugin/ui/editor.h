@@ -151,6 +151,9 @@ class Editor {
   std::vector<float> footer_row2_widths_;
   TextButton* sc_button_ = nullptr;
   TextButton* match_button_ = nullptr;
+  // The last Gain Match result shown on its button, and until when.
+  int match_count_ = -1;
+  std::chrono::steady_clock::time_point match_shown_until_;
   iplug::igraphics::ITextControl* status_ = nullptr;
   std::string status_text_;
 

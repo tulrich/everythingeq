@@ -81,11 +81,18 @@ class EditorModel {
   // Copies the active slot's settings over the other slot's.
   virtual void CopyCompare() = 0;
 
-  // Gain Match, a listening aid (not saved): the output plays at the
-  // input's loudness.  GainMatchDb() is the gain it applies now.
-  virtual bool GainMatchOn() const = 0;
-  virtual void SetGainMatchOn(bool on) = 0;
-  virtual float GainMatchDb() const = 0;
+  // Gain Match: measures the output against the input over a few seconds
+  // of playing audio, then moves Output Gain by the difference (one undo
+  // step).  GainMatchProgress() is -1 when idle, else 0 to 1.
+  virtual void StartGainMatch() = 0;
+  virtual void CancelGainMatch() = 0;
+  virtual float GainMatchProgress() const = 0;
+  struct GainMatchResult {
+    int count = 0;          // Completed matches so far.
+    float change_db = 0.f;  // The last one's Output Gain change.
+    bool limited = false;   // Output Gain hit its range.
+  };
+  virtual GainMatchResult LastGainMatch() const = 0;
 
   // Moves every parameter to `values` (host values) as one undo step, with
   // exact values (no detents).

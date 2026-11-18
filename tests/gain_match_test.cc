@@ -1,4 +1,4 @@
-// Gain Match: output level matching for A/B and bypass comparisons.
+// Gain Match: the one-shot input/output loudness measurement.
 
 #include "dsp/engine/gain_match.h"
 
@@ -13,14 +13,13 @@ namespace {
 constexpr double kFs = 48000.0;
 constexpr int kBlock = 256;
 
-// Runs `seconds` of white noise through `match`, with the output at
-// `out_gain` times the input; returns the last block's output gain (dB)
-// measured from the samples.
-double Run(GainMatch& match, double seconds, double out_gain, bool enabled,
-           bool hold, std::mt19937& rng) {
-  std::normal_distribution<float> noise(0.f, 0.1f);
+// Feeds `seconds` of white noise (at `level`), with the output at
+// `out_gain` times the input; returns the number of blocks until the
+// measurement completed, or -1.
+int Run(GainMatch& match, double seconds, double out_gain, bool hold,
+        std::mt19937& rng, float level = 0.1f) {
+  std::normal_distribution<float> noise(0.f, level);
   std::vector<float> il(kBlock), ir(kBlock), ol(kBlock), orr(kBlock);
-  double ratio = 1.0;
   const int blocks = static_cast<int>(seconds * kFs / kBlock);
   for (int b = 0; b < blocks; ++b) {
     for (int i = 0; i < kBlock; ++i) {
@@ -30,52 +29,47 @@ double Run(GainMatch& match, double seconds, double out_gain, bool enabled,
       orr[i] = static_cast<float>(ir[i] * out_gain);
     }
     const float* in[2] = {il.data(), ir.data()};
-    float* out[2] = {ol.data(), orr.data()};
-    match.Process(in, out, kBlock, enabled, hold);
-    ratio = ol[kBlock - 1] / (il[kBlock - 1] * out_gain);
+    const float* out[2] = {ol.data(), orr.data()};
+    if (match.Process(in, out, kBlock, hold)) return b + 1;
   }
-  return 20.0 * std::log10(ratio);
+  return -1;
 }
 
 }  // namespace
 
-TEST_CASE("Gain Match brings the output to the input's loudness",
+TEST_CASE("Gain Match measures the output against the input once",
           "[gain_match]") {
   std::mt19937 rng(1);
   GainMatch m;
   m.Prepare(kFs);
-  // 6 dB quieter output: matched within a fraction of a dB from the start.
-  CHECK(std::abs(Run(m, 0.5, 0.5, true, false, rng) - 6.02) < 0.3);
-  CHECK(std::abs(Run(m, 8.0, 0.5, true, false, rng) - 6.02) < 0.1);
-  CHECK(std::abs(m.gain_db() - 6.02) < 0.1);
+  CHECK(Run(m, 1.0, 0.5, false, rng) == -1);  // Not started.
+  m.Start();
+  const int blocks = Run(m, 5.0, 0.5, false, rng);
+  CHECK(std::abs(blocks * kBlock / kFs - GainMatch::kSeconds) < 0.01);
+  CHECK_FALSE(m.running());
+  CHECK(std::abs(m.correction_db() - 6.02) < 0.05);
+  m.Start();
+  Run(m, 5.0, 2.0, false, rng);
+  CHECK(std::abs(m.correction_db() + 6.02) < 0.05);
 }
 
-TEST_CASE("Gain Match is unity when held or off, and clamps", "[gain_match]") {
+TEST_CASE("Gain Match skips held and silent audio", "[gain_match]") {
   std::mt19937 rng(2);
   GainMatch m;
   m.Prepare(kFs);
-  Run(m, 4.0, 0.5, true, false, rng);
-  CHECK(std::abs(Run(m, 0.5, 0.5, true, true, rng)) < 0.01);  // Held.
-  // Held doesn't forget the measurement.
-  CHECK(std::abs(Run(m, 0.5, 0.5, true, false, rng) - 6.02) < 0.1);
-  CHECK(std::abs(Run(m, 0.5, 0.5, false, false, rng)) < 0.01);  // Off.
-  CHECK(std::abs(Run(m, 4.0, 1e-3, true, false, rng) - GainMatch::kMaxDb) <
-        0.01);
-}
-
-TEST_CASE("Gain Match keeps a measurement per A/B slot", "[gain_match]") {
-  std::mt19937 rng(3);
-  GainMatch m;
-  m.Prepare(kFs);
-  Run(m, 6.0, 0.5, true, false, rng);  // A: 6 dB quieter.
-  m.SelectSlot(1);
-  // A new slot starts from A's measurement.
-  CHECK(std::abs(m.gain_db() - 6.02) < 0.1);
-  Run(m, 15.0, 2.0, true, false, rng);  // B: 6 dB louder.
-  CHECK(std::abs(m.gain_db() + 6.02) < 0.2);
-  m.SelectSlot(0);
-  // Back on A, matched again after the short glide, not the 3 s average.
-  CHECK(std::abs(Run(m, 0.3, 0.5, true, false, rng) - 6.02) < 0.2);
+  m.Start();
+  CHECK(Run(m, 2.0, 0.5, false, rng) == -1);
+  const double progress = m.progress();
+  CHECK(progress > 0.6);
+  CHECK(Run(m, 2.0, 1.0, true, rng) == -1);          // Held.
+  CHECK(Run(m, 2.0, 1.0, false, rng, 1e-5f) == -1);  // Silent.
+  // Only the K-weighting's ring-down at the drop into silence counts.
+  CHECK(m.progress() - progress < 0.01);
+  CHECK(Run(m, 2.0, 0.5, false, rng) > 0);
+  CHECK(std::abs(m.correction_db() - 6.02) < 0.05);
+  m.Start();
+  m.Cancel();
+  CHECK(Run(m, 4.0, 0.5, false, rng) == -1);
 }
 
 }  // namespace eeq::test

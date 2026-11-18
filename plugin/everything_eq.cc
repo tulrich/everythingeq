@@ -291,7 +291,6 @@ void EverythingEq::SwitchCompare() {
     compare_.other_preset = current_preset_;
     compare_.active ^= 1;
     current_preset_ = next_preset;
-    compare_slot_ = compare_.active;
   }
   std::swap(undo_, other_undo_);
   std::vector<ParamChange> changes;
@@ -498,10 +497,7 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
     current_preset_ = preset;
     // A state without a comparison (e.g. a preset) loads into the active
     // slot and leaves the other one alone.
-    if (compare) {
-      compare_ = *compare;
-      compare_slot_ = compare_.active;
-    }
+    if (compare) compare_ = *compare;
   }
   state_restored_ = true;
   ENTER_PARAMS_MUTEX
@@ -511,9 +507,34 @@ int EverythingEq::UnserializeState(const iplug::IByteChunk& chunk,
   return end_pos;
 }
 
+void EverythingEq::StartGainMatch() {
+  match_progress_ = 0.f;  // Until the audio thread takes it up.
+  match_command_ = 1;
+}
+
+void EverythingEq::CancelGainMatch() {
+  match_progress_ = -1.f;
+  match_command_ = 2;
+}
+
+void EverythingEq::ApplyGainMatch() {
+  if (!match_done_.exchange(false)) return;
+  const int id = GlobalParamId(GlobalField::kOutputGain);
+  const iplug::IParam* p = GetParam(id);
+  const double before = p->Value();
+  const double wanted = before + match_db_.load(std::memory_order_relaxed);
+  const double after = std::clamp(wanted, p->GetMin(), p->GetMax());
+  exact_values_ = true;  // No 0.5 dB detent.
+  SetValueGesture(id, p->ToNormalized(after));
+  exact_values_ = false;
+  last_match_ = {last_match_.count + 1, static_cast<float>(after - before),
+                 after != wanted};
+}
+
 void EverythingEq::OnIdle() {
 #if IPLUG_EDITOR
   SyncUiState();
+  ApplyGainMatch();
   if (!editor_) return;
   EditorIdleData data;
   for (int i = 0; i < kNumMeterChannels; ++i) {
@@ -686,12 +707,22 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
   }
 
   engine_.Process(in, (sc_l || sc_r) ? sc : nullptr, out, num_frames);
-  gain_match_.SelectSlot(compare_slot_.load(std::memory_order_relaxed));
-  gain_match_.Process(in, out, num_frames,
-                      gain_match_on_.load(std::memory_order_relaxed),
-                      listening_);
-  gain_match_db_.store(static_cast<float>(gain_match_.gain_db()),
-                       std::memory_order_relaxed);
+  switch (match_command_.exchange(0, std::memory_order_relaxed)) {
+    case 1:
+      gain_match_.Start();
+      break;
+    case 2:
+      gain_match_.Cancel();
+      break;
+  }
+  if (gain_match_.Process(in, out, num_frames, listening_)) {
+    match_db_.store(static_cast<float>(gain_match_.correction_db()),
+                    std::memory_order_relaxed);
+    match_done_ = true;
+  }
+  match_progress_.store(
+      gain_match_.running() ? static_cast<float>(gain_match_.progress()) : -1.f,
+      std::memory_order_relaxed);
 
   // Metering for the UI.
   for (int b = 0; b < kNumBands; ++b) {

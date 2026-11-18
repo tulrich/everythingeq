@@ -68,9 +68,10 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   int CompareSlot() const override;
   void SwitchCompare() override;
   void CopyCompare() override;
-  bool GainMatchOn() const override { return gain_match_on_; }
-  void SetGainMatchOn(bool on) override { gain_match_on_ = on; }
-  float GainMatchDb() const override { return gain_match_db_; }
+  void StartGainMatch() override;
+  void CancelGainMatch() override;
+  float GainMatchProgress() const override { return match_progress_; }
+  GainMatchResult LastGainMatch() const override { return last_match_; }
 
   // Edits from the UI (controls and EditorModel) are recorded for undo.
   void BeginInformHostOfParamChangeFromUI(int param_index) override;
@@ -109,6 +110,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   // the preset snapshot.
   void SyncUiState();
   void UpdateLatency();
+  // UI thread: moves Output Gain by a completed Gain Match.
+  void ApplyGainMatch();
   void UpdateConnections();
   void AccumulatePeak(int meter_channel, const iplug::sample* data,
                       int num_frames);
@@ -123,9 +126,13 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   // Bypass or a listen mode is on, which holds Gain Match (audio thread).
   bool listening_ = false;
   GainMatch gain_match_;  // Audio thread.
-  std::atomic<bool> gain_match_on_{false};
-  std::atomic<float> gain_match_db_{0.f};
-  std::atomic<int> compare_slot_{0};  // compare_.active, for the audio thread.
+  // UI -> audio: 1 starts a Gain Match, 2 cancels it.  Audio -> UI: its
+  // progress (-1 when idle) and, once done, the correction.
+  std::atomic<int> match_command_{0};
+  std::atomic<float> match_progress_{-1.f};
+  std::atomic<bool> match_done_{false};
+  std::atomic<float> match_db_{0.f};
+  GainMatchResult last_match_;  // UI thread.
 
   std::array<bool, kMaxIn> in_connected_{};
   std::array<bool, kMaxOut> out_connected_{};

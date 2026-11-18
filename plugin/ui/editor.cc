@@ -223,14 +223,19 @@ void Editor::BuildFooter() {
       "so pitch and vowel tracking stay in tune.");
   footer_row1_.push_back(scale);
   match_button_ = new TextButton(ig::IRECT(), "GAIN MATCH", [this] {
-    model_.SetGainMatchOn(!model_.GainMatchOn());
+    if (model_.GainMatchProgress() >= 0.f) {
+      model_.CancelGainMatch();
+    } else {
+      model_.StartGainMatch();
+    }
   });
   match_button_->SetTooltip(
-      "Gain Match, for fair comparisons: plays the output as loud as the "
-      "input (K-weighted, over a few seconds), so Bypass and A/B compare "
-      "the sound rather than the level. It cancels Output Gain while on, and "
-      "pauses in Bypass, Delta, Solo and SC Listen. Not saved: turn it off "
-      "before you bounce.");
+      "Gain Match, for fair comparisons: with audio playing, measures the "
+      "output against the input (K-weighted loudness, 3 seconds) and moves "
+      "Output Gain so the output is as loud as the input, so Bypass and A/B "
+      "compare the sound rather than the level. Silence and Bypass, Delta, "
+      "Solo and SC Listen don't count. Click again to cancel; undo puts "
+      "Output Gain back.");
   graphics_.AttachControl(match_button_);
   footer_row1_.push_back(match_button_);
 
@@ -910,14 +915,27 @@ void Editor::Idle(const EditorIdleData& data) {
   }
   graph_->SetSpectrum(mode, spectrum_pre_, spectrum_post_, spectrum_sc_);
   sc_button_->SetOn(show_sc_);
-  if (model_.GainMatchOn()) {
-    char match[32];
-    std::snprintf(match, sizeof(match), "MATCH %+.1f dB", model_.GainMatchDb());
-    match_button_->SetLabel(match);
-  } else {
-    match_button_->SetLabel("GAIN MATCH");
+  const float progress = model_.GainMatchProgress();
+  const EditorModel::GainMatchResult match = model_.LastGainMatch();
+  if (match.count != match_count_) {
+    // A new result shows for a few seconds (not one from before the
+    // editor opened).
+    if (match_count_ >= 0) match_shown_until_ = now + std::chrono::seconds(4);
+    match_count_ = match.count;
   }
-  match_button_->SetOn(model_.GainMatchOn());
+  char match_label[40];
+  if (progress >= 0.f) {
+    std::snprintf(match_label, sizeof(match_label),
+                  progress > 0.f ? "MATCHING %.0f%%" : "MATCHING: PLAY AUDIO",
+                  100.f * progress);
+  } else if (now < match_shown_until_) {
+    std::snprintf(match_label, sizeof(match_label), "OUTPUT %+.1f dB%s",
+                  match.change_db, match.limited ? " (LIMIT)" : "");
+  } else {
+    std::snprintf(match_label, sizeof(match_label), "GAIN MATCH");
+  }
+  match_button_->SetLabel(match_label);
+  match_button_->SetOn(progress >= 0.f);
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
 
