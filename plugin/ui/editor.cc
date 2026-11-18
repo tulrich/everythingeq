@@ -167,8 +167,9 @@ void Editor::BuildStrip() {
     c.target_menu = AddBandField(
         a ? BandField::kDynTarget : BandField::kDynBTarget, "", 0.f, kField);
     c.target_menu->SetTooltip(
-        "What the group moves: Gain (dB), Freq (octaves) or Morph (Vowel "
-        "morph; width for Band Shelf and Tilt).");
+        "What the group moves: Gain (dB), Freq (octaves), Morph (Vowel "
+        "morph; width for Band Shelf and Tilt) or Shape (a Vocoder's shape, "
+        "from a Spectrum group; Range is the Amount, negative inverts).");
     c.range_dial = AddBandField(
         a ? BandField::kDynRange : BandField::kDynBRange, "RANGE", 0.f, kDial);
     c.range_dial->SetTooltip(
@@ -272,7 +273,8 @@ void Editor::BuildPanel() {
   graphics_.AttachControl(routing_);
   legend_ = new ig::ITextControl(
       ig::IRECT(),
-      "G gain \xc2\xb7 F freq \xc2\xb7 M morph \xc2\xb7 click again removes",
+      "G gain \xc2\xb7 F freq \xc2\xb7 M morph \xc2\xb7 S shape \xc2\xb7 click "
+      "again removes",
       theme::Text(9.f, theme::kTextDim));
   legend_->SetIgnoreMouse(true);
   graphics_.AttachControl(legend_);
@@ -342,7 +344,12 @@ void Editor::BuildPanel() {
       "the pitch (a band at 27.5 Hz with Dyn Target Freq and Dyn Range "
       "+8 oct follows f0; 55 Hz follows the 2nd harmonic). Tracking holds "
       "its last value through silence and unvoiced sounds; use a clean, "
-      "single-voice sidechain.");
+      "single-voice sidechain. Spectrum: analyzes the input's spectral "
+      "envelope (16 bands, 100 Hz - 8 kHz). A Vocoder band takes on its "
+      "shape (Dyn Target Shape); any other band runs the trigger on the "
+      "level at its own frequency, so each band ducks or opens by what's "
+      "in its own region (Dyn Target Freq: follows the loudest point "
+      "within Dyn Range).");
   add(2, GroupField::kScFilter, "SC Filter",
       "Optional filter on the detector input.");
   add(2, GroupField::kScHz, "SC Hz", "Sidechain filter frequency.");
@@ -411,17 +418,7 @@ void Editor::LayoutStrip() {
 
 void Editor::Connect(int slot) {
   const int band = std::max(0, model_.SelectedBand());
-  const bool a = slot == 0;
-  // Range 0, to set on the card or graph.
-  const std::array<std::pair<int, double>, 4> edits = {{
-      {BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn), 1.0},
-      {BandParamId(band, a ? BandField::kDynGroup : BandField::kDynBGroup),
-       selected_group_ / static_cast<double>(kNumGroups - 1)},
-      {BandParamId(band, a ? BandField::kDynTarget : BandField::kDynBTarget),
-       0.0},
-      {BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange),
-       kSlotDefault},
-  }};
+  const auto edits = ConnectEdits(model_.Values(), band, slot, selected_group_);
   for (const auto& [id, value] : edits) model_.BeginEdit(id);
   for (const auto& [id, value] : edits) model_.SetEdit(id, value);
   for (const auto& [id, value] : edits) model_.EndEdit(id);
@@ -429,11 +426,12 @@ void Editor::Connect(int slot) {
 
 void Editor::LayoutCards(const ParamValues& v, bool force) {
   const int band = std::max(0, model_.SelectedBand());
-  std::array<bool, 2> used{}, gain{};
+  std::array<bool, 2> used{}, gain{}, shape{};
   for (int slot = 0; slot < 2; ++slot) {
     const bool a = slot == 0;
     const auto target = static_cast<DynTarget>(Int(v[BandParamId(
         band, a ? BandField::kDynTarget : BandField::kDynBTarget)]));
+    shape[slot] = target == DynTarget::kShape;
     used[slot] =
         v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     gain[slot] = used[slot] && target == DynTarget::kGain;
@@ -445,7 +443,7 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
   std::array<int, 2> state{};
   for (int slot = 0; slot < 2; ++slot) {
     state[slot] = used[slot] | (compact << 1) | (show << 2) |
-                  ((makeup_slot == slot) << 3);
+                  ((makeup_slot == slot) << 3) | (shape[slot] << 4);
   }
   if (!force && state == card_state_) return;
   card_state_ = state;
@@ -460,6 +458,9 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
     const Rect& r = layout_.strip.cards[slot];
     const bool u = show && used[slot];
     const bool has_makeup = u && makeup_slot == slot;
+    // A Shape's range is its Amount.
+    const char* range_label = shape[slot] ? "AMOUNT" : "RANGE";
+    c.range_dial->SetLabel(range_label);
     Place(c.panel, show, ToIRECT(r));
     const Rect in = {r.l + 7.f, r.t + 7.f, r.r - 7.f, r.b - 7.f};
     Place(c.disconnect, u,
@@ -483,7 +484,7 @@ void Editor::LayoutCards(const ParamValues& v, bool force) {
         }
       } else {
         c.range_field->SetLabelWidth(46.f);
-        c.range_field->SetLabel("RANGE");
+        c.range_field->SetLabel(range_label);
         Place(c.range_dial, false);
         Place(c.range_field, u, ig::IRECT(in.l, rest_t, in.r, rest_t + kRow));
         if (has_makeup) {
@@ -524,9 +525,8 @@ void Editor::LayoutFooter() {
 void Editor::ToggleSection(int section) {
   Section& s = sections_[section];
   if (section == 1) {
-    const bool level =
-        static_cast<DetectMode>(Int(model_.Values()[GroupParamId(
-            selected_group_, GroupField::kDetect)])) == DetectMode::kLevel;
+    const bool level = UsesGainComputer(static_cast<DetectMode>(Int(
+        model_.Values()[GroupParamId(selected_group_, GroupField::kDetect)])));
     if (!level) return;  // Nothing to show in the tracking modes.
   }
   if (s.header->open()) {
@@ -541,9 +541,8 @@ void Editor::ToggleSection(int section) {
 void Editor::LayoutPanel(const ParamValues& v, bool force) {
   const EditorLayout& L = layout_;
   const int g = selected_group_;
-  const bool level =
-      static_cast<DetectMode>(Int(v[GroupParamId(g, GroupField::kDetect)])) ==
-      DetectMode::kLevel;
+  const bool level = UsesGainComputer(
+      static_cast<DetectMode>(Int(v[GroupParamId(g, GroupField::kDetect)])));
   const bool warn = SidechainMissing(v, g);
   char key[160];
   std::snprintf(
@@ -716,17 +715,20 @@ void Editor::UpdateBandEditor(const ParamValues& v) {
   // NOW: the band's current dynamic offset in its target's unit, over the
   // graph and on each card.
   const double global = v[GlobalParamId(GlobalField::kGlobalScale)] / 100.0;
-  auto scale = [&](DynTarget t) {  // Global Scale applies to Gain only.
-    return t == DynTarget::kGain ? global : 1.0;
+  auto scale = [&](DynTarget t) {  // Global Scale applies to gains only.
+    return IsGainTarget(t) ? global : 1.0;
   };
-  const GroupControls live = model_.LiveControls();
+  // A Spectrum group's control is the band's own reading; a Shape has no
+  // single value (the graph shows it).
+  const BandLive live = model_.LiveBandState()[band];
   std::string now_a, now_b;
-  if (range != 0.0) {
-    now_a = FormatSlotValue(range_mapping, live[group] * range * scale(target));
+  if (range != 0.0 && target != DynTarget::kShape) {
+    now_a =
+        FormatSlotValue(range_mapping, live.control[0] * range * scale(target));
   }
-  if (range_b != 0.0) {
+  if (range_b != 0.0 && target_b != DynTarget::kShape) {
     now_b = FormatSlotValue(range_b_mapping,
-                            live[group_b] * range_b * scale(target_b));
+                            live.control[1] * range_b * scale(target_b));
   }
   std::string now;
   if (!now_a.empty() || !now_b.empty()) {
@@ -769,7 +771,7 @@ void Editor::UpdateDynamicsPanel(const ParamValues& v) {
   const double alpha = v[GroupParamId(g, GroupField::kAlpha)];
   const auto detect =
       static_cast<DetectMode>(Int(v[GroupParamId(g, GroupField::kDetect)]));
-  const bool level = detect == DetectMode::kLevel;
+  const bool level = UsesGainComputer(detect);
   const auto sc_filter =
       static_cast<ScFilter>(Int(v[GroupParamId(g, GroupField::kScFilter)]));
   const bool has_sc_hz =

@@ -1,5 +1,5 @@
 {
-  "description": "Use case 10: Vocoder talk box. A keys chord takes on the full spectral envelope of the sung sidechain (16 bands, 100 Hz - 8 kHz), and passes flat between syllables.",
+  "description": "Use case 8, full-envelope variant: Vocoder talk box. A keys chord takes on the full spectral envelope of the sung sidechain (16 bands, 100 Hz - 8 kHz), and passes flat between syllables.",
   "sampleRate": 48000,
   "seconds": 4,
   "preset": "../../../presets/factory/17_vocoder_talk_box.json",

@@ -1,0 +1,26 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Formant Wah (SC)",
+  "params": {
+    "groups": [
+      {
+        "detect": "Spectrum",
+        "input": "ExternalSC",
+        "attackMs": 10,
+        "releaseMs": 80
+      }
+    ],
+    "bands": [
+      {
+        "type": "Peak",
+        "x": 1000,
+        "y": 12,
+        "z": 4,
+        "dynGroup": 0,
+        "dynTarget": "Freq",
+        "dynRange": 1.5
+      }
+    ]
+  }
+}

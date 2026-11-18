@@ -1,0 +1,28 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Spectral Ducking (SC)",
+  "params": {
+    "groups": [
+      {
+        "detect": "Spectrum",
+        "input": "ExternalSC",
+        "thresholdDb": -50,
+        "attackMs": 5,
+        "releaseMs": 120
+      }
+    ],
+    "bands": [
+      {
+        "type": "Vocoder",
+        "x": 1.0,
+        "y": 0,
+        "z": 9,
+        "mode": "Level",
+        "dynGroup": 0,
+        "dynTarget": "Shape",
+        "dynRange": -50
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "dsp/bands/vowel.h"
 #include "dsp/common/math.h"
 
 namespace eeq {
@@ -20,6 +21,7 @@ bool HasGain(BandType t) {
     case BandType::kVintageLow:
     case BandType::kVintageHigh:
     case BandType::kComb:
+    case BandType::kVocoder:
       return true;
     default:
       return false;
@@ -69,11 +71,24 @@ double ApplyModulation(BandType type, DynTarget target, double mod,
         rb.z += mod;  // Width, octaves.
       }
       break;
+    case DynTarget::kShape:
+      break;  // The engine applies a Vocoder's shape.
   }
   return 0.0;
 }
 
 }  // namespace
+
+double BandCenterHz(const BandParams& bp) {
+  switch (bp.type) {
+    case BandType::kVowel:
+      return VowelFormants(bp.x).hz[1] * bp.z;  // F2.
+    case BandType::kVocoder:
+      return 1000.0 * bp.x;  // Its Shift, about the middle of the bank.
+    default:
+      return HasFreq(bp.type) ? bp.x : 1000.0;
+  }
+}
 
 ResolvedBand ResolveBand(const BandParams& bp, double control_a,
                          double control_b, double global_scale) {
@@ -81,7 +96,7 @@ ResolvedBand ResolveBand(const BandParams& bp, double control_a,
   // Gain-target ranges, but leaves Freq and Morph alone so pitch and vowel
   // tracking stay in tune.
   auto scaled = [&](DynTarget target, double range) {
-    return target == DynTarget::kGain ? range * global_scale : range;
+    return IsGainTarget(target) ? range * global_scale : range;
   };
   ResolvedBand rb;
   rb.x = bp.x, rb.y = bp.y, rb.z = bp.z, rb.option = bp.option;

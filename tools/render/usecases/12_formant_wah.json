@@ -1,0 +1,12 @@
+{
+  "description": "Use case 11: Formant wah. A peak on a keys chord follows the loudest region of the sung sidechain within 1.5 octaves of 1 kHz (a Spectrum group on Dyn Target Freq).",
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/19_formant_wah.json",
+  "input": {
+    "generate": "keys"
+  },
+  "sidechain": {
+    "generate": "sungVowels"
+  }
+}

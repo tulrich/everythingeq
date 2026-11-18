@@ -35,7 +35,9 @@ enum class BandType {
 };
 inline constexpr int kNumBandTypes = static_cast<int>(BandType::kOff);
 
-enum class DynTarget { kGain, kFreq, kMorph };
+// What a Dyn assignment modulates.  Shape is a Vocoder's: its Dyn Range is
+// the Amount of a Spectrum group's envelope (other types ignore it).
+enum class DynTarget { kGain, kFreq, kMorph, kShape };
 enum class Chan { kStereo, kLeft, kRight, kMid, kSide };
 // The per-band Option, by band type.
 enum class VowelWeighting { kNatural, kFlat };
@@ -43,14 +45,25 @@ enum class FilterSlope { k12, k24 };          // LP, HP
 enum class VintageAtten { k5k, k10k, k20k };  // Vintage High
 // Which harmonics of f0 a Comb's teeth sit on.
 enum class CombHarmonics { kAll, kOdd, kEven };
-inline constexpr int kNumOptions = 4;
+// How a Vocoder follows its source (dsp/bands/vocoder.h).
+enum class VocoderMode { kShape, kLevel };
+inline constexpr int kNumOptions = 3;
 
 enum class DetectorInput { kInternalDry, kInternalBandSum, kExternalSc };
 enum class ScFilter { kOff, kBp, kLp, kHp, kTilt, kKWeight };
 enum class TriggerMode { kAbove, kBelow };
 // What a group's D follows: input level (the gain computer), or the tracked
-// vowel or pitch of the detector input (dsp/dynamics/tracker.h).
-enum class DetectMode { kLevel, kVowel, kPitch };
+// vowel or pitch of the detector input (dsp/dynamics/tracker.h).  Spectrum
+// also analyzes the input's spectral envelope
+// (dsp/dynamics/spectral_envelope.h): Vocoder bands take on its shape, and
+// every other band's D runs the gain computer on the level at the band's
+// own frequency (Dyn Target Freq: follows the loudest point within Dyn
+// Range of it).
+enum class DetectMode { kLevel, kVowel, kPitch, kSpectrum };
+// Whether the group's threshold, knee and so on apply.
+inline bool UsesGainComputer(DetectMode m) {
+  return m == DetectMode::kLevel || m == DetectMode::kSpectrum;
+}
 // Output modes (ABOUT.md section 3.D).  In the split modes, bands
 // 1..kSplitBands pick the split side and the rest shape the residual.
 enum class OutputMode { kNormal, kSplitLr, kSplit, kResidual };
@@ -73,21 +86,23 @@ inline constexpr int kSplitBands = 4;
 //                        (a shelf at the Option's VintageAtten frequency)
 //   Comb:                x = f0 Hz, y = tooth gain dB, z = tooth Q; teeth on
 //                        the Option's CombHarmonics of f0
-//   Vocoder:             x = formant shift (ratio), y = amount (%), z = range
-//                        dB; follows the spectrum of the group the Option
-//                        names (0..3)
+//   Vocoder:             x = formant shift (ratio), y = gain dB, z = range
+//                        dB; Dyn Target Shape assignments from Spectrum
+//                        groups set its shape, per the Option's VocoderMode
 struct BandParams {
   BandType type = BandType::kOff;
   double x = 1000.0;
   double y = 0.0;
   double z = 0.70710678118654752440;
   int option = 0;  // Vowel: VowelWeighting; LP, HP: FilterSlope;
-                   // Vintage High: VintageAtten
+                   // Vintage High: VintageAtten; Comb: CombHarmonics;
+                   // Vocoder: VocoderMode
   // -1 = none, else 0..kNumGroups-1 (see SubscribesTo).  A band can follow
   // a group with dyn_range 0, e.g. a preset set up for the user to turn up.
   int dyn_group = -1;
   DynTarget dyn_target = DynTarget::kGain;
-  double dyn_range = 0.0;  // dB, octaves or morph index (per dyn_target)
+  double dyn_range = 0.0;  // dB, octaves, morph index or Shape % (per
+                           // dyn_target)
   // 0..1: broadband gain opposing the band's dynamic gain (Dyn Target Gain
   // on HasDynMakeup types), so e.g. ducking a band boosts everything else.
   double dyn_makeup = 0.0;
@@ -139,13 +154,6 @@ struct EngineParams {
 };
 
 inline constexpr double kBpOffDb = -60.0;
-
-// The group whose input a Vocoder band follows (its Option).
-inline int VocoderSource(const BandParams& bp) {
-  return bp.option < 0             ? 0
-         : bp.option >= kNumGroups ? kNumGroups - 1
-                                   : bp.option;
-}
 
 // Whether either of a band's dynamics assignments uses group g.
 inline bool SubscribesTo(const BandParams& bp, int g) {

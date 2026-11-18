@@ -1,0 +1,12 @@
+{
+  "description": "Use case 10: Spectral ducking. A keys chord dips only where the sung sidechain is loud (a Vocoder in Level mode with a negative Amount), making room for the vocal without turning the whole part down.",
+  "sampleRate": 48000,
+  "seconds": 4,
+  "preset": "../../../presets/factory/18_spectral_ducking.json",
+  "input": {
+    "generate": "keys"
+  },
+  "sidechain": {
+    "generate": "sungVowels"
+  }
+}

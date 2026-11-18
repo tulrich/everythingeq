@@ -20,8 +20,15 @@ std::vector<double> DisplayFrequencies(int count, double lo = 20.0,
 
 // Per-group dynamics control values D in [0, 1] (0 = static settings).
 using GroupControls = std::array<double, kNumGroups>;
-// Each Vocoder band's current shape (the engine's; flat when absent).
-using VocoderShapes = std::array<VocoderShape, kNumBands>;
+// What the engine last applied to a band (Engine::band_control and
+// vocoder_shape): its Dyn A and Dyn B control values (a Spectrum group's
+// are the band's own readings) and a Vocoder's shape.
+struct BandLive {
+  std::array<double, 2> control{};
+  VocoderShape shape{};
+  bool operator==(const BandLive&) const = default;
+};
+using LiveBands = std::array<BandLive, kNumBands>;
 
 struct ChainResponse {
   // Magnitude in dB of each band's own output (empty for Off bands).
@@ -47,10 +54,12 @@ std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
                                         double freq_hz, double sample_rate,
                                         std::complex<double>* complement);
 
+// With `live`, each band uses its own applied controls and shape instead
+// of `controls`.
 void ComputeChainResponse(const EngineParams& params,
                           const GroupControls& controls, double sample_rate,
                           const std::vector<double>& freqs, ChainResponse& out,
-                          const VocoderShapes* vocoder_shapes = nullptr);
+                          const LiveBands* live = nullptr);
 
 }  // namespace eeq
 

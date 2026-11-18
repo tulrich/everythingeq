@@ -4,7 +4,6 @@
 #include <string>
 #include <utility>
 
-#include "dsp/bands/band_design.h"
 #include "model/param_table.h"
 
 namespace eeq {
@@ -13,7 +12,6 @@ namespace {
 using nlohmann::json;
 
 const std::pair<const char*, BandType> kBandTypes[] = {
-    {"Off", BandType::kOff},
     {"Peak", BandType::kPeak},
     {"LowShelf", BandType::kLowShelf},
     {"HighShelf", BandType::kHighShelf},
@@ -22,11 +20,6 @@ const std::pair<const char*, BandType> kBandTypes[] = {
     {"HP", BandType::kHp},
     {"Notch", BandType::kNotch},
     {"BP", BandType::kBp},
-    // Older names (before LP and HP took a Slope option).
-    {"LP12", BandType::kLp},
-    {"HP12", BandType::kHp},
-    {"LP24_LR", BandType::kLp},
-    {"HP24_LR", BandType::kHp},
     {"Tilt", BandType::kTilt},
     {"FletcherMunson", BandType::kFletcherMunson},
     {"Vowel", BandType::kVowel},
@@ -37,7 +30,8 @@ const std::pair<const char*, BandType> kBandTypes[] = {
 const std::pair<const char*, DynTarget> kDynTargets[] = {
     {"Gain", DynTarget::kGain},
     {"Freq", DynTarget::kFreq},
-    {"Morph", DynTarget::kMorph}};
+    {"Morph", DynTarget::kMorph},
+    {"Shape", DynTarget::kShape}};
 const std::pair<const char*, Chan> kChans[] = {{"Stereo", Chan::kStereo},
                                                {"Left", Chan::kLeft},
                                                {"Right", Chan::kRight},
@@ -51,6 +45,8 @@ const std::pair<const char*, CombHarmonics> kCombHarmonics[] = {
     {"All", CombHarmonics::kAll},
     {"Odd", CombHarmonics::kOdd},
     {"Even", CombHarmonics::kEven}};
+const std::pair<const char*, VocoderMode> kVocoderModes[] = {
+    {"Shape", VocoderMode::kShape}, {"Level", VocoderMode::kLevel}};
 const std::pair<const char*, VintageAtten> kVintageAttens[] = {
     {"5k", VintageAtten::k5k},
     {"10k", VintageAtten::k10k},
@@ -66,19 +62,15 @@ const std::pair<const char*, ScFilter> kScFilters[] = {
 const std::pair<const char*, DetectMode> kDetectModes[] = {
     {"Level", DetectMode::kLevel},
     {"Vowel", DetectMode::kVowel},
-    {"Pitch", DetectMode::kPitch}};
+    {"Pitch", DetectMode::kPitch},
+    {"Spectrum", DetectMode::kSpectrum}};
 const std::pair<const char*, TriggerMode> kModes[] = {
     {"Above", TriggerMode::kAbove}, {"Below", TriggerMode::kBelow}};
 const std::pair<const char*, OutputMode> kOutputModes[] = {
     {"Normal", OutputMode::kNormal},
     {"SplitLR", OutputMode::kSplitLr},
     {"Split", OutputMode::kSplit},
-    {"Residual", OutputMode::kResidual},
-    // Legacy names, read only: Split M/S was dropped, and Normal and Split
-    // were called Stereo and Split Side.
-    {"SplitMS", OutputMode::kSplitLr},
-    {"Stereo", OutputMode::kNormal},
-    {"SplitSide", OutputMode::kSplit}};
+    {"Residual", OutputMode::kResidual}};
 
 template <typename E, size_t N>
 void ReadEnum(const json& j, const char* key,
@@ -101,7 +93,7 @@ void WriteEnum(json& j, const char* key,
   if (value == default_value) return;
   for (const auto& [name, v] : names) {
     if (v == value) {
-      j[key] = name;  // The first (current) name, not a legacy alias.
+      j[key] = name;
       return;
     }
   }
@@ -156,20 +148,7 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
     for (size_t i = 0; i < j["bands"].size() && i < kNumBands; ++i) {
       const json& b = j["bands"][i];
       BandParams& bp = p.bands[i];
-      const std::string type_name = b.value("type", "");
-      if (type_name == "KWeight") {
-        // K-Weight was a band type until state version 8; its main part is
-        // a +4 dB high shelf (the K-Weighting preset adds the high-pass).
-        bp.type = BandType::kHighShelf;
-        bp.x = kKWeightHighShelfHz;
-        bp.y = kKWeightShelfDb;
-        bp.z = kKWeightHighShelfQ;
-      } else {
-        ReadEnum(b, "type", kBandTypes, bp.type);
-      }
-      if (type_name == "LP24_LR" || type_name == "HP24_LR") {
-        bp.option = static_cast<int>(FilterSlope::k24);
-      }
+      ReadEnum(b, "type", kBandTypes, bp.type);
       ReadEnum(b, "dynTarget", kDynTargets, bp.dyn_target);
       ReadEnum(b, "chan", kChans, bp.chan);
       if (bp.type == BandType::kVowel) {
@@ -189,8 +168,9 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
         ReadEnum(b, "harmonics", kCombHarmonics, harmonics);
         bp.option = static_cast<int>(harmonics);
       } else if (bp.type == BandType::kVocoder) {
-        // "sourceGroup": 0..3.
-        Read(b, "sourceGroup", bp.option);
+        auto mode = static_cast<VocoderMode>(bp.option);
+        ReadEnum(b, "mode", kVocoderModes, mode);
+        bp.option = static_cast<int>(mode);
       }
       Read(b, "x", bp.x);
       Read(b, "y", bp.y);
@@ -213,14 +193,13 @@ EngineParams ParseEngineParams(const json& j) {
   const EngineParams defaults = BuildEngineParams(DefaultParamValues(), false);
   for (int b = 0; b < kNumBands; ++b) {
     BandParams& bp = p.bands[b];
-    // A band left out (or Off, in older presets) is the default layout's
-    // band, bypassed.
+    // A band left out is the default layout's band, bypassed.
     if (bp.type == BandType::kOff) {
       bp = defaults.bands[b];
       bp.bypass = true;
       continue;
     }
-    // Older presets named only groups other than the band's default.
+    // A range with no group follows the band's default group.
     if (bp.dyn_group < 0 && bp.dyn_range != 0.0) {
       bp.dyn_group = DefaultDynGroup(b);
     }
@@ -297,7 +276,8 @@ json EngineParamsToJson(const EngineParams& p) {
                   static_cast<CombHarmonics>(bp.option),
                   static_cast<CombHarmonics>(bd.option));
       } else if (bp.type == BandType::kVocoder) {
-        Write(j, "sourceGroup", bp.option, bd.option);
+        WriteEnum(j, "mode", kVocoderModes, static_cast<VocoderMode>(bp.option),
+                  static_cast<VocoderMode>(bd.option));
       }
       // An assignment is on when it names its group.
       Write(j, "dynGroup", bp.dyn_group, -1);

@@ -78,118 +78,11 @@ TEST_CASE("State tolerates missing, unknown and out-of-range keys", "[state]") {
                  "band1.dyn_group": 2.4, "future.param": 1}})");
   REQUIRE(v.has_value());
   ParamValues expected = DefaultParamValues();
-  // Type 7 was BP before v3 inserted Band Shelf.
   expected[BandParamId(1, BandField::kType)] = static_cast<int>(BandType::kBp);
   expected[BandParamId(1, BandField::kX)] = 1.0;
   expected[GlobalParamId(GlobalField::kOutputGain)] = -24.0;
-  expected[BandParamId(0, BandField::kDynGroup)] = 1;  // Migrated from v1.
+  expected[BandParamId(0, BandField::kDynGroup)] = 2;
   REQUIRE(*v == expected);
-}
-
-TEST_CASE("Version 2 band types shift past Band Shelf", "[state]") {
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 2,
-      "params": {"band1.type": 3, "band2.type": 4, "band3.type": 13}})");
-  REQUIRE(v.has_value());
-  REQUIRE((*v)[BandParamId(0, BandField::kType)] ==
-          static_cast<int>(BandType::kHighShelf));
-  REQUIRE((*v)[BandParamId(1, BandField::kType)] ==
-          static_cast<int>(BandType::kLp));
-  // K-Weight, a high shelf since version 8.
-  REQUIRE((*v)[BandParamId(2, BandField::kType)] ==
-          static_cast<int>(BandType::kHighShelf));
-}
-
-TEST_CASE("Version 3 LR crossovers become 24 dB/oct LP and HP", "[state]") {
-  // v3: LP12 5, HP12 6, LP24_LR 9, HP24_LR 10, Tilt 11, K-Weight 14.
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 3,
-      "params": {"band1.type": 5, "band1.option": 1,
-                 "band2.type": 9, "band2.z": 0.9,
-                 "band3.type": 10, "band4.type": 11, "band5.type": 14}})");
-  REQUIRE(v.has_value());
-  auto at = [&](int b, BandField f) { return (*v)[BandParamId(b, f)]; };
-  REQUIRE(at(0, BandField::kType) == static_cast<int>(BandType::kLp));
-  REQUIRE(at(0, BandField::kOption) == 0);  // A stray Vowel option cleared.
-  REQUIRE(at(1, BandField::kType) == static_cast<int>(BandType::kLp));
-  REQUIRE(at(1, BandField::kOption) == static_cast<int>(FilterSlope::k24));
-  REQUIRE(at(1, BandField::kZ) == kSlotDefault);  // Q 0.707: still LR4.
-  REQUIRE(at(2, BandField::kType) == static_cast<int>(BandType::kHp));
-  REQUIRE(at(2, BandField::kOption) == static_cast<int>(FilterSlope::k24));
-  REQUIRE(at(3, BandField::kType) == static_cast<int>(BandType::kTilt));
-  // K-Weight, a high shelf since version 8.
-  REQUIRE(at(4, BandField::kType) == static_cast<int>(BandType::kHighShelf));
-}
-
-TEST_CASE("Version 1 Static bands migrate to no Dyn Range", "[state]") {
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 1,
-      "params": {"band4.dyn_group": 0, "band4.dyn_range": 0.8,
-                 "band5.dyn_group": 4, "band5.dyn_range": 0.8}})");
-  REQUIRE(v.has_value());
-  ParamValues expected = DefaultParamValues();
-  expected[BandParamId(3, BandField::kDynGroup)] = 1;  // Bands 3-4: Group 2.
-  expected[BandParamId(4, BandField::kDynGroup)] = 3;
-  expected[BandParamId(4, BandField::kDynRange)] = 0.8;
-  expected[BandParamId(4, BandField::kDynOn)] = 1;  // Migrated from v4.
-  REQUIRE(*v == expected);
-}
-
-TEST_CASE("Version 4 assignments with a Dyn Range turn on", "[state]") {
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 4,
-      "params": {"band1.dyn_range": 0.6, "band1.dyn_b_range": 0.5,
-                 "band2.dyn_b_range": 0.3}})");
-  REQUIRE(v.has_value());
-  ParamValues expected = DefaultParamValues();
-  expected[BandParamId(0, BandField::kDynRange)] = 0.6;
-  expected[BandParamId(0, BandField::kDynOn)] = 1;
-  expected[BandParamId(1, BandField::kDynBRange)] = 0.3;
-  expected[BandParamId(1, BandField::kDynBOn)] = 1;
-  REQUIRE(*v == expected);
-}
-
-TEST_CASE("Version 5 Split M/S becomes Split L/R", "[state]") {
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 5,
-      "params": {"global.output_mode": 2, "band1.tap": 1}})");
-  REQUIRE(v.has_value());
-  ParamValues expected = DefaultParamValues();
-  expected[GlobalParamId(GlobalField::kOutputMode)] =
-      static_cast<int>(OutputMode::kSplitLr);
-  REQUIRE(*v == expected);
-}
-
-TEST_CASE("Version 6 Off bands become bypassed default bands", "[state]") {
-  // v6 Type indices: 0 Off, 1 Peak, 2 Low Shelf, ...
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 6,
-      "params": {"band2.type": 0, "band2.x": 0.9, "band2.bypass": 0,
-                 "band3.type": 2, "band3.x": 0.25}})");
-  REQUIRE(v.has_value());
-  ParamValues expected = DefaultParamValues();
-  expected[BandParamId(1, BandField::kBypass)] = 1;
-  expected[BandParamId(2, BandField::kType)] =
-      static_cast<int>(BandType::kLowShelf);
-  expected[BandParamId(2, BandField::kX)] = 0.25;
-  REQUIRE(*v == expected);
-}
-
-TEST_CASE("Version 7 K-Weight bands become high shelves", "[state]") {
-  // v7 Type indices: ... 10 Vowel, 11 K-Weight, 12 Vintage Low, 13 Vintage
-  // High.
-  const std::optional<ParamValues> v = DeserializeState(R"({
-      "format": "everythingeq-state", "version": 7,
-      "params": {"band1.type": 11, "band2.type": 12, "band3.type": 13,
-                 "band4.type": 10}})");
-  REQUIRE(v.has_value());
-  const EngineParams p = BuildEngineParams(*v, false);
-  REQUIRE(p.bands[0].type == BandType::kHighShelf);
-  REQUIRE(std::abs(p.bands[0].x - kKWeightHighShelfHz) < 0.01);
-  REQUIRE(std::abs(p.bands[0].y - kKWeightShelfDb) < 0.01);
-  REQUIRE(p.bands[1].type == BandType::kVintageLow);
-  REQUIRE(p.bands[2].type == BandType::kVintageHigh);
-  REQUIRE(p.bands[3].type == BandType::kVowel);
 }
 
 TEST_CASE("Dyn On decides whether a band follows its group", "[state]") {

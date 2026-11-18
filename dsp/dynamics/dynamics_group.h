@@ -4,6 +4,7 @@
 #include <array>
 
 #include "dsp/bands/band_processor.h"
+#include "dsp/dynamics/spectral_envelope.h"
 #include "dsp/dynamics/tracker.h"
 #include "dsp/engine/params.h"
 
@@ -15,6 +16,9 @@ namespace eeq {
 //   -> control signal D in [0, 1] per channel.
 // With Detect = Vowel or Pitch, the conditioned input (mono) feeds a Tracker
 // instead and D follows its estimate through the attack/release smoothing.
+// With Detect = Spectrum, it also feeds a SpectralEnvelope, which each
+// subscribing band reads at its own frequency (SpectralTarget,
+// SpectralPeakOffset), smoothed per band by a SpectralFollower.
 class DynamicsGroup {
  public:
   static constexpr double kFastTauMs = 1.0;    // sigA (D5)
@@ -48,11 +52,32 @@ class DynamicsGroup {
     return m;
   }
 
+  // Per-band smoothing state for a Spectrum group's readings.
+  struct SpectralFollower {
+    double d = 0.0;
+    int hold = 0;
+  };
+
   double control(int ch) const { return control_[ch]; }
   double trigger(int ch) const { return trigger_[ch]; }
   double filtered(int ch) const { return filtered_[ch]; }  // SC listen signal
   double effective_threshold() const { return teff_; }
   const Tracker& tracker() const { return tracker_; }
+  bool spectral() const { return p_.detect == DetectMode::kSpectrum; }
+  const SpectralEnvelope& spectrum() const { return spectrum_; }
+  const GroupParams& params() const { return p_; }
+
+  // Spectrum: the gain computer's output for the envelope at hz, with the
+  // trigger's transient term measured against the spectrum's mean (so at
+  // alpha = 1, Rise is how far that region stands out).
+  double SpectralTarget(double hz) const;
+  // Spectrum, for a band at hz with Dyn Target Freq: the move toward the
+  // envelope's loudest point within range_oct of hz, as a fraction of
+  // range_oct (in [-1, 1]; 0 in silence).
+  double SpectralPeakOffset(double hz, double range_oct) const;
+  // Advances `f` toward `target` by one control sub-block with the group's
+  // attack, hold and release; returns the new value.
+  double Follow(double target, SpectralFollower& f) const;
 
   // Pure gain-computer mapping, exposed for tests and the UI meter.
   static double GainComputer(double trigger_db, double teff_db, double knee_db,
@@ -68,12 +93,16 @@ class DynamicsGroup {
   double coeff_a_ = 1.0, coeff_b_ = 1.0, coeff_attack_ = 1.0,
          coeff_release_ = 1.0;
   int hold_samples_ = 0;
+  // Per control sub-block, for SpectralFollowers.
+  double block_attack_ = 1.0, block_release_ = 1.0;
+  int hold_blocks_ = 0;
   double teff_ = 0.0;
 
   std::array<double, kNumChannels> sig_a_{}, sig_b_{}, control_{}, trigger_{},
       filtered_{};
   std::array<int, kNumChannels> hold_{};
   Tracker tracker_;
+  SpectralEnvelope spectrum_;
   Meter meter_{1e9, -1e9, 0.0, false};
 };
 

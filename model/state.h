@@ -16,9 +16,10 @@ namespace eeq {
 //    "preset": {"name": "...", "user": false}}   (optional)
 // Parameters are keyed by their stable ParamSpec::key.  On load, unknown keys
 // are ignored, missing keys get defaults, values are sanitized, and older
-// versions are migrated.  The output is deterministic.
+// versions go through MigrateState (no steps yet).  The output is
+// deterministic.
 
-inline constexpr int kStateVersion = 8;
+inline constexpr int kStateVersion = 9;
 
 // `preset` names the preset the settings came from (omitted when empty).
 std::string SerializeState(const ParamValues& values,

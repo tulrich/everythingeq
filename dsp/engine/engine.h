@@ -47,6 +47,10 @@ class Engine {
   const BandSlot& band(int b) const { return slots_[b]; }
   // A Vocoder band's current shape (flat for other types).
   const VocoderShape& vocoder_shape(int b) const { return vocoder_shapes_[b]; }
+  // The control values last applied to band b's Dyn A (slot 0) and Dyn B
+  // (slot 1): the group's D, or for a Spectrum group the band's own reading
+  // (in [-1, 1] for Dyn Target Freq).  Of the two channels, the larger.
+  double band_control(int b, int slot) const { return band_controls_[b][slot]; }
 
  private:
   using Frame = std::array<double, kNumChannels>;
@@ -78,9 +82,11 @@ class Engine {
   std::array<DetectorFilter, kNumBands> band_detectors_{};
   std::array<DetectorFilter, kNumBands> solo_filters_{};
   std::array<DynamicsGroup, kNumGroups> groups_{};
-  // Each Vocoder band's analysis of its source group's input, and the
-  // shape last applied.
-  std::array<VocoderAnalysis, kNumBands> vocoders_{};
+  // Each band's readings of Spectrum groups (Dyn A, Dyn B), the controls
+  // last applied, and a Vocoder's shape.
+  std::array<std::array<DynamicsGroup::SpectralFollower, 2>, kNumBands>
+      followers_{};
+  std::array<std::array<double, 2>, kNumBands> band_controls_{};
   std::array<VocoderShape, kNumBands> vocoder_shapes_{};
   std::array<DelayLine, kNumChannels> delay_{};
 

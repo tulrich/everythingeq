@@ -28,8 +28,12 @@ class EditorModel {
   virtual double SampleRate() const = 0;
   // Latest dynamics control value D per group, from the audio thread.
   virtual GroupControls LiveControls() const = 0;
-  // Each Vocoder band's current shape.
-  virtual VocoderShapes LiveVocoderShapes() const { return {}; }
+  // What the engine last applied to each band (controls, Vocoder shapes).
+  virtual LiveBands LiveBandState() const { return {}; }
+  // Spectrum groups: the latest band levels (dB).
+  virtual std::array<SpectralLevels, kNumGroups> LiveSpectra() const {
+    return {};
+  }
   // Vowel / Pitch groups: the tracker's latest estimate (as a control value
   // in [0, 1], held while unvoiced) and whether the input is voiced now.
   struct Tracked {

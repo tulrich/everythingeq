@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "dsp/engine/params.h"
@@ -130,6 +131,13 @@ EngineParams BuildEngineParams(const ParamValues& values, bool mono_output);
 // Engine parameters -> host values (used to load presets).  Slots a band type
 // doesn't use get their defaults.
 ParamValues ValuesFromEngineParams(const EngineParams& params);
+
+// The edits (parameter ID, normalized value) that connect band's Dyn
+// assignment `slot` (0 = A, 1 = B) to `group`: Target Gain with Range 0, to
+// set on the graph or the card, or for a Vocoder, Shape at Amount 100%.
+std::array<std::pair<int, double>, 4> ConnectEdits(const ParamValues& values,
+                                                   int band, int slot,
+                                                   int group);
 
 // The detent nearest a parameter value (host units), for edits made in the
 // plugin UI: levels (dB, phon) in 0.5 dB steps, times in 0.1 ms steps below

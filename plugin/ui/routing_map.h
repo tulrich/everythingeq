@@ -22,11 +22,11 @@ namespace eeq {
 // The dynamics routing, drawn like a subway map (ABOUT.md section 4).
 // Bands are columns, left to right like the ribbon above the graph; groups
 // are rows.  Each group's feed drops from its source's label at the top left
-// (Input, Band Sum, Sidechain) and turns right into the group's head.  An assignment is a line in the band's color
-// that runs right from the head in its own lane, then turns down with a
-// rounded corner and drops to the band's port at the bottom,
-// ending in an arrowhead (filled = Dyn A, the left port; hollow = Dyn B,
-// the right one).  Under the ports: each band's type icon and its
+// (Input, Band Sum, Sidechain) and turns right into the group's head.  An
+// assignment is a line in the band's color that runs right from the head in its
+// own lane, then turns down with a rounded corner and drops to the band's port
+// at the bottom, ending in an arrowhead (filled = Dyn A, the left port; hollow
+// = Dyn B, the right one).  Under the ports: each band's type icon and its
 // assignments' targets and ranges.
 //
 // Every crossing of a group row and a port column has a faint dot.  Click
@@ -142,7 +142,7 @@ class RoutingMap final : public iplug::igraphics::IControl {
   }
 
   static std::string RangeLabel(const Port& p) {
-    static const char kLetters[] = {'G', 'F', 'M'};
+    static const char kLetters[] = {'G', 'F', 'M', 'S'};
     const double r = std::abs(p.range);
     char num[16];
     if (r >= 10.0 || std::abs(r - std::round(r)) < 0.05) {
@@ -150,7 +150,7 @@ class RoutingMap final : public iplug::igraphics::IControl {
     } else {
       std::snprintf(num, sizeof(num), "%.1f", r);
     }
-    std::string s(1, kLetters[std::clamp(static_cast<int>(p.target), 0, 2)]);
+    std::string s(1, kLetters[std::clamp(static_cast<int>(p.target), 0, 3)]);
     s += p.range < 0.0 ? "\xe2\x88\x92" : "+";
     return s + num;
   }
@@ -361,7 +361,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   }
 
   // Group heads: shape, name, detect mode, live D and the applied gain.
-  static const char* const kDetect[] = {"Level", "Vowel", "Pitch"};
+  static const char* const kDetect[] = {"Level", "Vowel", "Pitch", "Spectrum"};
   for (int gi = 0; gi < kNumGroups; ++gi) {
     const ig::IRECT head = Head(gi);
     const bool active = cb_.group_active && cb_.group_active(gi);
@@ -387,7 +387,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const int detect =
           std::clamp(static_cast<int>(
                          std::lround(v[GroupParamId(gi, GroupField::kDetect)])),
-                     0, 2);
+                     0, 3);
       g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far),
                  kDetect[detect],
                  ig::IRECT(head.L + 30.f, ty - 6.f, head.R - 4.f, ty + 6.f));
@@ -527,10 +527,6 @@ inline void RoutingMap::OnMouseDown(float x, float y,
           BandParamId(h.band, a ? BandField::kDynOn : BandField::kDynBOn);
       const int group_id =
           BandParamId(h.band, a ? BandField::kDynGroup : BandField::kDynBGroup);
-      const int target_id = BandParamId(
-          h.band, a ? BandField::kDynTarget : BandField::kDynBTarget);
-      const int range_id =
-          BandParamId(h.band, a ? BandField::kDynRange : BandField::kDynBRange);
       if (p.on && p.group == h.group) {
         model_.SetValueGesture(on_id, 0.0);  // Disconnect.
       } else if (p.on) {
@@ -538,14 +534,7 @@ inline void RoutingMap::OnMouseDown(float x, float y,
         model_.SetValueGesture(group_id,
                                h.group / static_cast<double>(kNumGroups - 1));
       } else {
-        // Connect.  A new connection starts as Gain with Range 0, to set on
-        // the graph or the card.
-        const std::array<std::pair<int, double>, 4> edits = {{
-            {on_id, 1.0},
-            {group_id, h.group / static_cast<double>(kNumGroups - 1)},
-            {target_id, 0.0},
-            {range_id, kSlotDefault},
-        }};
+        const auto edits = ConnectEdits(v, h.band, h.slot, h.group);
         for (const auto& [id, value] : edits) model_.BeginEdit(id);
         for (const auto& [id, value] : edits) model_.SetEdit(id, value);
         for (const auto& [id, value] : edits) model_.EndEdit(id);

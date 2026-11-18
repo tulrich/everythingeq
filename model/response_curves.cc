@@ -40,7 +40,7 @@ std::complex<double> BandParamsResponse(const BandParams& bp, double control_a,
 void ComputeChainResponse(const EngineParams& params,
                           const GroupControls& controls, double sample_rate,
                           const std::vector<double>& freqs, ChainResponse& out,
-                          const VocoderShapes* vocoder_shapes) {
+                          const LiveBands* live) {
   const size_t n = freqs.size();
   const bool split_mode = params.global.output_mode != OutputMode::kNormal;
   const SplitSide side = SplitSideOf(params);
@@ -54,11 +54,15 @@ void ComputeChainResponse(const EngineParams& params,
   for (int b = 0; b < kNumBands; ++b) {
     const BandParams& bp = params.bands[b];
     if (bp.type == BandType::kOff) continue;
-    const ResolvedBand rb =
-        ResolveBand(bp, ControlFor(bp.dyn_group, controls),
-                    ControlFor(bp.dyn_b_group, controls), scale);
-    design[b] = bp.type == BandType::kVocoder && vocoder_shapes
-                    ? DesignVocoder(rb.x, (*vocoder_shapes)[b], sample_rate)
+    double control_a = ControlFor(bp.dyn_group, controls);
+    double control_b = ControlFor(bp.dyn_b_group, controls);
+    if (live) {
+      control_a = std::clamp((*live)[b].control[0], -1.0, 1.0);
+      control_b = std::clamp((*live)[b].control[1], -1.0, 1.0);
+    }
+    const ResolvedBand rb = ResolveBand(bp, control_a, control_b, scale);
+    design[b] = bp.type == BandType::kVocoder && live
+                    ? DesignVocoder(rb.x, rb.y, (*live)[b].shape, sample_rate)
                     : DesignResolvedBand(bp.type, rb, sample_rate);
     if (bp.type == BandType::kComb) {
       ++combs;

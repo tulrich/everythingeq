@@ -24,7 +24,7 @@ void Engine::Prepare(double sample_rate) {
   for (DelayLine& d : delay_) d.Prepare(max_delay);
   for (BandSlot& s : slots_) s.Prepare(fs_);
   for (DynamicsGroup& g : groups_) g.Prepare(fs_);
-  for (VocoderAnalysis& v : vocoders_) v.Prepare(fs_);
+  PrepareVocoderTables();
   prepared_ = true;
   params_dirty_ = true;
   Reset();
@@ -38,7 +38,7 @@ void Engine::Reset() {
   idle_bypass_ = false;
   for (DetectorFilter& f : band_detectors_) f.Reset();
   for (DynamicsGroup& g : groups_) g.Reset();
-  for (VocoderAnalysis& v : vocoders_) v.Reset();
+  for (auto& f : followers_) f = {};
   ResetBands();
 }
 
@@ -73,11 +73,6 @@ void Engine::ApplyStaticDesigns(bool snap_now) {
     const DetectorDesign d = DesignDetector(bp.type, bp.x, bp.z, fs_);
     band_detectors_[b].Apply(d, ramp);
     solo_filters_[b].Apply(d, ramp);
-    if (bp.type == BandType::kVocoder) {
-      // The source group's ballistics shape the band envelopes.
-      const GroupParams& gp = params_.groups[VocoderSource(bp)];
-      vocoders_[b].SetBallistics(gp.attack_ms, gp.release_ms);
-    }
   }
   const SplitSide side = SplitSideOf(params_);
   split_xover_band_ = side.crossover;
@@ -101,27 +96,59 @@ void Engine::ControlUpdate(bool snap_now) {
     const BandParams& bp = params_.bands[b];
     const bool ms_chan = bp.chan == Chan::kMid || bp.chan == Chan::kSide;
     const bool mono = params_.global.output_mode == OutputMode::kSplitLr;
-    auto controls = [&](int group) {
+    const BandType type = EffectiveType(bp);
+    // One assignment's control values.
+    auto controls = [&](int slot, int group, DynTarget target, double range) {
       std::array<double, kNumChannels> dyn{};
       if (group < 0 || group >= kNumGroups) return dyn;
       const DynamicsGroup& g = groups_[group];
+      if (g.spectral()) {
+        // The band's own reading (a Vocoder's Shape reads the whole
+        // envelope below).
+        if (target == DynTarget::kShape) return dyn;
+        const double hz = BandCenterHz(bp);
+        const double t = target == DynTarget::kFreq
+                             ? g.SpectralPeakOffset(hz, range)
+                             : g.SpectralTarget(hz);
+        const double d = g.Follow(t, followers_[b][slot]);
+        return std::array<double, kNumChannels>{d, d};
+      }
       dyn = {g.control(0), g.control(1)};
       if (ms_chan || mono) dyn[0] = dyn[1] = 0.5 * (dyn[0] + dyn[1]);
       return dyn;
     };
-    const std::array<double, kNumChannels> dyn_a = controls(bp.dyn_group);
-    const std::array<double, kNumChannels> dyn_b = controls(bp.dyn_b_group);
+    const std::array<double, kNumChannels> dyn_a =
+        controls(0, bp.dyn_group, bp.dyn_target, bp.dyn_range);
+    const std::array<double, kNumChannels> dyn_b =
+        controls(1, bp.dyn_b_group, bp.dyn_b_target, bp.dyn_b_range);
+    auto larger = [](const std::array<double, kNumChannels>& d) {
+      return std::abs(d[0]) >= std::abs(d[1]) ? d[0] : d[1];
+    };
+    band_controls_[b] = {larger(dyn_a), larger(dyn_b)};
     std::array<ResolvedBand, kNumChannels> r{};
     for (int ch = 0; ch < kNumChannels; ++ch) {
       r[ch] = ResolveBand(bp, dyn_a[ch], dyn_b[ch], scale);
     }
-    const BandType type = EffectiveType(bp);
     if (type == BandType::kVocoder) {
       // Mono analysis: both channels take the same shape.
-      vocoder_shapes_[b] =
-          vocoders_[b].Shape(std::max(r[0].y, 0.0) / 100.0, r[0].z);
-      slots_[b].UpdateDesign(
-          type, DesignVocoder(r[0].x, vocoder_shapes_[b], fs_), snap_now);
+      VocoderShape& shape = vocoder_shapes_[b];
+      shape.fill(0.0f);
+      const auto mode = static_cast<VocoderMode>(bp.option);
+      auto add = [&](int group, DynTarget target, double range) {
+        if (group < 0 || group >= kNumGroups || target != DynTarget::kShape ||
+            !groups_[group].spectral()) {
+          return;
+        }
+        const DynamicsGroup& g = groups_[group];
+        AddVocoderShape(g.spectrum(), g.params(), mode, range * scale / 100.0,
+                        shape);
+      };
+      add(bp.dyn_group, bp.dyn_target, bp.dyn_range);
+      add(bp.dyn_b_group, bp.dyn_b_target, bp.dyn_b_range);
+      const auto range = static_cast<float>(std::max(r[0].z, 0.0));
+      for (float& s : shape) s = std::clamp(s, -range, range);
+      slots_[b].UpdateDesign(type, DesignVocoder(r[0].x, r[0].y, shape, fs_),
+                             snap_now);
       continue;
     }
     vocoder_shapes_[b] = VocoderShape{};
@@ -155,12 +182,6 @@ void Engine::ProcessDetectors(const Frame& dry, const Frame& sc) {
   for (int g = 0; g < kNumGroups; ++g) {
     const Frame d = DetectorInputFrame(g, dry, sc);
     groups_[g].Process(d[0], d[1]);
-  }
-  for (int b = 0; b < kNumBands; ++b) {
-    const BandParams& bp = params_.bands[b];
-    if (bp.type != BandType::kVocoder) continue;
-    const DynamicsGroup& g = groups_[VocoderSource(bp)];
-    vocoders_[b].Process(0.5 * (g.filtered(0) + g.filtered(1)));
   }
 }
 

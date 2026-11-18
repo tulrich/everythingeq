@@ -83,6 +83,15 @@ struct ResolvedBand {
 // for types with a gain, 1 for the rest.
 double GainScaleFor(BandType type, double global_scale);
 
+// Whether Global Scale scales a Dyn Target's range.
+inline bool IsGainTarget(DynTarget t) {
+  return t == DynTarget::kGain || t == DynTarget::kShape;
+}
+
+// The frequency a band is "at": where its graph node sits and where it
+// reads a Spectrum group's envelope.
+double BandCenterHz(const BandParams& bp);
+
 // The band's design for resolved parameters, including Dyn Makeup.
 BandDesign DesignResolvedBand(BandType type, const ResolvedBand& rb,
                               double sample_rate);

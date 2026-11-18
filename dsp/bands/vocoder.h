@@ -4,56 +4,42 @@
 #include <array>
 
 #include "dsp/bands/band_design.h"
-#include "dsp/svf/svf.h"
+#include "dsp/dynamics/spectral_envelope.h"
+#include "dsp/engine/params.h"
 
 namespace eeq {
 
-// The Vocoder band type (ABOUT.md section 3.A): a graphic EQ whose bands
-// follow the spectral envelope of a group's (conditioned) detector input,
-// e.g. a vocal on the sidechain.  Each band is boosted or cut by how far
-// the source's level in that band sits above or below the source's mean
-// across the bands, so the instrument takes on the source's spectral shape
-// (vowels and consonants alike) while keeping its own level.
+// The Vocoder band type (ABOUT.md section 3.A): a graphic EQ with a bell
+// at each of a Spectrum group's analysis bands, whose gains follow that
+// group's spectral envelope (e.g. a vocal on the sidechain).  A Dyn
+// assignment with Target Shape connects the group; its Dyn Range is the
+// Amount.
 
-inline constexpr int kVocoderBands = 16;
-inline constexpr double kVocoderLoHz = 100.0;
-inline constexpr double kVocoderHiHz = 8000.0;
-// Levels more than this far below the loudest band count as this far.
-inline constexpr double kVocoderFloorDb = 60.0;
-// The source fades the shape in between these levels (sum of the bands,
-// dBFS), so silence leaves the instrument flat.
-inline constexpr double kVocoderGateLoDb = -60.0;
-inline constexpr double kVocoderGateHiDb = -45.0;
-
-// Center of analysis band i (log-spaced from kVocoderLoHz to kVocoderHiHz).
-double VocoderBandHz(int i);
+inline constexpr int kVocoderBands = kSpectralBands;
 
 // Per-band gains in dB (0 = flat).
 using VocoderShape = std::array<float, kVocoderBands>;
 
-// Analysis of the source: a band-pass bank with an envelope follower per
-// band.  Mono.  Prepare() allocates nothing; Process() runs per sample.
-class VocoderAnalysis {
- public:
-  void Prepare(double sample_rate);
-  void Reset();
-  void SetBallistics(double attack_ms, double release_ms);
-  void Process(double x);
-  // The shape to impose: amount scales the deviations from the mean (1 =
-  // as measured), each clamped to +-range_db.
-  VocoderShape Shape(double amount, double range_db) const;
+// Builds the synthesis bank's static tables; call before the audio thread
+// designs a Vocoder.
+void PrepareVocoderTables();
 
- private:
-  double fs_ = 48000.0;
-  std::array<SvfCell, kVocoderBands> cells_{};
-  std::array<double, kVocoderBands> env_{};
-  double attack_ = 1.0, release_ = 1.0;
-};
+// Adds one Shape assignment's gains to `shape` (unclamped; the band clamps
+// the sum to its Range).  Amount is a ratio (1 = 100%); negative inverts.
+//   Shape: each band moves by Amount x how far the source sits above or
+//          below its own mean there, faded in with the source's level, so
+//          the instrument takes on the source's spectral shape (vowels and
+//          consonants alike) while keeping its own level.
+//   Level: each band moves by Amount x how far the source's level there is
+//          over the group's threshold (as its trigger computes it), so a
+//          negative Amount ducks the instrument where the source is loud.
+void AddVocoderShape(const SpectralEnvelope& env, const GroupParams& gp,
+                     VocoderMode mode, double amount, VocoderShape& shape);
 
 // The synthesis bank: kVocoderBands bells at the analysis centers times
-// `shift` (formant shift), with the shape's gains.
-BandDesign DesignVocoder(double shift, const VocoderShape& shape,
-                         double sample_rate);
+// `shift` (formant shift), with the shape's gains, plus a broadband gain.
+BandDesign DesignVocoder(double shift, double gain_db,
+                         const VocoderShape& shape, double sample_rate);
 
 }  // namespace eeq
 

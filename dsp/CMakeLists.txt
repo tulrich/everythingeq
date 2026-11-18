@@ -7,6 +7,7 @@ add_library(eeq_dsp STATIC
   bands/vocoder.cc
   bands/vowel.cc
   dynamics/dynamics_group.cc
+  dynamics/spectral_envelope.cc
   dynamics/tracker.cc
   engine/engine.cc
 )

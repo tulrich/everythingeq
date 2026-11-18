@@ -10,6 +10,7 @@
 
 #include "IControl.h"
 #include "dsp/bands/vowel.h"
+#include "dsp/dynamics/spectral_envelope.h"
 #include "dsp/dynamics/tracker.h"
 #include "model/slot_mapping.h"
 #include "plugin/ui/editor_model.h"
@@ -87,7 +88,9 @@ class DetectorScope final : public iplug::igraphics::IControl {
         "when it crosses the blue threshold line, ramping across the shaded "
         "knee. The strip below is the group output D (0-100%), grey when no "
         "band uses this group, with the gain its bands apply now. Drag "
-        "up/down to move the threshold.");
+        "up/down to move the threshold. Detect Spectrum adds the input's "
+        "16 band levels (100 Hz - 8 kHz) at the right, measured as each "
+        "band's trigger: lit where they cross the threshold.");
   }
 
   bool IsDirty() override { return true; }  // Scrolls continuously.
@@ -96,23 +99,30 @@ class DetectorScope final : public iplug::igraphics::IControl {
     namespace ig = iplug::igraphics;
     const ParamValues v = model_.Values();
     Settings s = Read(v);
-    const ig::IRECT trig = TriggerRect();
+    const ig::IRECT full = TriggerRect();
     const ig::IRECT dstrip = mRECT.GetFromBottom(kStrip);
     g.FillRoundRect(theme::kBackground, mRECT, 3.f);
+    // Spectrum: the band levels take the right part; the trace the rest.
+    const bool spectral = s.detect == DetectMode::kSpectrum;
+    const ig::IRECT trig =
+        spectral ? full.GetReducedFromRight(full.W() * kBarsShare) : full;
 
     // Active region (above or below the threshold), knee band, threshold.
-    const bool level = s.detect == DetectMode::kLevel;
+    const bool level = UsesGainComputer(s.detect);
     const float ty = DbToY(s.teff, s, trig);
     const ig::IRECT active_rect = s.below
                                       ? ig::IRECT(trig.L, ty, trig.R, trig.B)
                                       : ig::IRECT(trig.L, trig.T, trig.R, ty);
-    if (level) g.FillRect(theme::kAccent.WithOpacity(0.06f), active_rect);
+    const ig::IRECT active_full =
+        ig::IRECT(full.L, active_rect.T, full.R, active_rect.B);
+    if (level) g.FillRect(theme::kAccent.WithOpacity(0.06f), active_full);
     if (level && s.knee > 0.0) {
       const float k0 = DbToY(s.teff + s.knee / 2, s, trig);
       const float k1 = DbToY(s.teff - s.knee / 2, s, trig);
       g.FillRect(theme::kAccent.WithOpacity(0.15f),
-                 ig::IRECT(trig.L, k0, trig.R, k1));
+                 ig::IRECT(full.L, k0, full.R, k1));
     }
+    if (spectral) DrawBands(g, s, full.GetFromRight(full.W() * kBarsShare));
 
     // Trigger trace: one vertical range per column.
     const float col_w = trig.W() / DetectorHistory::kColumns;
@@ -135,7 +145,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
     }
     if (started) g.PathStroke(theme::kText.WithOpacity(0.85f), 1.f);
     if (level)
-      g.DrawLine(theme::kAccent, trig.L, ty, trig.R, ty, nullptr, 1.5f);
+      g.DrawLine(theme::kAccent, full.L, ty, full.R, ty, nullptr, 1.5f);
 
     // D strip.
     const bool active = graph_.group_active(group_);
@@ -196,7 +206,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
   void OnMouseDown(float x, float y,
                    const iplug::igraphics::IMouseMod& mod) override {
     const Settings s = Read(model_.Values());
-    if (s.detect != DetectMode::kLevel) return;  // No threshold to drag.
+    if (!UsesGainComputer(s.detect)) return;  // No threshold to drag.
     drag_id_ = GroupParamId(
         group_, s.alpha >= 0.5 ? GroupField::kRise : GroupField::kThreshold);
     drag_weight_ = s.alpha >= 0.5 ? s.alpha : 1.0 - s.alpha;
@@ -244,6 +254,7 @@ class DetectorScope final : public iplug::igraphics::IControl {
 
  private:
   static constexpr float kStrip = 14.f;
+  static constexpr float kBarsShare = 0.36f;  // Of the width, Spectrum.
 
   struct Settings {
     double alpha, teff, knee, lo, hi;
@@ -264,6 +275,36 @@ class DetectorScope final : public iplug::igraphics::IControl {
     s.lo = (1.0 - s.alpha) * -72.0 + s.alpha * -24.0;
     s.hi = (1.0 - s.alpha) * 0.0 + s.alpha * 36.0;
     return s;
+  }
+
+  // A Spectrum group's band levels as its per-band trigger sees them (level
+  // less alpha times the spectrum's mean), on the trace's scale.
+  void DrawBands(iplug::igraphics::IGraphics& g, const Settings& s,
+                 const iplug::igraphics::IRECT& r) const {
+    namespace ig = iplug::igraphics;
+    const SpectralLevels levels = model_.LiveSpectra()[group_];
+    double peak = SpectralEnvelope::kFloorDb, mean = 0.0;
+    for (float l : levels) peak = std::max(peak, static_cast<double>(l));
+    for (float l : levels) {
+      mean += std::max(static_cast<double>(l),
+                       peak - SpectralEnvelope::kMeanFloorDb);
+    }
+    mean /= kSpectralBands;
+    g.DrawLine(theme::kBorder, r.L, r.T, r.L, r.B);
+    const ig::IRECT bars = r.GetHPadded(-3.f);  // The trace's scale.
+    const float w = bars.W() / kSpectralBands;
+    for (int i = 0; i < kSpectralBands; ++i) {
+      const double trigger = levels[i] - s.alpha * mean;
+      const bool fires = s.below ? trigger < s.teff : trigger > s.teff;
+      const float x = bars.L + i * w;
+      const float y = DbToY(trigger, s, bars);
+      g.FillRect(fires ? theme::kAccent : theme::kText.WithOpacity(0.35f),
+                 ig::IRECT(x + 0.5f, y, x + w - 0.5f, bars.B));
+    }
+    g.DrawText(theme::Text(8.f, theme::kTextDim), "100",
+               ig::IRECT(bars.L, bars.T, bars.L + 20, bars.T + 10));
+    g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "8k",
+               ig::IRECT(bars.R - 20, bars.T, bars.R, bars.T + 10));
   }
 
   iplug::igraphics::IRECT TriggerRect() const {

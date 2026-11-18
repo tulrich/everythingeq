@@ -212,7 +212,7 @@ BandDesign DesignBand(BandType type, double x, double y, double z, int option,
       return DesignComb(x, y, z, option, fs);
     case BandType::kVocoder:
       // Flat until the engine supplies the source's shape.
-      return DesignVocoder(x, VocoderShape{}, fs);
+      return DesignVocoder(x, y, VocoderShape{}, fs);
   }
   return {};
 }

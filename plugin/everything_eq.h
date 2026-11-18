@@ -41,7 +41,8 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   ParamValues Values() const override { return CurrentValues(); }
   double SampleRate() const override { return GetSampleRate(); }
   GroupControls LiveControls() const override;
-  VocoderShapes LiveVocoderShapes() const override;
+  LiveBands LiveBandState() const override;
+  std::array<SpectralLevels, kNumGroups> LiveSpectra() const override;
   std::array<Tracked, kNumGroups> LiveTracking() const override;
   int PopAnalyzerSamples(bool post, float* dest, int max_count) override;
   int PopDetectorFrames(DetectorFrame* dest, int max_count) override;
@@ -119,8 +120,13 @@ class EverythingEq final : public iplug::Plugin, public EditorModel {
   // and the latest dynamics control value per group.
   std::array<std::atomic<float>, kNumMeterChannels> peaks_{};
   std::array<std::atomic<float>, kNumGroups> group_controls_{};
+  // Each band's applied controls and Vocoder shape, and each Spectrum
+  // group's band levels.
+  std::array<std::array<std::atomic<float>, 2>, kNumBands> band_controls_{};
   std::array<std::array<std::atomic<float>, kVocoderBands>, kNumBands>
       vocoder_shapes_{};
+  std::array<std::array<std::atomic<float>, kSpectralBands>, kNumGroups>
+      group_spectra_{};
   std::array<std::atomic<float>, kNumGroups> group_tracked_{};
   std::array<std::atomic<bool>, kNumGroups> group_voiced_{};
   std::atomic<bool> transport_started_{false};

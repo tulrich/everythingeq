@@ -32,7 +32,6 @@ constexpr SlotMapping kCombFreq{kCombMinHz, 220.0,  kCombMaxHz,
                                 true,       "Freq", "Hz"};
 constexpr SlotMapping kCombQ{kCombMinQ, 20.0, kCombMaxQ, true, "Q", ""};
 constexpr SlotMapping kVocoderShift{0.5, 1.0, 2.0, true, "Shift", "x"};
-constexpr SlotMapping kVocoderAmount{0.0, 100.0, 200.0, false, "Amount", "%"};
 constexpr SlotMapping kVocoderRange{6.0, 24.0, 60.0, true, "Range", "dB"};
 
 double Lerp(double a, double b, double t, bool log) {
@@ -92,7 +91,7 @@ std::optional<SlotMapping> SlotMappingFor(BandType type, Slot slot) {
       return kCombQ;
     case BandType::kVocoder:
       if (slot == Slot::kX) return kVocoderShift;
-      if (slot == Slot::kY) return kVocoderAmount;
+      if (slot == Slot::kY) return kGain;
       return kVocoderRange;
     case BandType::kOff:
       return std::nullopt;
@@ -112,7 +111,7 @@ const char* OptionName(BandType type) {
     case BandType::kComb:
       return "Harmonics";
     case BandType::kVocoder:
-      return "Source";
+      return "Mode";
     default:
       return "";
   }
@@ -130,7 +129,7 @@ std::vector<std::string> OptionLabels(BandType type) {
     case BandType::kComb:
       return {"All", "Odd", "Even"};  // CombHarmonics
     case BandType::kVocoder:
-      return {"Group 1", "Group 2", "Group 3", "Group 4"};  // Source group
+      return {"Shape", "Level"};  // VocoderMode
     default:
       return {};
   }
@@ -141,12 +140,11 @@ int OptionCount(BandType type) {
     case BandType::kVowel:
     case BandType::kLp:
     case BandType::kHp:
+    case BandType::kVocoder:
       return 2;
     case BandType::kVintageHigh:
     case BandType::kComb:
       return 3;
-    case BandType::kVocoder:
-      return kNumGroups;
     default:
       return 0;
   }
@@ -160,6 +158,8 @@ SlotMapping DynRangeMapping(DynTarget target) {
       return {-8.0, 0.0, 8.0, false, "Dyn Range", "oct"};
     case DynTarget::kMorph:
       return {-4.0, 0.0, 4.0, false, "Dyn Range", ""};
+    case DynTarget::kShape:
+      return {-200.0, 0.0, 200.0, false, "Amount", "%"};
   }
   return {};
 }

@@ -37,6 +37,9 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
           info, iplug::MakeConfig(kNumParams,
                                   static_cast<int>(FactoryPresets().size()))),
       presets_(UserPresetDir()) {
+  for (auto& levels : group_spectra_) {
+    for (std::atomic<float>& l : levels) l = SpectralEnvelope::kFloorDb;
+  }
   InitParams();
   MakeFactoryPresets();
   // Host bypass (AU, VST3) crossfades in the engine instead of switching
@@ -115,11 +118,25 @@ EverythingEq::EverythingEq(const iplug::InstanceInfo& info)
 
 EverythingEq::~EverythingEq() = default;
 
-VocoderShapes EverythingEq::LiveVocoderShapes() const {
-  VocoderShapes s{};
+LiveBands EverythingEq::LiveBandState() const {
+  LiveBands s{};
   for (int b = 0; b < kNumBands; ++b) {
+    for (int slot = 0; slot < 2; ++slot) {
+      s[b].control[slot] =
+          band_controls_[b][slot].load(std::memory_order_relaxed);
+    }
     for (int i = 0; i < kVocoderBands; ++i) {
-      s[b][i] = vocoder_shapes_[b][i].load(std::memory_order_relaxed);
+      s[b].shape[i] = vocoder_shapes_[b][i].load(std::memory_order_relaxed);
+    }
+  }
+  return s;
+}
+
+std::array<SpectralLevels, kNumGroups> EverythingEq::LiveSpectra() const {
+  std::array<SpectralLevels, kNumGroups> s{};
+  for (int g = 0; g < kNumGroups; ++g) {
+    for (int i = 0; i < kSpectralBands; ++i) {
+      s[g][i] = group_spectra_[g][i].load(std::memory_order_relaxed);
     }
   }
   return s;
@@ -611,9 +628,22 @@ void EverythingEq::ProcessBlock(iplug::sample** inputs, iplug::sample** outputs,
 
   // Metering for the UI.
   for (int b = 0; b < kNumBands; ++b) {
+    for (int slot = 0; slot < 2; ++slot) {
+      band_controls_[b][slot].store(
+          static_cast<float>(engine_.band_control(b, slot)),
+          std::memory_order_relaxed);
+    }
     const VocoderShape& shape = engine_.vocoder_shape(b);
     for (int i = 0; i < kVocoderBands; ++i) {
       vocoder_shapes_[b][i].store(shape[i], std::memory_order_relaxed);
+    }
+  }
+  for (int g = 0; g < kNumGroups; ++g) {
+    const DynamicsGroup& group = engine_.group(g);
+    if (!group.spectral()) continue;
+    for (int i = 0; i < kSpectralBands; ++i) {
+      group_spectra_[g][i].store(static_cast<float>(group.spectrum().BandDb(i)),
+                                 std::memory_order_relaxed);
     }
   }
   DetectorFrame frame;

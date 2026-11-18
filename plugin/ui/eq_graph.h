@@ -10,7 +10,6 @@
 #include "IControl.h"
 #include "dsp/bands/band_design.h"
 #include "dsp/bands/band_processor.h"
-#include "dsp/bands/vowel.h"
 #include "model/response_curves.h"
 #include "model/slot_mapping.h"
 #include "plugin/ui/editor_model.h"
@@ -83,16 +82,16 @@ class EqGraph final : public iplug::igraphics::IControl {
   void Refresh() {
     const ParamValues v = model_.Values();
     const GroupControls live = model_.LiveControls();
-    const VocoderShapes shapes = model_.LiveVocoderShapes();
+    const LiveBands bands = model_.LiveBandState();
     const int points = std::max(32, static_cast<int>(mRECT.W() / 2.f));
     const bool changed = v != values_ || live != live_ ||
-                         shapes != live_shapes_ ||
+                         bands != live_bands_ ||
                          freqs_.size() != static_cast<size_t>(points) ||
                          model_.SampleRate() != sample_rate_;
     if (!changed) return;
     values_ = v;
     live_ = live;
-    live_shapes_ = shapes;
+    live_bands_ = bands;
     sample_rate_ = model_.SampleRate();
     if (freqs_.size() != static_cast<size_t>(points)) {
       freqs_ = DisplayFrequencies(points, kMinHz, kMaxHz);
@@ -118,7 +117,7 @@ class EqGraph final : public iplug::igraphics::IControl {
       full.fill(1.0);
       ComputeChainResponse(params_, full, sample_rate_, freqs_, ghost_);
       ComputeChainResponse(params_, live_, sample_rate_, freqs_, live_curves_,
-                           &live_shapes_);
+                           &live_bands_);
       ComputeGroupGains();
     }
     ComputeLiveMarkers();
@@ -353,6 +352,13 @@ class EqGraph final : public iplug::igraphics::IControl {
         drag_range_ += dx * oct_per_px;
         DragNodeY(dy);
         break;
+      case DynTarget::kShape: {
+        // Full height = the full Amount range.
+        const SlotMapping m = DynRangeMapping(target);
+        drag_range_ -= dy / mRECT.H() * (m.max - m.min);
+        DragNodeX(dx);
+        break;
+      }
       case DynTarget::kMorph:
         DragNodeY(dy);
         if (params_.bands[drag_band_].type == BandType::kVowel) {
@@ -453,13 +459,8 @@ class EqGraph final : public iplug::igraphics::IControl {
       if (bp.bypass) continue;
       const auto m = SlotMappingFor(bp.type, Slot::kX);
       if (!m || std::string(m->unit) != "Hz") continue;
-      auto control = [&](int group) {
-        return group >= 0 && group < kNumGroups
-                   ? std::clamp(live_[group], 0.0, 1.0)
-                   : 0.0;
-      };
       const double hz =
-          ResolveBand(bp, control(bp.dyn_group), control(bp.dyn_b_group),
+          ResolveBand(bp, live_bands_[b].control[0], live_bands_[b].control[1],
                       params_.global.global_scale)
               .x;
       // Only once it is visibly apart from the node.
@@ -659,23 +660,8 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::optional<iplug::igraphics::IVec2> NodePosition(
       int band, const BandParams& bp) const {
     if (freqs_.empty()) return std::nullopt;
-    double hz = 1000.0;
-    switch (bp.type) {
-      case BandType::kOff:
-        return std::nullopt;
-      case BandType::kFletcherMunson:
-        hz = 1000.0;
-        break;
-      case BandType::kVowel:
-        hz = VowelFormants(bp.x).hz[1] * bp.z;  // F2.
-        break;
-      case BandType::kVocoder:
-        hz = 1000.0 * bp.x;  // Its Shift, about the middle of the bank.
-        break;
-      default:
-        hz = bp.x;
-        break;
-    }
+    if (bp.type == BandType::kOff) return std::nullopt;
+    const double hz = BandCenterHz(bp);
     float y = DbToY(0.0);
     if (const auto m = SlotMappingFor(bp.type, Slot::kY)) {
       if (std::string(m->unit) == "dB") {
@@ -821,7 +807,7 @@ class EqGraph final : public iplug::igraphics::IControl {
   std::vector<float> spectrum_pre_, spectrum_post_;
   ParamValues values_{};
   GroupControls live_{};
-  VocoderShapes live_shapes_{};
+  LiveBands live_bands_{};
   double sample_rate_ = 0.0;
   EngineParams params_{};
   std::vector<double> freqs_;

@@ -112,8 +112,8 @@ std::vector<ParamSpec> MakeTable() {
     at(BandField::kType) =
         Enum(k + "type", n + "Type", g, static_cast<int>(d.type),
              {"Peak", "Low Shelf", "High Shelf", "Band Shelf", "LP", "HP",
-              "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel",
-              "Vintage Low", "Vintage High", "Comb", "Vocoder"});
+              "Notch", "BP", "Tilt", "Fletcher-Munson", "Vowel", "Vintage Low",
+              "Vintage High", "Comb", "Vocoder"});
     at(BandField::kX) = SlotParam(k + "x", n + "Freq", g);
     at(BandField::kX).default_value =
         SlotFromPhysical(*SlotMappingFor(d.type, Slot::kX), d.hz);
@@ -124,7 +124,7 @@ std::vector<ParamSpec> MakeTable() {
         Enum(k + "dyn_group", n + "Dyn Group", g, DefaultDynGroup(b),
              {"Group 1", "Group 2", "Group 3", "Group 4"});
     at(BandField::kDynTarget) = Enum(k + "dyn_target", n + "Dyn Target", g, 0,
-                                     {"Gain", "Freq", "Morph"});
+                                     {"Gain", "Freq", "Morph", "Shape"});
     at(BandField::kDynRange) = SlotParam(k + "dyn_range", n + "Dyn Range", g);
     at(BandField::kDynMakeup) = Continuous(k + "dyn_makeup", n + "Dyn Makeup",
                                            g, 0.0, 100.0, 0.0, "%", false, 0.1);
@@ -133,7 +133,7 @@ std::vector<ParamSpec> MakeTable() {
         Enum(k + "dyn_b_group", n + "Dyn B Group", g, DefaultDynGroup(b),
              {"Group 1", "Group 2", "Group 3", "Group 4"});
     at(BandField::kDynBTarget) = Enum(k + "dyn_b_target", n + "Dyn B Target", g,
-                                      0, {"Gain", "Freq", "Morph"});
+                                      0, {"Gain", "Freq", "Morph", "Shape"});
     at(BandField::kDynBRange) =
         SlotParam(k + "dyn_b_range", n + "Dyn B Range", g);
     at(BandField::kOption) = OptionParam(k + "option", n + "Option", g);
@@ -177,8 +177,8 @@ std::vector<ParamSpec> MakeTable() {
     at(GroupField::kInput) =
         Enum(k + "input", n + "Input", g, 0,
              {"Internal Dry", "Internal Band-Sum", "External SC"});
-    at(GroupField::kDetect) =
-        Enum(k + "detect", n + "Detect", g, 0, {"Level", "Vowel", "Pitch"});
+    at(GroupField::kDetect) = Enum(k + "detect", n + "Detect", g, 0,
+                                   {"Level", "Vowel", "Pitch", "Spectrum"});
     at(GroupField::kScFilter) =
         Enum(k + "sc_filter", n + "SC Filter", g, 0,
              {"Off", "BP", "LP", "HP", "Tilt", "K-Weight"});
@@ -247,6 +247,27 @@ ParamValues DefaultParamValues() {
   const std::vector<ParamSpec>& t = ParamTable();
   for (int i = 0; i < kNumParams; ++i) v[i] = t[i].default_value;
   return v;
+}
+
+std::array<std::pair<int, double>, 4> ConnectEdits(const ParamValues& v,
+                                                   int band, int slot,
+                                                   int group) {
+  const bool a = slot == 0;
+  const bool vocoder = BandTypeOf(v, band) == BandType::kVocoder;
+  const DynTarget target = vocoder ? DynTarget::kShape : DynTarget::kGain;
+  const int target_id =
+      BandParamId(band, a ? BandField::kDynTarget : BandField::kDynBTarget);
+  const double targets =
+      static_cast<double>(ParamTable()[target_id].enum_labels.size() - 1);
+  return {{
+      {BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn), 1.0},
+      {BandParamId(band, a ? BandField::kDynGroup : BandField::kDynBGroup),
+       group / static_cast<double>(kNumGroups - 1)},
+      {target_id, static_cast<int>(target) / targets},
+      {BandParamId(band, a ? BandField::kDynRange : BandField::kDynBRange),
+       vocoder ? SlotFromPhysical(DynRangeMapping(target), 100.0)
+               : kSlotDefault},
+  }};
 }
 
 double SanitizeParamValue(int id, double value) {

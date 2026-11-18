@@ -141,7 +141,7 @@ TEST_CASE("Host values survive engine params and back", "[params]") {
 
 TEST_CASE("Factory presets parse and are representable", "[params]") {
   const std::vector<Preset>& presets = FactoryPresets();
-  REQUIRE(presets.size() == 18);
+  REQUIRE(presets.size() == 20);
   REQUIRE(presets[0].name == "Init");
   REQUIRE(NearlyEqual(presets[0].params,
                       BuildEngineParams(DefaultParamValues(), false)));
@@ -247,19 +247,23 @@ TEST_CASE("Mono output plays Split L/R as split side plus residual",
   REQUIRE(MaxAbsDiff(y2, x) > 0.01);
 }
 
-TEST_CASE("Preset JSON reads old output mode names", "[params]") {
+TEST_CASE("Preset JSON names output modes", "[params]") {
   const std::pair<const char*, OutputMode> cases[] = {
-      {"Normal", OutputMode::kNormal},   {"Stereo", OutputMode::kNormal},
-      {"Split", OutputMode::kSplit},     {"SplitSide", OutputMode::kSplit},
-      {"SplitLR", OutputMode::kSplitLr}, {"SplitMS", OutputMode::kSplitLr}};
+      {"Normal", OutputMode::kNormal},
+      {"Split", OutputMode::kSplit},
+      {"SplitLR", OutputMode::kSplitLr},
+      {"Residual", OutputMode::kResidual}};
   for (const auto& [name, mode] : cases) {
     CAPTURE(name);
     const nlohmann::json j = {{"global", {{"outputMode", name}}}};
     REQUIRE(ParseEngineParams(j).global.output_mode == mode);
+    EngineParams p;
+    p.global.output_mode = mode;
+    const nlohmann::json out = EngineParamsToJson(p);
+    if (mode != OutputMode::kNormal) {
+      REQUIRE(out["global"]["outputMode"] == name);
+    }
   }
-  EngineParams p;
-  p.global.output_mode = OutputMode::kSplit;
-  REQUIRE(EngineParamsToJson(p)["global"]["outputMode"] == "Split");
 }
 
 TEST_CASE("Display text follows the band type", "[params]") {

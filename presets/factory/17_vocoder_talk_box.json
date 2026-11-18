@@ -5,6 +5,7 @@
   "params": {
     "groups": [
       {
+        "detect": "Spectrum",
         "input": "ExternalSC",
         "attackMs": 5,
         "releaseMs": 40
@@ -14,9 +15,12 @@
       {
         "type": "Vocoder",
         "x": 1.0,
-        "y": 100,
+        "y": 0,
         "z": 24,
-        "sourceGroup": 0
+        "mode": "Shape",
+        "dynGroup": 0,
+        "dynTarget": "Shape",
+        "dynRange": 100
       }
     ]
   }
