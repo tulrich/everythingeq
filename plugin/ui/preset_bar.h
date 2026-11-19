@@ -71,11 +71,11 @@ class PresetBar final : public iplug::igraphics::IControl {
       const ig::IRECT r = redo ? RedoRect() : UndoRect();
       const bool enabled = redo ? can_redo_ : can_undo_;
       DrawBox(g, r, enabled && hover_ == (redo ? kRedo : kUndo));
-      g.DrawText(
-          theme::Text(
-              10.f, enabled ? theme::kText : theme::kTextDim.WithOpacity(0.5f),
-              ig::EAlign::Center),
-          redo ? "REDO" : "UNDO", r);
+      g.DrawText(theme::Text(
+                     theme::kSmall,
+                     enabled ? theme::kText : theme::kTextDim.WithOpacity(0.5f),
+                     ig::EAlign::Center),
+                 redo ? "REDO" : "UNDO", r);
     }
   }
 

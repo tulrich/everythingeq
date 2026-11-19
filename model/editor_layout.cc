@@ -31,14 +31,16 @@ float SectionHeight(const PanelSection& s, bool open) {
 StripLayout ComputeStrip(const Rect& r, bool full) {
   StripLayout s;
   s.compact = !full;
-  const float info_w = full ? 150.f : 126.f;
   const float card_w =
-      full ? std::clamp((r.w() - 330.f) / 2.f, 140.f, 196.f) : 132.f;
+      full ? std::clamp((r.w() - 330.f) / 2.f, 132.f, 196.f) : 132.f;
   s.cards[1] = {r.r - card_w, r.t, r.r, r.b};
   s.cards[0] = {s.cards[1].l - kPad - card_w, r.t, s.cards[1].l - kPad, r.b};
   s.shape = {r.l, r.t, s.cards[0].l - kPad, r.b};
   const Rect inner = {s.shape.l + kPad, s.shape.t + kPad, s.shape.r - kPad,
                       s.shape.b - kPad};
+  // The dials keep room for their values; the info column gives way.
+  const float info_w =
+      full ? std::clamp(inner.w() - 10.f - 3.f * 62.f, 126.f, 150.f) : 126.f;
   s.info = {inner.l, inner.t, inner.l + info_w, inner.b};
   const float dials_l = s.info.r + 10.f;
   const float dial_w = std::max(0.f, (inner.r - dials_l) / 3.f);

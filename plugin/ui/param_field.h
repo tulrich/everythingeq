@@ -239,7 +239,7 @@ class ParamField final : public iplug::igraphics::IControl {
 
  private:
   iplug::igraphics::IRECT EntryRect() const {
-    return style_ == Style::kDial ? mRECT.GetFromBottom(14.f)
+    return style_ == Style::kDial ? mRECT.GetFromBottom(18.f)
                                   : mRECT.GetReducedFromLeft(label_width_);
   }
 
@@ -250,12 +250,18 @@ class ParamField final : public iplug::igraphics::IControl {
     const iplug::IParam* p = GetParam();
     g.DrawText(
         theme::Text(theme::kSmall, fade(theme::kTextDim), ig::EAlign::Center),
-        label_.c_str(), mRECT.GetFromTop(13.f));
-    g.DrawText(
-        theme::Text(theme::kValue, fade(theme::kText), ig::EAlign::Center),
-        value, mRECT.GetFromBottom(15.f));
+        label_.c_str(), mRECT.GetFromTop(16.f));
+    // A value too wide for the column steps down a size before shortening.
+    ig::IText text =
+        theme::Text(theme::kValue, fade(theme::kText), ig::EAlign::Center);
+    ig::IRECT measured;
+    if (g.MeasureText(text, value, measured) > mRECT.W()) {
+      text.mSize = theme::kSmall;
+    }
+    g.DrawText(text, Fit(g, text, value, mRECT.W()).c_str(),
+               mRECT.GetFromBottom(18.f));
     const ig::IRECT knob =
-        mRECT.GetReducedFromTop(14.f).GetReducedFromBottom(16.f);
+        mRECT.GetReducedFromTop(17.f).GetReducedFromBottom(19.f);
     const float r = std::clamp(std::min(knob.W(), knob.H()) / 2.f - 2.f, 4.f,
                                kMaxDialRadius);
     const float cx = knob.MW(), cy = knob.MH();

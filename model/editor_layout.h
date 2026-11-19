@@ -114,7 +114,7 @@ struct PanelLayout {
 // Map geometry shared by the layout and the routing map control: source
 // labels on top, a row per group, then the bands' ports and icons.
 inline constexpr int kNumMapGroups = 4;
-inline constexpr float kMapTopHeight = 17.f;
+inline constexpr float kMapTopHeight = 21.f;
 inline constexpr float kMapBottomHeight = 28.f;
 inline constexpr float kMapMinRow = 22.f;
 inline constexpr float kMapMaxRow = 36.f;

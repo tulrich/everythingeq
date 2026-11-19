@@ -41,9 +41,9 @@ inline ig::IColor BandColor(int band) {
 
 // Text sizes.  Nothing on the panel is smaller than kSmall: captions and
 // labels; values in fields; names (Band n, G n) and headings.
-inline constexpr float kSmall = 11.f;
-inline constexpr float kValue = 12.f;
-inline constexpr float kName = 13.f;
+inline constexpr float kSmall = 13.f;
+inline constexpr float kValue = 14.f;
+inline constexpr float kName = 15.f;
 
 inline ig::IText Text(float size, const ig::IColor& color = kText,
                       ig::EAlign align = ig::EAlign::Near,

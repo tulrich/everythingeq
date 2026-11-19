@@ -91,9 +91,9 @@ class RoutingMap final : public iplug::igraphics::IControl {
   };
 
   // Geometry (see kMapTopHeight and kMapBottomHeight).
-  static constexpr float kBusX[3] = {9.f, 30.f, 51.f};
-  static constexpr float kHeadL = 61.f;
-  static constexpr float kHeadW = 46.f;
+  static constexpr float kBusX[3] = {11.f, 35.f, 59.f};
+  static constexpr float kHeadL = 70.f;
+  static constexpr float kHeadW = 50.f;
   static constexpr float kBandsL = kHeadL + kHeadW + 10.f;
   static constexpr float kCorner = 6.f;
   static constexpr float kArrow = 7.5f;
@@ -256,7 +256,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   static const char* const kSources[] = {"IN", "SUM", "SC"};
   const ig::IColor sc_color =
       sc_connected_ ? theme::kTextDim : theme::kCaution.WithOpacity(0.7f);
-  const float bus_t = mRECT.T + 15.f;
+  const float bus_t = mRECT.T + 19.f;
   std::array<float, kNumGroups> feed_x{};
   std::array<bool, kNumGroups> used{};  // Some band follows the group.
   for (int b = 0; b < kNumBands; ++b) {
@@ -284,7 +284,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
         theme::Text(theme::kSmall, n > 0 ? c : c.WithOpacity(0.5f),
                     ig::EAlign::Center),
         kSources[s],
-        ig::IRECT(BusX(s) - 11.f, mRECT.T, BusX(s) + 11.f, mRECT.T + 13.f));
+        ig::IRECT(BusX(s) - 15.f, mRECT.T, BusX(s) + 15.f, mRECT.T + 17.f));
     // Faint dots where a group could listen to this source.
     for (int gi = 0; gi < kNumGroups; ++gi) {
       g.FillCircle(theme::kTextDim.WithOpacity(0.4f), BusX(s), GroupY(gi),

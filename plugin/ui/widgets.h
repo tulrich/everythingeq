@@ -94,12 +94,13 @@ class TextButton final : public iplug::igraphics::IControl {
         if (hover) g.FillRoundRect(theme::kPanelRaised, mRECT, 3.f);
         break;
     }
-    g.DrawText(theme::Text(style_ == Style::kGhost ? 12.f : 10.f,
-                           on_     ? theme::kOn
-                           : hover ? theme::kText
-                                   : theme::kTextDim,
-                           ig::EAlign::Center),
-               label_.c_str(), mRECT);
+    g.DrawText(
+        theme::Text(style_ == Style::kGhost ? theme::kValue : theme::kSmall,
+                    on_     ? theme::kOn
+                    : hover ? theme::kText
+                            : theme::kTextDim,
+                    ig::EAlign::Center),
+        label_.c_str(), mRECT);
   }
   void OnMouseDown(float, float, const iplug::igraphics::IMouseMod&) override {
     if (on_click_) on_click_();

@@ -227,7 +227,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 Window: **`1000 x 580 px`** by default, resizable from the grip in the bottom-right corner or the host window's edges between `360 x 220` and `2000 x 1300`, and reopened at its last size. Inactive controls stay in fixed slots at **35% opacity** to preserve spatial memory.
 
-**Text:** nothing on the panel is smaller than 11 pt (captions and labels), with values at 12 pt and names at 13 pt; text that doesn't earn its space is left out or abbreviated (no titles over the map, no legend, no status line), with tooltips carrying the explanations.
+**Text:** nothing on the panel is smaller than 13 pt (captions and labels), with values at 14 pt and names at 15 pt (a value too wide for its dial steps down to 13 pt); text that doesn't earn its space is left out or abbreviated (no titles over the map, no legend, no status line), with tooltips carrying the explanations.
 
 The layout reads left to right like the signal: the dynamics (routing and groups) on the left, the EQ (ribbon over the graph, meters, band strip, footer) on the right.
 
