@@ -93,11 +93,8 @@ struct PanelSection {
 };
 
 struct PanelLayout {
-  Rect title;  // "ROUTING".
   Rect map;
   float map_row = 26.f;  // Height of one group's row in the map.
-  bool show_legend = false;
-  Rect legend;
   Rect divider;
   Rect header;
   bool show_warning = false;
@@ -115,11 +112,10 @@ struct PanelLayout {
 };
 
 // Map geometry shared by the layout and the routing map control: source
-// labels on top, a row per group, then the bands' ports, icons and range
-// labels.
+// labels on top, a row per group, then the bands' ports and icons.
 inline constexpr int kNumMapGroups = 4;
-inline constexpr float kMapTopHeight = 14.f;
-inline constexpr float kMapBottomHeight = 46.f;
+inline constexpr float kMapTopHeight = 17.f;
+inline constexpr float kMapBottomHeight = 28.f;
 inline constexpr float kMapMinRow = 22.f;
 inline constexpr float kMapMaxRow = 36.f;
 float MapHeight(float row);

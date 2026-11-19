@@ -216,7 +216,7 @@ std::vector<ParamSpec> MakeTable() {
   at(GlobalField::kDelta) = Bool("global.delta", "Delta", g, false);
   at(GlobalField::kBypass) = Bool("global.bypass", "Bypass", g, false);
   at(GlobalField::kOutputGain) =
-      Continuous("global.output_gain_db", "Output Gain", g, -24.0, 24.0, 0.0,
+      Continuous("global.output_gain_db", "Output Gain", g, -12.0, 12.0, 0.0,
                  "dB", false, kLevelDetentDb);
   at(GlobalField::kLookahead) =
       Continuous("global.lookahead_ms", "Lookahead", g, 0.0, kMaxLookaheadMs,

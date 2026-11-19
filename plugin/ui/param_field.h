@@ -101,7 +101,8 @@ class ParamField final : public iplug::igraphics::IControl {
       const ig::IColor on_color = label_ == "BYP" ? theme::kWarn : theme::kOn;
       g.FillRoundRect(fade(on ? on_color : theme::kPanelRaised), mRECT, 3.f);
       g.DrawRoundRect(fade(theme::kBorder), mRECT, 3.f);
-      g.DrawText(theme::Text(11.f, fade(on ? theme::kBackground : theme::kText),
+      g.DrawText(theme::Text(theme::kValue,
+                             fade(on ? theme::kBackground : theme::kText),
                              ig::EAlign::Center),
                  label_.c_str(), mRECT);
       return;
@@ -109,8 +110,8 @@ class ParamField final : public iplug::igraphics::IControl {
 
     const ig::IRECT label_rect = mRECT.GetFromLeft(label_width_);
     const ig::IRECT box = mRECT.GetReducedFromLeft(label_width_);
-    g.DrawText(theme::Text(10.f, fade(theme::kTextDim)), label_.c_str(),
-               label_rect);
+    g.DrawText(theme::Text(theme::kSmall, fade(theme::kTextDim)),
+               label_.c_str(), label_rect);
     g.FillRoundRect(fade(mMouseIsOver && !IsDisabled() ? theme::kPanelRaised
                                                        : theme::kPanel),
                     box, 3.f);
@@ -124,7 +125,7 @@ class ParamField final : public iplug::igraphics::IControl {
     }
     const ig::IRECT text_rect =
         box.GetPadded(-6.f).GetReducedFromRight(is_enum ? 8.f : 0.f);
-    const ig::IText text = theme::Text(11.f, fade(theme::kText));
+    const ig::IText text = theme::Text(theme::kValue, fade(theme::kText));
     g.DrawText(text, Fit(g, text, value.Get(), text_rect.W()).c_str(),
                text_rect);
   }
@@ -247,12 +248,14 @@ class ParamField final : public iplug::igraphics::IControl {
                 const char* value) {
     namespace ig = iplug::igraphics;
     const iplug::IParam* p = GetParam();
-    g.DrawText(theme::Text(9.f, fade(theme::kTextDim), ig::EAlign::Center),
-               label_.c_str(), mRECT.GetFromTop(11.f));
-    g.DrawText(theme::Text(10.f, fade(theme::kText), ig::EAlign::Center), value,
-               mRECT.GetFromBottom(13.f));
+    g.DrawText(
+        theme::Text(theme::kSmall, fade(theme::kTextDim), ig::EAlign::Center),
+        label_.c_str(), mRECT.GetFromTop(13.f));
+    g.DrawText(
+        theme::Text(theme::kValue, fade(theme::kText), ig::EAlign::Center),
+        value, mRECT.GetFromBottom(15.f));
     const ig::IRECT knob =
-        mRECT.GetReducedFromTop(12.f).GetReducedFromBottom(14.f);
+        mRECT.GetReducedFromTop(14.f).GetReducedFromBottom(16.f);
     const float r = std::clamp(std::min(knob.W(), knob.H()) / 2.f - 2.f, 4.f,
                                kMaxDialRadius);
     const float cx = knob.MW(), cy = knob.MH();
@@ -280,8 +283,8 @@ class ParamField final : public iplug::igraphics::IControl {
     const iplug::IParam* p = GetParam();
     if (!p) return;
     if (label_width_ > 0.f) {
-      g.DrawText(theme::Text(10.f, fade(theme::kTextDim)), label_.c_str(),
-                 mRECT.GetFromLeft(label_width_));
+      g.DrawText(theme::Text(theme::kSmall, fade(theme::kTextDim)),
+                 label_.c_str(), mRECT.GetFromLeft(label_width_));
     }
     const ig::IRECT box = mRECT.GetReducedFromLeft(label_width_);
     const int n = p->NDisplayTexts();
@@ -291,10 +294,10 @@ class ParamField final : public iplug::igraphics::IControl {
       const bool on = i == current;
       g.FillRoundRect(fade(on ? color_ : theme::kPanel), seg, 3.f);
       if (!on) g.DrawRoundRect(fade(theme::kBorder), seg, 3.f);
-      g.DrawText(
-          theme::Text(10.f, fade(on ? theme::kBackground : theme::kTextDim),
-                      ig::EAlign::Center),
-          p->GetDisplayTextAtIdx(i), seg);
+      g.DrawText(theme::Text(theme::kSmall,
+                             fade(on ? theme::kBackground : theme::kTextDim),
+                             ig::EAlign::Center),
+                 p->GetDisplayTextAtIdx(i), seg);
     }
   }
 

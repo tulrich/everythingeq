@@ -29,7 +29,7 @@ class ChoiceField final : public iplug::igraphics::IControl {
     namespace ig = iplug::igraphics;
     const ig::IRECT box = mRECT.GetReducedFromLeft(label_width_);
     if (label_width_ > 0.f) {
-      g.DrawText(theme::Text(10.f, theme::kTextDim), label_.c_str(),
+      g.DrawText(theme::Text(theme::kSmall, theme::kTextDim), label_.c_str(),
                  mRECT.GetFromLeft(label_width_));
     }
     g.FillRoundRect(mMouseIsOver ? theme::kPanelRaised : theme::kPanel, box,
@@ -38,7 +38,7 @@ class ChoiceField final : public iplug::igraphics::IControl {
     const float x = box.R - 9.f, y = box.MH();
     g.FillTriangle(theme::kTextDim, x - 3.f, y - 1.5f, x + 3.f, y - 1.5f, x,
                    y + 2.f);
-    g.DrawText(theme::Text(11.f), options_[index_].c_str(),
+    g.DrawText(theme::Text(theme::kValue), options_[index_].c_str(),
                box.GetPadded(-6.f).GetReducedFromRight(8.f));
   }
 

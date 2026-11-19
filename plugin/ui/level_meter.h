@@ -8,6 +8,7 @@
 #include <string>
 
 #include "IControl.h"
+#include "plugin/ui/theme.h"
 
 namespace eeq {
 
@@ -87,10 +88,8 @@ class LevelMeter final : public iplug::igraphics::IControl {
 
   void Draw(iplug::igraphics::IGraphics& g) override {
     namespace ig = iplug::igraphics;
-    const ig::IText label_text(12.f, ig::COLOR_LIGHT_GRAY, "Roboto-Regular",
-                               ig::EAlign::Center);
-    const ig::IText scale_text(8.f, ig::COLOR_GRAY, "Roboto-Regular",
-                               ig::EAlign::Far, ig::EVAlign::Middle);
+    const ig::IText label_text =
+        theme::Text(theme::kName, ig::COLOR_LIGHT_GRAY, ig::EAlign::Center);
 
     ig::IRECT r = mRECT;
     // Peak readout on top, name underneath the bars.
@@ -98,20 +97,17 @@ class LevelMeter final : public iplug::igraphics::IControl {
     const ig::IRECT label_rect = r.ReduceFromBottom(16.f);
     r.ReduceFromTop(8.f);  // Room for the +6 label.
     r.ReduceFromBottom(4.f);
-    const ig::IRECT scale_rect = r.ReduceFromLeft(13.f);
+    const ig::IRECT scale_rect = r.ReduceFromLeft(4.f);
     bars_rect_ = r;
 
     g.DrawText(label_text, label_.c_str(), label_rect);
 
-    // Scale ticks.
+    // Scale ticks, unlabeled (the colors mark -12 and 0 dBFS); 0 dBFS is
+    // the longest.
     for (float db : {6.f, 0.f, -6.f, -12.f, -24.f, -36.f, -48.f, -60.f}) {
       const float y = DbToY(db);
-      WDL_String s;
-      s.SetFormatted(8, "%d", static_cast<int>(-db));  // Magnitude only.
-      if (db > 0.f) s.Set("+6");
-      g.DrawText(scale_text, s.Get(),
-                 ig::IRECT(scale_rect.L, y - 5.f, scale_rect.R - 2.f, y + 5.f));
-      g.DrawLine(ig::COLOR_GRAY.WithOpacity(0.5f), scale_rect.R - 1.5f, y,
+      g.DrawLine(ig::COLOR_GRAY.WithOpacity(0.6f),
+                 db == 0.f ? scale_rect.L : scale_rect.R - 2.5f, y,
                  scale_rect.R, y);
     }
 
@@ -156,9 +152,9 @@ class LevelMeter final : public iplug::igraphics::IControl {
     } else {
       s.SetFormatted(16, "%.1f", shown_db);
     }
-    g.DrawText(
-        ig::IText(10.f, ig::COLOR_WHITE, "Roboto-Regular", ig::EAlign::Center),
-        s.Get(), readout_rect);
+    g.DrawText(ig::IText(theme::kSmall, ig::COLOR_WHITE, "Roboto-Regular",
+                         ig::EAlign::Center),
+               s.Get(), readout_rect);
   }
 
  private:

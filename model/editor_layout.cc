@@ -12,15 +12,13 @@ constexpr float kDrawerTabWidth = 22.f;
 constexpr float kGripClearance = 14.f;  // The resize grip in the corner.
 
 // Panel rows.
-constexpr float kTitleHeight = 12.f;
-constexpr float kLegendHeight = 11.f;
-constexpr float kHeaderHeight = 18.f;
-constexpr float kWarningHeight = 12.f;
-constexpr float kScopeHeight = 54.f;
+constexpr float kHeaderHeight = 20.f;
+constexpr float kWarningHeight = 14.f;
+constexpr float kScopeHeight = 60.f;
 constexpr float kMaxScopeHeight = 140.f;
-constexpr float kSectionHeader = 13.f;
-constexpr float kFieldHeight = 18.f;
-constexpr float kFieldPitch = 21.f;
+constexpr float kSectionHeader = 16.f;
+constexpr float kFieldHeight = 21.f;
+constexpr float kFieldPitch = 24.f;
 constexpr float kSectionGap = 5.f;
 constexpr float kScMeterWidth = 22.f;
 
@@ -33,7 +31,7 @@ float SectionHeight(const PanelSection& s, bool open) {
 StripLayout ComputeStrip(const Rect& r, bool full) {
   StripLayout s;
   s.compact = !full;
-  const float info_w = full ? 128.f : 112.f;
+  const float info_w = full ? 150.f : 126.f;
   const float card_w =
       full ? std::clamp((r.w() - 330.f) / 2.f, 140.f, 196.f) : 132.f;
   s.cards[1] = {r.r - card_w, r.t, r.r, r.b};
@@ -105,7 +103,7 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
   // behind a tab) on the left, the EQ column on the right.
   Rect eq;
   if (full) {
-    const float panel_w = std::clamp(width * 0.3f, 290.f, 360.f);
+    const float panel_w = std::clamp(width * 0.29f, 280.f, 350.f);
     L.show_panel = true;
     L.panel = {kPad, body_t, kPad + panel_w, body_b};
     L.preset = {kPad, kPad, L.panel.r, kPad + top_h};
@@ -118,7 +116,7 @@ EditorLayout ComputeEditorLayout(float width, float height, bool drawer_open) {
     const float panel_w = std::min(320.f, width - 80.f);
     L.panel = {L.drawer_tab.r + 6.f, body_t, L.drawer_tab.r + 6.f + panel_w,
                body_b};
-    L.preset = {kPad, kPad, kPad + 190.f, kPad + top_h};
+    L.preset = {kPad, kPad, kPad + 270.f, kPad + top_h};
     eq = {L.drawer_tab.r + 6.f, body_t, width - kPad, body_b};
   } else {
     L.preset = {kPad, kPad, kPad + 150.f, kPad + top_h};
@@ -158,35 +156,31 @@ PanelLayout ComputePanelLayout(const Rect& panel,
   const Rect inner = {panel.l + kPad, panel.t + kPad, panel.r - kPad,
                       panel.b - kPad};
   float y = inner.t;
-  P.title = Box(inner.l, y, inner.w(), kTitleHeight);
-  y += kTitleHeight + 2.f;
   P.map_row = std::clamp(
       (inner.h() * 0.4f - kMapTopHeight - kMapBottomHeight) / kNumMapGroups,
       kMapMinRow, kMapMaxRow);
   P.map = Box(inner.l, y, inner.w(), MapHeight(P.map_row));
   y = P.map.b + kGap;
 
-  // Everything below the map, given whether the legend is shown and which
-  // sections are open.
+  // Everything below the map, given which sections are open.
   std::vector<bool> open(sections.size());
   for (size_t i = 0; i < sections.size(); ++i) open[i] = sections[i].want_open;
-  auto below = [&](bool legend) {
-    float h = (legend ? kLegendHeight + 2.f : 0.f) + 6.f + kHeaderHeight + 4.f +
-              (warning ? kWarningHeight + 2.f : 0.f);
+  auto below = [&] {
+    float h =
+        6.f + kHeaderHeight + 4.f + (warning ? kWarningHeight + 2.f : 0.f);
     for (size_t i = 0; i < sections.size(); ++i) {
       h += SectionHeight(sections[i], open[i]) + kSectionGap;
     }
     return h;
   };
   const float avail = inner.b - y;
-  P.show_legend = true;
   P.show_scope = true;
   // The scope needs at least this; it's the group's main readout, so it
   // stays while sections can fold to make room.
   auto scope_min = [&] { return P.show_scope ? kScopeHeight + 8.f : 0.f; };
   // Fold the lowest-priority open sections until everything fits, then
-  // drop the legend, then the scope.
-  while (below(P.show_legend) + scope_min() > avail) {
+  // drop the scope.
+  while (below() + scope_min() > avail) {
     int fold = -1;
     for (size_t i = 0; i < sections.size(); ++i) {
       if (open[i] && (fold < 0 || sections[i].fold_priority <
@@ -196,20 +190,14 @@ PanelLayout ComputePanelLayout(const Rect& panel,
     }
     if (fold >= 0) {
       open[fold] = false;
-    } else if (P.show_legend) {
-      P.show_legend = false;
     } else if (P.show_scope) {
       P.show_scope = false;
     } else {
       break;
     }
   }
-  const float spare = avail - below(P.show_legend);
+  const float spare = avail - below();
 
-  if (P.show_legend) {
-    P.legend = Box(inner.l, y, inner.w(), kLegendHeight);
-    y += kLegendHeight + 2.f;
-  }
   P.divider = Box(inner.l, y + 2.f, inner.w(), 1.f);
   y += 6.f;
   P.header = Box(inner.l, y, inner.w(), kHeaderHeight);

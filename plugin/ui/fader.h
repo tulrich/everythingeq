@@ -26,10 +26,10 @@ class Fader final : public iplug::igraphics::IControl {
     g.FillRoundRect(ig::IColor(255, 30, 30, 34), readout, 2.f);
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%+.1f", p->Value());
-    g.DrawText(theme::Text(10.f, theme::kText, ig::EAlign::Center), buf,
-               readout);
-    g.DrawText(theme::Text(12.f, theme::kTextDim, ig::EAlign::Center), label_,
-               mRECT.GetFromBottom(16.f));
+    g.DrawText(theme::Text(theme::kSmall, theme::kText, ig::EAlign::Center),
+               buf, readout);
+    g.DrawText(theme::Text(theme::kName, theme::kTextDim, ig::EAlign::Center),
+               label_, mRECT.GetFromBottom(16.f));
     // Groove, default tick and handle.
     const ig::IRECT track = TrackRect();
     g.FillRoundRect(theme::kPanel, track.GetMidHPadded(2.f), 2.f);

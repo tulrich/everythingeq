@@ -98,7 +98,7 @@ TEST_CASE("State tolerates missing, unknown and out-of-range keys", "[state]") {
   ParamValues expected = DefaultParamValues();
   expected[BandParamId(1, BandField::kType)] = static_cast<int>(BandType::kBp);
   expected[BandParamId(1, BandField::kX)] = 1.0;
-  expected[GlobalParamId(GlobalField::kOutputGain)] = -24.0;
+  expected[GlobalParamId(GlobalField::kOutputGain)] = -12.0;
   expected[BandParamId(0, BandField::kDynGroup)] = 2;
   REQUIRE(*v == expected);
 }

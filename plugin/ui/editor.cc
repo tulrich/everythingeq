@@ -122,7 +122,8 @@ void Editor::BuildGraphArea() {
   graphics_.AttachControl(fader_);
   // The selected band's live dynamic offset, over the graph's corner.
   now_readout_ = new ig::ITextControl(
-      ig::IRECT(), "", theme::Text(11.f, theme::kTextDim, ig::EAlign::Near));
+      ig::IRECT(), "",
+      theme::Text(theme::kValue, theme::kTextDim, ig::EAlign::Near));
   now_readout_->SetIgnoreMouse(true);
   graphics_.AttachControl(now_readout_);
   mini_label_ = new MiniLabel(ig::IRECT());
@@ -143,9 +144,9 @@ void Editor::BuildStrip() {
   graphics_.AttachControl(strip_panel_);
   type_field_ = AddBandField(BandField::kType, "", 0.f, kField);
   type_field_->SetTooltip("Band type.");
-  chan_field_ = AddBandField(BandField::kChan, "CHAN", 46.f, kField);
+  chan_field_ = AddBandField(BandField::kChan, "CHAN", 62.f, kField);
   chan_field_->SetTooltip("Which channels the band processes.");
-  option_field_ = AddBandField(BandField::kOption, "OPTION", 46.f, kField);
+  option_field_ = AddBandField(BandField::kOption, "OPTION", 62.f, kField);
   bypass_field_ = AddBandField(BandField::kBypass, "BYP", 0.f, kToggle);
   solo_field_ = AddBandField(BandField::kSolo, "SOLO", 0.f, kToggle);
   dials_[0] = AddBandField(BandField::kX, "FREQ", 0.f, kDial);
@@ -270,9 +271,6 @@ void Editor::BuildFooter() {
   graphics_.AttachControl(sc_button_);
   footer_row2_.push_back(sc_button_);
   footer_row2_widths_.push_back(36.f);
-  status_ = new ig::ITextControl(
-      ig::IRECT(), "", theme::Text(9.f, theme::kTextDim, ig::EAlign::Far));
-  graphics_.AttachControl(status_);
 }
 
 void Editor::BuildPanel() {
@@ -286,10 +284,6 @@ void Editor::BuildPanel() {
 
   panel_bg_ = new Panel(ig::IRECT());
   graphics_.AttachControl(panel_bg_);
-  routing_title_ = new ig::ITextControl(ig::IRECT(), "ROUTING",
-                                        theme::Text(9.f, theme::kTextDim));
-  routing_title_->SetIgnoreMouse(true);
-  graphics_.AttachControl(routing_title_);
   RoutingMap::Callbacks cb;
   cb.select_group = [this](int g) { SelectGroup(g); };
   cb.selected_group = [this] { return selected_group_; };
@@ -297,17 +291,10 @@ void Editor::BuildPanel() {
   cb.group_gain_db = [this](int g) { return graph_->group_gain_db(g); };
   routing_ = new RoutingMap(ig::IRECT(), model_, std::move(cb));
   graphics_.AttachControl(routing_);
-  legend_ = new ig::ITextControl(
-      ig::IRECT(),
-      "G gain \xc2\xb7 F freq \xc2\xb7 M morph \xc2\xb7 S shape \xc2\xb7 click "
-      "again removes",
-      theme::Text(9.f, theme::kTextDim));
-  legend_->SetIgnoreMouse(true);
-  graphics_.AttachControl(legend_);
   group_header_ = new GroupHeader(ig::IRECT(), model_, selected_group_);
   graphics_.AttachControl(group_header_);
-  warning_ =
-      new ig::ITextControl(ig::IRECT(), "", theme::Text(10.f, theme::kCaution));
+  warning_ = new ig::ITextControl(ig::IRECT(), "",
+                                  theme::Text(theme::kSmall, theme::kCaution));
   warning_->SetIgnoreMouse(true);
   graphics_.AttachControl(warning_);
   scope_ = new DetectorScope(ig::IRECT(), model_, history_, *graph_,
@@ -545,7 +532,6 @@ void Editor::LayoutFooter() {
     row2.ReduceFromLeft(kGapsBefore[i]);
     Place(footer_row2_[i], show, row2.ReduceFromLeft(footer_row2_widths_[i]));
   }
-  Place(status_, show, row2);
 }
 
 void Editor::ToggleSection(int section) {
@@ -582,8 +568,7 @@ void Editor::LayoutPanel(const ParamValues& v, bool force) {
   // everything is redrawn.
   graphics_.SetAllControlsDirty();
 
-  std::vector<ig::IControl*> all = {routing_title_,  routing_, legend_,
-                                    group_header_,   warning_, scope_,
+  std::vector<ig::IControl*> all = {routing_, group_header_, warning_, scope_,
                                     sidechain_meter_};
   if (!L.show_panel) {
     for (ig::IControl* c : all) Place(c, false);
@@ -599,9 +584,7 @@ void Editor::LayoutPanel(const ParamValues& v, bool force) {
   spec[2] = {3, sections_[2].want_open, sections_[2].priority};
   const PanelLayout P = ComputePanelLayout(L.panel, spec, warn, true);
 
-  Place(routing_title_, true, ToIRECT(P.title));
   Place(routing_, true, ToIRECT(P.map));
-  Place(legend_, P.show_legend, ToIRECT(P.legend));
   Place(group_header_, true, ToIRECT(P.header));
   Place(warning_, P.show_warning, ToIRECT(P.warning));
   Place(scope_, P.show_scope, ToIRECT(P.scope));
@@ -938,17 +921,6 @@ void Editor::Idle(const EditorIdleData& data) {
   match_button_->SetOn(progress >= 0.f);
   UpdateBandEditor(v);
   UpdateDynamicsPanel(v);
-
-  char buf[160];
-  std::snprintf(
-      buf, sizeof(buf), "%.1f kHz   %d in / %d out   SC %d   latency %d smp",
-      model_.SampleRate() / 1000.0, data.in_connected[0] + data.in_connected[1],
-      data.out_connected[0] + data.out_connected[1],
-      data.in_connected[2] + data.in_connected[3], data.latency_samples);
-  if (status_text_ != buf) {
-    status_text_ = buf;
-    status_->SetStr(buf);
-  }
 }
 
 }  // namespace eeq

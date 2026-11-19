@@ -39,7 +39,7 @@ class Panel final : public iplug::igraphics::IControl {
       g.FillRoundRect(theme::kPanel.WithOpacity(0.6f), mRECT, 4.f);
     }
     if (*title_) {
-      g.DrawText(theme::Text(10.f, theme::kTextDim), title_,
+      g.DrawText(theme::Text(theme::kSmall, theme::kTextDim), title_,
                  mRECT.GetFromTop(16.f).GetHPadded(-6.f));
     }
   }
@@ -154,9 +154,9 @@ class SectionHeader final : public iplug::igraphics::IControl {
                      x + 2.5f, y);
     }
     ig::IRECT text = mRECT.GetReducedFromLeft(10.f);
-    g.DrawText(theme::Text(9.f, theme::kAccent), title_, text);
+    g.DrawText(theme::Text(theme::kSmall, theme::kAccent), title_, text);
     if (!open_ && !summary_.empty()) {
-      g.DrawText(theme::Text(9.f, theme::kTextDim, ig::EAlign::Far),
+      g.DrawText(theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Far),
                  summary_.c_str(), text);
     }
     g.DrawLine(theme::kBorder, mRECT.L, mRECT.B - 0.5f, mRECT.R,
@@ -203,8 +203,8 @@ class CardPanel final : public iplug::igraphics::IControl {
     g.DrawRoundRect(highlight_ ? theme::kText : theme::kBorder, mRECT, 4.f);
     const ig::IRECT row =
         mRECT.GetPadded(-7.f).GetFromTop(13.f).GetReducedFromRight(inset_);
-    g.DrawText(theme::Text(9.f, theme::kTextDim), title_, row);
-    g.DrawText(theme::Text(10.f, theme::kTextDim, ig::EAlign::Far),
+    g.DrawText(theme::Text(theme::kSmall, theme::kTextDim), title_, row);
+    g.DrawText(theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Far),
                now_.c_str(), row);
   }
 
@@ -230,10 +230,11 @@ class StripPanel final : public iplug::igraphics::IControl {
     const ig::IRECT row = mRECT.GetPadded(-8.f).GetFromTop(14.f);
     g.FillCircle(theme::BandColor(band), row.L + 5.f, row.MH(), 4.5f);
     const std::string label = "Band " + std::to_string(band + 1);
-    g.DrawText(theme::Text(12.f), label.c_str(), row.GetReducedFromLeft(14.f));
+    g.DrawText(theme::Text(theme::kName), label.c_str(),
+               row.GetReducedFromLeft(14.f));
     // Which part of a split the band shapes.
     if (split_) {
-      g.DrawText(theme::Text(9.f, theme::kGain, ig::EAlign::Near),
+      g.DrawText(theme::Text(theme::kSmall, theme::kGain, ig::EAlign::Near),
                  band < kSplitBands ? "SPLIT" : "RESIDUAL",
                  row.GetReducedFromLeft(62.f).GetFromLeft(70.f));
     }
@@ -282,16 +283,17 @@ class GroupHeader final : public iplug::igraphics::IControl {
     theme::FillGroupGlyph(g, group_, r.L + 6.f, r.MH(), 5.f, theme::kText);
     r.ReduceFromLeft(16.f);
     const std::string name = "G" + std::to_string(group_ + 1);
-    g.DrawText(theme::Text(12.f), name.c_str(), r.ReduceFromLeft(22.f));
+    g.DrawText(theme::Text(theme::kName), name.c_str(), r.ReduceFromLeft(22.f));
     char d[24];
     std::snprintf(
         d, sizeof(d), "D %d%%",
         static_cast<int>(model_.LiveControls()[group_] * 100.0 + 0.5));
-    g.DrawText(theme::Text(10.f, theme::kAccent, ig::EAlign::Far), d, r);
+    g.DrawText(theme::Text(theme::kValue, theme::kAccent, ig::EAlign::Far), d,
+               r);
     const std::string summary =
         label(GroupField::kDetect) + " \xc2\xb7 " + label(GroupField::kInput);
-    g.DrawText(theme::Text(10.f, theme::kTextDim), summary.c_str(),
-               r.GetReducedFromRight(44.f));
+    g.DrawText(theme::Text(theme::kValue, theme::kTextDim), summary.c_str(),
+               r.GetReducedFromRight(48.f));
   }
   bool IsDirty() override { return true; }  // Live D.
 
@@ -332,7 +334,8 @@ class DrawerTab final : public iplug::igraphics::IControl {
                      static_cast<float>(std::clamp(d[i], 0.0, 1.0) * bar.H())));
       y += 36.f;
     }
-    ig::IText text = theme::Text(9.f, theme::kTextDim, ig::EAlign::Center);
+    ig::IText text =
+        theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Center);
     text.mAngle = -90.f;
     g.DrawText(text, "DYNAMICS",
                ig::IRECT(mRECT.L, y + 6.f, mRECT.R, y + 66.f));
@@ -385,14 +388,15 @@ class MiniLabel final : public iplug::igraphics::IControl {
     float w = 0.f;
     {
       ig::IRECT measured;
-      g.MeasureText(theme::Text(10.f), text_.c_str(), measured);
+      g.MeasureText(theme::Text(theme::kSmall), text_.c_str(), measured);
       w = measured.W();
     }
     const ig::IRECT pill(mRECT.L, mRECT.T,
                          std::min(mRECT.R, mRECT.L + w + 26.f), mRECT.B);
     g.FillRoundRect(theme::kPanel.WithOpacity(0.85f), pill, 3.f);
     g.FillCircle(color_, pill.L + 9.f, pill.MH(), 4.f);
-    g.DrawText(theme::Text(10.f), text_.c_str(), pill.GetReducedFromLeft(18.f));
+    g.DrawText(theme::Text(theme::kSmall), text_.c_str(),
+               pill.GetReducedFromLeft(18.f));
   }
 
  private:

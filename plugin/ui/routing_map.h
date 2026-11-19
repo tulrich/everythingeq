@@ -26,8 +26,7 @@ namespace eeq {
 // assignment is a line in the band's color that runs right from the head in its
 // own lane, then turns down with a rounded corner and drops to the band's port
 // at the bottom, ending in an arrowhead (filled = Dyn A, the left port; hollow
-// = Dyn B, the right one).  Under the ports: each band's type icon and its
-// assignments' targets and ranges.
+// = Dyn B, the right one).  Under the ports: each band's type icon.
 //
 // Every crossing of a group row and a port column has a faint dot.  Click
 // an empty crossing to connect that port to the group (Dyn On, Range 0; a
@@ -92,10 +91,10 @@ class RoutingMap final : public iplug::igraphics::IControl {
   };
 
   // Geometry (see kMapTopHeight and kMapBottomHeight).
-  static constexpr float kBusX[3] = {9.f, 29.f, 49.f};
-  static constexpr float kHeadL = 60.f;
-  static constexpr float kHeadW = 64.f;
-  static constexpr float kBandsL = kHeadL + kHeadW + 12.f;
+  static constexpr float kBusX[3] = {9.f, 30.f, 51.f};
+  static constexpr float kHeadL = 61.f;
+  static constexpr float kHeadW = 46.f;
+  static constexpr float kBandsL = kHeadL + kHeadW + 10.f;
   static constexpr float kCorner = 6.f;
   static constexpr float kArrow = 7.5f;
 
@@ -121,10 +120,9 @@ class RoutingMap final : public iplug::igraphics::IControl {
   }
   float PortY() const { return RowsBottom() + 9.f; }  // Arrow tips.
   iplug::igraphics::IRECT IconRect(int band) const {
-    return iplug::igraphics::IRECT(ColL(band) + 2.f, PortY() + 3.f,
-                                   ColL(band) + ColW() - 2.f, PortY() + 13.f);
+    return iplug::igraphics::IRECT(ColL(band) + 2.f, PortY() + 4.f,
+                                   ColL(band) + ColW() - 2.f, mRECT.B - 1.f);
   }
-  float LabelY(int slot) const { return PortY() + 15.f + slot * 10.f; }
 
   Port PortOf(const ParamValues& v, int band, int slot) const {
     Port p;
@@ -139,20 +137,6 @@ class RoutingMap final : public iplug::igraphics::IControl {
     p.on =
         v[BandParamId(band, a ? BandField::kDynOn : BandField::kDynBOn)] >= 0.5;
     return p;
-  }
-
-  static std::string RangeLabel(const Port& p) {
-    static const char kLetters[] = {'G', 'F', 'M', 'S'};
-    const double r = std::abs(p.range);
-    char num[16];
-    if (r >= 10.0 || std::abs(r - std::round(r)) < 0.05) {
-      std::snprintf(num, sizeof(num), "%d", static_cast<int>(std::lround(r)));
-    } else {
-      std::snprintf(num, sizeof(num), "%.1f", r);
-    }
-    std::string s(1, kLetters[std::clamp(static_cast<int>(p.target), 0, 3)]);
-    s += p.range < 0.0 ? "\xe2\x88\x92" : "+";
-    return s + num;
   }
 
   // `top` over `bottom` at opacity `t`, opaque.
@@ -272,7 +256,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   static const char* const kSources[] = {"IN", "SUM", "SC"};
   const ig::IColor sc_color =
       sc_connected_ ? theme::kTextDim : theme::kCaution.WithOpacity(0.7f);
-  const float bus_t = mRECT.T + 12.f;
+  const float bus_t = mRECT.T + 15.f;
   std::array<float, kNumGroups> feed_x{};
   std::array<bool, kNumGroups> used{};  // Some band follows the group.
   for (int b = 0; b < kNumBands; ++b) {
@@ -297,9 +281,10 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
     const ig::IColor c = s == 2 ? sc_color : theme::kTextDim;
     g.DrawText(
-        theme::Text(8.f, n > 0 ? c : c.WithOpacity(0.5f), ig::EAlign::Center),
+        theme::Text(theme::kSmall, n > 0 ? c : c.WithOpacity(0.5f),
+                    ig::EAlign::Center),
         kSources[s],
-        ig::IRECT(BusX(s) - 10.f, mRECT.T, BusX(s) + 10.f, mRECT.T + 10.f));
+        ig::IRECT(BusX(s) - 11.f, mRECT.T, BusX(s) + 11.f, mRECT.T + 13.f));
     // Faint dots where a group could listen to this source.
     for (int gi = 0; gi < kNumGroups; ++gi) {
       g.FillCircle(theme::kTextDim.WithOpacity(0.4f), BusX(s), GroupY(gi),
@@ -360,8 +345,9 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Group heads: shape, name, detect mode, live D and the applied gain.
-  static const char* const kDetect[] = {"Level", "Vowel", "Pitch", "Spectrum"};
+  // Group heads: shape, name, detect mode (its initial), live D and the
+  // applied gain.
+  static const char* const kDetect[] = {"L", "V", "P", "S"};
   for (int gi = 0; gi < kNumGroups; ++gi) {
     const ig::IRECT head = Head(gi);
     const bool active = cb_.group_active && cb_.group_active(gi);
@@ -373,14 +359,15 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
                     : lit           ? theme::kText
                                     : theme::kBorder,
                     head, 3.f);
-    const float ty = head.T + 7.f;
+    const float ty = std::min(head.T + 9.f, head.MH() - 2.f);
     theme::FillGroupGlyph(g, gi, head.L + 8.f, ty, 3.5f,
                           theme::kText.WithOpacity(a));
     const std::string name = "G" + std::to_string(gi + 1);
-    g.DrawText(theme::Text(10.f, theme::kText.WithOpacity(a)), name.c_str(),
-               ig::IRECT(head.L + 14.f, ty - 6.f, head.L + 30.f, ty + 6.f));
+    g.DrawText(theme::Text(theme::kName, theme::kText.WithOpacity(a)),
+               name.c_str(),
+               ig::IRECT(head.L + 14.f, ty - 7.f, head.L + 34.f, ty + 7.f));
     if (input[gi] == 2 && !sc_connected_) {
-      const float tx = head.R - 13.f;
+      const float tx = head.R - 12.f;
       g.DrawTriangle(theme::kCaution, tx + 4.f, ty - 4.f, tx + 8.5f, ty + 4.f,
                      tx - 0.5f, ty + 4.f);
     } else {
@@ -388,9 +375,9 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
           std::clamp(static_cast<int>(
                          std::lround(v[GroupParamId(gi, GroupField::kDetect)])),
                      0, 3);
-      g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far),
+      g.DrawText(theme::Text(theme::kValue, theme::kTextDim, ig::EAlign::Far),
                  kDetect[detect],
-                 ig::IRECT(head.L + 30.f, ty - 6.f, head.R - 4.f, ty + 6.f));
+                 ig::IRECT(head.L + 30.f, ty - 7.f, head.R - 5.f, ty + 7.f));
     }
     const ig::IRECT bar(head.L + 5.f, head.B - 6.f, head.R - 5.f, head.B - 4.f);
     g.FillRect(theme::kPanelRaised, bar);
@@ -415,13 +402,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Band lines, arrowheads, icons and range labels.
-  g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "A",
-             ig::IRECT(mRECT.L + kHeadL, LabelY(0), mRECT.L + kBandsL - 4.f,
-                       LabelY(0) + 9.f));
-  g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "B",
-             ig::IRECT(mRECT.L + kHeadL, LabelY(1), mRECT.L + kBandsL - 4.f,
-                       LabelY(1) + 9.f));
+  // Band lines, arrowheads and icons.
   auto band_color = [&](int b) {
     float a = 1.f;
     if (any_hover && !BandLit(v, b)) a *= 0.3f;
@@ -474,10 +455,6 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
         g.DrawTriangle(color, x, py, x - 4.f, py - kArrow, x + 4.f, py - kArrow,
                        nullptr, 1.4f);
       }
-      g.DrawText(theme::Text(8.f, color, ig::EAlign::Center),
-                 RangeLabel(p).c_str(),
-                 ig::IRECT(ColL(b) - 2.f, LabelY(s), ColL(b) + cw + 2.f,
-                           LabelY(s) + 9.f));
     }
     const ig::IRECT icon = IconRect(b);
     BandRibbon::DrawIcon(
@@ -492,8 +469,8 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     const ig::IRECT cell(x - hw, y - 7.f, x + hw, y + 7.f);
     g.DrawRoundRect(theme::kText.WithOpacity(0.35f), cell, 2.f);
     if (!(p.on && p.group == hover_.group)) {
-      g.DrawText(theme::Text(11.f, theme::kText, ig::EAlign::Center), "+",
-                 cell);
+      g.DrawText(theme::Text(theme::kValue, theme::kText, ig::EAlign::Center),
+                 "+", cell);
     }
   } else if (hover_.part == Part::kSource) {
     g.DrawCircle(theme::kText.WithOpacity(0.6f), BusX(hover_.source),

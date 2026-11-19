@@ -154,15 +154,11 @@ class Editor {
   // The last Gain Match result shown on its button, and until when.
   int match_count_ = -1;
   std::chrono::steady_clock::time_point match_shown_until_;
-  iplug::igraphics::ITextControl* status_ = nullptr;
-  std::string status_text_;
 
   // Dynamics panel.
   DrawerTab* drawer_tab_ = nullptr;
   Panel* panel_bg_ = nullptr;
-  iplug::igraphics::ITextControl* routing_title_ = nullptr;
   RoutingMap* routing_ = nullptr;
-  iplug::igraphics::ITextControl* legend_ = nullptr;
   GroupHeader* group_header_ = nullptr;
   iplug::igraphics::ITextControl* warning_ = nullptr;
   DetectorScope* scope_ = nullptr;

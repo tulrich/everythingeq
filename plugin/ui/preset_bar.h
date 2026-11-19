@@ -39,8 +39,8 @@ class PresetBar final : public iplug::igraphics::IControl {
                    y + 2.f);
     const PresetRef ref = model_.CurrentPreset();
     const std::string name = ref.name.empty() ? "No Preset" : ref.name;
-    const ig::IText text =
-        theme::Text(11.f, ref.name.empty() ? theme::kTextDim : theme::kText);
+    const ig::IText text = theme::Text(
+        theme::kValue, ref.name.empty() ? theme::kTextDim : theme::kText);
     const ig::IRECT text_rect = box.GetPadded(-6.f).GetReducedFromRight(8.f);
     g.DrawText(
         text,
@@ -53,17 +53,17 @@ class PresetBar final : public iplug::igraphics::IControl {
       const ig::IRECT ab = AbRect();
       DrawBox(g, ab, hover_ == kAb);
       for (int i = 0; i < 2; ++i) {
-        g.DrawText(
-            theme::Text(11.f, i == slot ? theme::kAccent : theme::kTextDim,
-                        ig::EAlign::Center),
-            i ? "B" : "A", ab.SubRectHorizontal(2, i));
+        g.DrawText(theme::Text(theme::kValue,
+                               i == slot ? theme::kAccent : theme::kTextDim,
+                               ig::EAlign::Center),
+                   i ? "B" : "A", ab.SubRectHorizontal(2, i));
       }
       const ig::IRECT copy = CopyRect();
       DrawBox(g, copy, hover_ == kCopy);
-      g.DrawText(
-          theme::Text(10.f, hover_ == kCopy ? theme::kText : theme::kTextDim,
-                      ig::EAlign::Center),
-          "COPY", copy);
+      g.DrawText(theme::Text(theme::kSmall,
+                             hover_ == kCopy ? theme::kText : theme::kTextDim,
+                             ig::EAlign::Center),
+                 "COPY", copy);
     }
     // Undo / Redo.
     for (const bool redo : {false, true}) {
@@ -294,7 +294,7 @@ class PresetBar final : public iplug::igraphics::IControl {
 
   void PromptName(int mode, const std::string& initial) {
     entry_ = mode;
-    GetUI()->CreateTextEntry(*this, theme::Text(11.f), NameRect(),
+    GetUI()->CreateTextEntry(*this, theme::Text(theme::kValue), NameRect(),
                              initial.c_str());
   }
 

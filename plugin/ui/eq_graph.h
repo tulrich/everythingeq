@@ -46,10 +46,10 @@ class EqGraph final : public iplug::igraphics::IControl {
   static constexpr double kMinHz = 20.0;
   static constexpr double kMaxHz = 20000.0;
   static constexpr double kRangeDb = 18.0;
-  static constexpr float kNodeRadius = 6.f;
+  static constexpr float kNodeRadius = 7.5f;
   static constexpr float kEdgeHalfW = 2.5f;
   static constexpr float kEdgeHalfH = 7.f;
-  static constexpr float kTabRadius = 5.f;
+  static constexpr float kTabRadius = 6.5f;
   // Below this |Global Scale|, dragging a node doesn't change its gain.
   static constexpr double kMinDragGainScale = 0.05;
 
@@ -179,9 +179,9 @@ class EqGraph final : public iplug::igraphics::IControl {
                      1.5f);
       }
       const std::string label = std::to_string(b + 1);
-      g.DrawText(theme::Text(9.f, theme::kBackground, ig::EAlign::Center),
-                 label.c_str(),
-                 ig::IRECT(p->x - 8, p->y - 6, p->x + 8, p->y + 6));
+      g.DrawText(
+          theme::Text(theme::kSmall, theme::kBackground, ig::EAlign::Center),
+          label.c_str(), ig::IRECT(p->x - 8, p->y - 6, p->x + 8, p->y + 6));
     }
   }
 
@@ -447,7 +447,7 @@ class EqGraph final : public iplug::igraphics::IControl {
       g.DrawCircle(color, h->pos.x, h->pos.y, r, nullptr,
                    dragging ? 2.f : 1.25f);
       g.DrawText(
-          theme::Text(h->ring ? 9.f : 8.f, color, ig::EAlign::Center),
+          theme::Text(theme::kSmall, color, ig::EAlign::Center),
           dyn == 0 ? "A" : "B",
           ig::IRECT(h->pos.x - 8, h->pos.y - 6, h->pos.x + 8, h->pos.y + 6));
     }
@@ -491,7 +491,8 @@ class EqGraph final : public iplug::igraphics::IControl {
         g.FillCircle(color, x, DbToY(total[i]), 3.f);
       }
       const std::string label = std::to_string(b + 1);
-      g.DrawText(theme::Text(9.f, color, ig::EAlign::Center), label.c_str(),
+      g.DrawText(theme::Text(theme::kSmall, color, ig::EAlign::Center),
+                 label.c_str(),
                  ig::IRECT(x - 8.f, mRECT.T + 1.f, x + 8.f, mRECT.T + 12.f));
     }
   }
@@ -741,7 +742,8 @@ class EqGraph final : public iplug::igraphics::IControl {
 
   void DrawGrid(iplug::igraphics::IGraphics& g) {
     namespace ig = iplug::igraphics;
-    const ig::IText label = theme::Text(9.f, theme::kTextDim, ig::EAlign::Near);
+    const ig::IText label =
+        theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Near);
     for (double hz : {20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0,
                       10000.0, 20000.0}) {
       const float x = FreqToX(hz);
@@ -777,12 +779,12 @@ class EqGraph final : public iplug::igraphics::IControl {
     const bool lr = mode == OutputMode::kSplitLr;
     const ig::IRECT key(mRECT.R - 190.f, mRECT.T + 6.f, mRECT.R - 8.f,
                         mRECT.T + 18.f);
-    g.DrawText(
-        theme::Text(10.f, kSplitColor.WithOpacity(split_a), ig::EAlign::Near),
-        lr ? "SPLIT 1-4 (L)" : "SPLIT 1-4", key);
-    g.DrawText(
-        theme::Text(10.f, kResidualColor.WithOpacity(rest_a), ig::EAlign::Far),
-        lr ? "RESIDUAL 5-8 (R)" : "RESIDUAL 5-8", key);
+    g.DrawText(theme::Text(theme::kSmall, kSplitColor.WithOpacity(split_a),
+                           ig::EAlign::Near),
+               lr ? "SPLIT 1-4 (L)" : "SPLIT 1-4", key);
+    g.DrawText(theme::Text(theme::kSmall, kResidualColor.WithOpacity(rest_a),
+                           ig::EAlign::Far),
+               lr ? "RESIDUAL 5-8 (R)" : "RESIDUAL 5-8", key);
   }
 
   void StrokeCurve(iplug::igraphics::IGraphics& g, const std::vector<float>& c,

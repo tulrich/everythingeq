@@ -160,45 +160,33 @@ class DetectorScope final : public iplug::igraphics::IControl {
                                     x + col_w + 0.5f, dstrip.B));
     }
 
-    // Labels.
+    // Labels (D itself is in the group header).
     char buf[64];
-    const ig::IText dim_text = theme::Text(9.f, theme::kTextDim);
-    std::snprintf(buf, sizeof(buf), "%+.0f", s.hi);
-    g.DrawText(dim_text, buf,
-               ig::IRECT(trig.L + 2, trig.T, trig.L + 40, trig.T + 11));
-    std::snprintf(buf, sizeof(buf), "%+.0f", s.lo);
-    g.DrawText(dim_text, buf,
-               ig::IRECT(trig.L + 2, trig.B - 11, trig.L + 40, trig.B));
     if (level) {
       std::snprintf(buf, sizeof(buf), "%s %.1f dB",
                     s.alpha >= 0.5 ? "Rise" : "Thresh", s.teff);
-      g.DrawText(theme::Text(9.f, theme::kAccent, ig::EAlign::Far), buf,
-                 ig::IRECT(trig.R - 90, ty - 12, trig.R - 3, ty - 1));
+      g.DrawText(theme::Text(theme::kValue, theme::kAccent, ig::EAlign::Far),
+                 buf, ig::IRECT(trig.R - 110, ty - 15, trig.R - 3, ty - 1));
     } else {
       // The tracked vowel or pitch, dimmed while held (unvoiced input).
       const EditorModel::Tracked t = model_.LiveTracking()[group_];
       const std::string text =
           TrackedText(s.detect, t.value) + (t.voiced ? "" : "  (held)");
-      g.DrawText(theme::Text(11.f, t.voiced ? theme::kAccent : theme::kTextDim,
+      g.DrawText(theme::Text(theme::kValue,
+                             t.voiced ? theme::kAccent : theme::kTextDim,
                              ig::EAlign::Far),
                  text.c_str(),
                  ig::IRECT(trig.R - 140, trig.T + 2, trig.R - 4, trig.T + 15));
     }
-    std::snprintf(
-        buf, sizeof(buf), "D %d%%",
-        static_cast<int>(std::lround(model_.LiveControls()[group_] * 100)));
-    g.DrawText(theme::Text(9.f, theme::kText, ig::EAlign::Far), buf,
-               dstrip.GetHPadded(-3.f));
     if (active) {
       std::snprintf(
           buf, sizeof(buf), "%+.1f dB",
           std::round(graph_.group_gain_db(group_) * 10.f) / 10.f + 0.f);
-      g.DrawText(theme::Text(9.f, theme::kGain, ig::EAlign::Far), buf,
-                 dstrip.GetHPadded(-3.f).GetReducedFromRight(36.f));
+      g.DrawText(theme::Text(theme::kSmall, theme::kGain, ig::EAlign::Far), buf,
+                 dstrip.GetHPadded(-3.f));
     } else {
-      g.DrawText(theme::Text(9.f, theme::kTextDim, ig::EAlign::Far),
-                 "no bands: set a band's Dyn Range",
-                 dstrip.GetHPadded(-3.f).GetReducedFromRight(36.f));
+      g.DrawText(theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Far),
+                 "no bands connected", dstrip.GetHPadded(-3.f));
     }
     g.DrawRoundRect(theme::kBorder, mRECT, 3.f);
   }
@@ -301,10 +289,10 @@ class DetectorScope final : public iplug::igraphics::IControl {
       g.FillRect(fires ? theme::kAccent : theme::kText.WithOpacity(0.35f),
                  ig::IRECT(x + 0.5f, y, x + w - 0.5f, bars.B));
     }
-    g.DrawText(theme::Text(8.f, theme::kTextDim), "100",
+    g.DrawText(theme::Text(theme::kSmall, theme::kTextDim), "100",
                ig::IRECT(bars.L, bars.T, bars.L + 20, bars.T + 10));
-    g.DrawText(theme::Text(8.f, theme::kTextDim, ig::EAlign::Far), "8k",
-               ig::IRECT(bars.R - 20, bars.T, bars.R, bars.T + 10));
+    g.DrawText(theme::Text(theme::kSmall, theme::kTextDim, ig::EAlign::Far),
+               "8k", ig::IRECT(bars.R - 20, bars.T, bars.R, bars.T + 10));
   }
 
   iplug::igraphics::IRECT TriggerRect() const {
