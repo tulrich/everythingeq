@@ -22,7 +22,8 @@ namespace eeq {
 // The dynamics routing, drawn like a subway map (ABOUT.md section 4).
 // Bands are columns, left to right like the ribbon above the graph; groups
 // are rows.  Each source (Input, Band Sum, Sidechain) is one line down from
-// its label at the top left; each group's feed branches off it and turns
+// its label at the top left (the band sum's is a box with an EQ curve, fed
+// from IN); each group's feed branches off it and turns
 // right into the group's head.  An assignment is a line in the band's color
 // that runs right from the head along the group's row, then turns down with
 // a rounded corner and drops to the band's port at the bottom, ending in an
@@ -53,8 +54,8 @@ class RoutingMap final : public iplug::igraphics::IControl {
         "Routing. Click an empty crossing to connect a band's Dyn A (left) "
         "or Dyn B (right) port to a group; click a connection to remove "
         "it. Click where a group's feed meets a source line (IN = "
-        "input, SUM = band sum, SC = sidechain) to choose what it listens "
-        "to.");
+        "input, the EQ box = the bands' sum, SC = sidechain) to choose what "
+        "it listens to.");
   }
 
   // The panel color behind the map, used to break lines where they cross.
@@ -94,12 +95,13 @@ class RoutingMap final : public iplug::igraphics::IControl {
   };
 
   // Geometry (see kMapTopHeight and kMapBottomHeight).
-  static constexpr float kBusX[3] = {9.f, 33.f, 57.f};
-  static constexpr float kHeadL = 65.f;
+  static constexpr float kBusX[3] = {9.f, 31.f, 52.f};
+  static constexpr float kHeadL = 60.f;
   static constexpr float kHeadW = 48.f;
   static constexpr float kBandsL = kHeadL + kHeadW + 10.f;
   static constexpr float kCorner = 6.f;
   static constexpr float kArrow = 7.5f;
+  static constexpr float kFeedWidth = 3.f;  // Like the band lines.
 
   float Row() const {
     return std::max(kMapMinRow, (mRECT.H() - kMapTopHeight - kMapBottomHeight) /
@@ -109,6 +111,11 @@ class RoutingMap final : public iplug::igraphics::IControl {
   float RowsBottom() const { return RowsTop() + kNumGroups * Row(); }
   float GroupY(int group) const { return RowsTop() + (group + 0.5f) * Row(); }
   float BusX(int source) const { return mRECT.L + kBusX[source]; }
+  // The band sum's EQ box, which the SUM line drops from.
+  iplug::igraphics::IRECT SumBox() const {
+    return iplug::igraphics::IRECT(BusX(1) - 9.f, mRECT.T + 2.f, BusX(1) + 9.f,
+                                   mRECT.T + 16.f);
+  }
   iplug::igraphics::IRECT Head(int group) const {
     const float t = RowsTop() + group * Row();
     return iplug::igraphics::IRECT(mRECT.L + kHeadL, t + 2.f,
@@ -254,10 +261,11 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   // Sources: one line down from each label as far as its lowest group, with
   // each group's feed branching off and turning right into the head.  Feeds
   // share their source's line, so unused groups' (dark) go underneath.
-  static const char* const kSources[] = {"IN", "SUM", "SC"};
+  static const char* const kSources[] = {"IN", nullptr, "SC"};
   const ig::IColor sc_color =
       sc_connected_ ? theme::kTextDim : theme::kCaution.WithOpacity(0.7f);
-  const float bus_t = mRECT.T + 19.f;
+  // Where each source's line starts: under its label, or the sum's box.
+  auto bus_t = [&](int s) { return s == 1 ? SumBox().B : mRECT.T + 19.f; };
   std::array<bool, kNumGroups> used{};  // Some band follows the group.
   for (int b = 0; b < kNumBands; ++b) {
     for (int s = 0; s < 2; ++s) {
@@ -272,11 +280,21 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
   for (int s = 0; s < 3; ++s) {
     const bool fed = std::find(input.begin(), input.end(), s) != input.end();
     const ig::IColor c = s == 2 ? sc_color : theme::kTextDim;
-    g.DrawText(
-        theme::Text(theme::kSmall, fed ? c : c.WithOpacity(0.5f),
-                    ig::EAlign::Center),
-        kSources[s],
-        ig::IRECT(BusX(s) - 15.f, mRECT.T, BusX(s) + 15.f, mRECT.T + 17.f));
+    const ig::IColor shown = fed ? c : c.WithOpacity(0.5f);
+    if (kSources[s]) {
+      g.DrawText(
+          theme::Text(theme::kSmall, shown, ig::EAlign::Center), kSources[s],
+          ig::IRECT(BusX(s) - 15.f, mRECT.T, BusX(s) + 15.f, mRECT.T + 17.f));
+    } else {
+      // The band sum: the input through the EQ, drawn as IN feeding a box
+      // with an EQ curve.
+      const ig::IRECT box = SumBox();
+      g.DrawLine(shown, BusX(0) + 8.f, box.MH(), box.L, box.MH(), nullptr,
+                 kFeedWidth);
+      g.FillRoundRect(background_, box, 3.f);
+      g.DrawRoundRect(shown, box, 3.f, nullptr, 1.5f);
+      BandRibbon::DrawIcon(g, BandType::kPeak, box.GetPadded(-3.f), shown);
+    }
     // Faint dots where a group could listen to this source.
     for (int gi = 0; gi < kNumGroups; ++gi) {
       g.FillCircle(theme::kTextDim.WithOpacity(0.4f), BusX(s), GroupY(gi),
@@ -290,9 +308,10 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
       const ig::IColor c = feed_color(gi);
       const float x = BusX(input[gi]), y = GroupY(gi);
       if (input[gi] == 2 && !sc_connected_) {
-        g.DrawDottedLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f, 4.f);
+        g.DrawDottedLine(c, x, bus_t(input[gi]), x, y - kCorner, nullptr,
+                         kFeedWidth, 4.f);
       } else {
-        g.DrawLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f);
+        g.DrawLine(c, x, bus_t(input[gi]), x, y - kCorner, nullptr, kFeedWidth);
       }
     }
   }
@@ -301,15 +320,16 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     const ig::IColor c = feed_color(gi);
     const float x = BusX(input[gi]), y = GroupY(gi);
     const float head_l = Head(gi).L;
-    g.DrawLine(background_, x + kCorner, y, head_l, y, nullptr, 4.5f);
+    g.DrawLine(background_, x + kCorner, y, head_l, y, nullptr,
+               kFeedWidth + 2.5f);
     g.PathClear();
     g.PathMoveTo(x, y - kCorner);
     g.PathQuadraticBezierTo(x, y, x + kCorner, y);
-    g.PathStroke(c, 2.f);
+    g.PathStroke(c, kFeedWidth);
     if (sc && !sc_connected_) {
-      g.DrawDottedLine(c, x + kCorner, y, head_l, y, nullptr, 2.f, 4.f);
+      g.DrawDottedLine(c, x + kCorner, y, head_l, y, nullptr, kFeedWidth, 4.f);
     } else {
-      g.DrawLine(c, x + kCorner, y, head_l, y, nullptr, 2.f);
+      g.DrawLine(c, x + kCorner, y, head_l, y, nullptr, kFeedWidth);
     }
   }
 
