@@ -12,12 +12,14 @@
       },
       {
         "type": "Peak",
+        "qMode": "Constant",
         "x": 400,
         "y": 0,
         "z": 1.0
       },
       {
         "type": "Peak",
+        "qMode": "Constant",
         "x": 2500,
         "y": 0,
         "z": 1.0

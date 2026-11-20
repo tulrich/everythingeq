@@ -86,11 +86,14 @@ ParamSpec SlotParam(std::string key, std::string name, std::string group) {
   return s;
 }
 
-// 12 dB/oct for LP and HP; the first choice otherwise.
+// 12 dB/oct for LP and HP, Proportional Q for Peak; the first choice
+// otherwise.
 int DefaultOption(BandType type) {
-  return type == BandType::kLp || type == BandType::kHp
-             ? static_cast<int>(FilterSlope::k12)
-             : 0;
+  if (type == BandType::kLp || type == BandType::kHp) {
+    return static_cast<int>(FilterSlope::k12);
+  }
+  if (type == BandType::kPeak) return static_cast<int>(PeakQ::kProportional);
+  return 0;
 }
 
 // The default band layout: a conventional 8-band EQ.  The HP and LP bands

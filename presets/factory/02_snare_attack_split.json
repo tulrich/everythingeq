@@ -34,6 +34,7 @@
       {},
       {
         "type": "Peak",
+        "qMode": "Constant",
         "x": 190,
         "y": -4,
         "z": 4

@@ -43,8 +43,10 @@ const std::pair<const char*, FilterSlope> kSlopes[] = {
     {"6", FilterSlope::k6},   {"12", FilterSlope::k12},
     {"18", FilterSlope::k18}, {"24", FilterSlope::k24},
     {"36", FilterSlope::k36}, {"48", FilterSlope::k48}};
-// An LP or HP without a slope is 12 dB/oct.
+// An LP or HP without a slope is 12 dB/oct; a Peak without a Q mode is
+// Proportional.
 constexpr FilterSlope kDefaultSlope = FilterSlope::k12;
+constexpr PeakQ kDefaultPeakQ = PeakQ::kProportional;
 const std::pair<const char*, PeakQ> kPeakQs[] = {
     {"Constant", PeakQ::kConstant}, {"Proportional", PeakQ::kProportional}};
 const std::pair<const char*, CombHarmonics> kCombHarmonics[] = {
@@ -158,7 +160,7 @@ void ApplyEngineParamsJson(const json& j, EngineParams& p) {
       ReadEnum(b, "dynTarget", kDynTargets, bp.dyn_target);
       ReadEnum(b, "chan", kChans, bp.chan);
       if (bp.type == BandType::kPeak) {
-        auto q = static_cast<PeakQ>(bp.option);
+        auto q = kDefaultPeakQ;
         ReadEnum(b, "qMode", kPeakQs, q);
         bp.option = static_cast<int>(q);
       } else if (bp.type == BandType::kVowel) {
@@ -272,7 +274,7 @@ json EngineParamsToJson(const EngineParams& p) {
       j["z"] = bp.z;
       if (bp.type == BandType::kPeak) {
         WriteEnum(j, "qMode", kPeakQs, static_cast<PeakQ>(bp.option),
-                  static_cast<PeakQ>(bd.option));
+                  kDefaultPeakQ);
       } else if (bp.type == BandType::kVowel) {
         WriteEnum(j, "weighting", kWeightings,
                   static_cast<VowelWeighting>(bp.option),

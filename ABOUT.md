@@ -62,7 +62,7 @@ A zero-latency, minimum-phase C++ audio plugin (built with **iPlug2**; targeting
 * **Why ZDF SVF:** Solves the instantaneous feedback loop algebraically, so cutoff ($g = \tan(\pi f / f_s)$) and damping ($k = 1/Q$) remain orthogonal up to Nyquist, and the state variables stay meaningful when coefficients change every sample. Direct-form biquads add no latency either, but their state is tied to the coefficient set, so fast modulation causes zipper noise, transients, or instability. All shapes (LP/BP/HP/peak/shelf/notch) come from one cell as a linear mix of its outputs.
 * **Polymorphic Band Slot:** Each of the 8 band slots wraps a small unit cascade (up to 4 SVF cells) configured by `Band_Type`:
   * *Primitives (Peak, Low/High Shelf, Notch, BP, and LP/HP at 12 dB/oct):* 1x SVF cell.
-  * *Peak Q Mode (Option):* **Constant** keeps the set Q at every gain; **Proportional** narrows the bell as its gain grows, in either direction, like many console EQs: the Q doubles for every 12 dB of gain and is the set Q at 6 dB (0.71× at 0 dB, 2× at 18 dB). Gentle moves stay broad and deep ones get surgical, which also suits a dynamic bell: the harder it ducks a resonance, the narrower it gets.
+  * *Peak Q Mode (Option):* **Constant** keeps the set Q at every gain; **Proportional** narrows the bell as its gain grows, in either direction, like many console EQs: the Q doubles for every 12 dB of gain and is the set Q at 6 dB (0.71× at 0 dB, 2× at 18 dB). Gentle moves stay broad and deep ones get surgical, which also suits a dynamic bell: the harder it ducks a resonance, the narrower it gets. Proportional is the default; the dynamic factory presets (wahs, Harmonic EQ, Snare Attack Split, Vintage Tricks) keep Constant.
   * *LP/HP at 6, 12, 18, 36 and 48 dB/oct:* Butterworth (−3 dB at the cutoff, no overshoot at Q 0.7071): a first-order cell for 6 and 18 dB/oct plus 2nd-order cells (1–4). The band's Q scales the sharpest cell's, so a higher Q adds a resonant peak at the cutoff at any slope; 6 dB/oct has no Q.
   * *Band Shelf:* a plateau of the band's gain between two edges, built from 2x Butterworth High Shelf cells (+gain at the low edge, −gain at the high edge) whose half-gain points are the edges. X is the center (the geometric mean of the edges), Z the width in octaves. Transitions are 12 dB/oct without overshoot; below about 2 octaves wide the plateau doesn't reach the full gain and the shape becomes a broad bell.
   * *LP/HP at 24 dB/oct (Linkwitz-Riley crossovers):* 2x cascaded SVF cells, both at the band's Q (default 0.7071 = LR4). LP and HP at 24 dB/oct, the same cutoff and Q 0.7071 sum to a flat-magnitude all-pass, **not** to the dry signal. Other Q values make a resonant 24 dB/oct filter.
@@ -172,7 +172,7 @@ v1 has **one main input, one optional sidechain input, and one output** in every
 
 | Type | X (`Freq`) | Y (`Gain`) | Z (`Q`) | `Option` |
 | :--- | :--- | :--- | :--- | :--- |
-| Peak | Freq (Hz) | Gain (dB) | Q | Q Mode: Constant / Proportional |
+| Peak | Freq (Hz) | Gain (dB) | Q | Q Mode: Proportional (default) / Constant |
 | Low Shelf, High Shelf | Freq (Hz) | Gain (dB) | Q | – |
 | Band Shelf | Center (Hz) | Gain (dB) | Width (oct) | – (later: transition slope) |
 | LP, HP | Freq (Hz) | – | Q | Slope: 6 / 12 / 18 / 24 / 36 / 48 dB/oct (24 = Linkwitz-Riley, the others Butterworth) |

@@ -14,6 +14,7 @@
     "bands": [
       {
         "type": "Peak",
+        "qMode": "Constant",
         "x": 1000,
         "y": 12,
         "z": 4,

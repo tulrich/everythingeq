@@ -304,6 +304,21 @@ TEST_CASE("Option text follows the band type", "[params]") {
   REQUIRE_FALSE(ParseSlotText(v, option, "1").has_value());
 }
 
+TEST_CASE("Peak bands default to proportional Q", "[params]") {
+  const int prop = static_cast<int>(PeakQ::kProportional);
+  const EngineParams p = BuildEngineParams(DefaultParamValues(), false);
+  for (int b = 0; b < kNumBands; ++b) {
+    if (p.bands[b].type == BandType::kPeak) REQUIRE(p.bands[b].option == prop);
+  }
+  // A preset without a Q mode is Proportional; Constant round-trips.
+  const nlohmann::json bare = {{"bands", {{{"type", "Peak"}}}}};
+  REQUIRE(ParseEngineParams(bare).bands[0].option == prop);
+  EngineParams constant = ParseEngineParams(bare);
+  constant.bands[0].option = static_cast<int>(PeakQ::kConstant);
+  REQUIRE(ParseEngineParams(EngineParamsToJson(constant)).bands[0].option ==
+          static_cast<int>(PeakQ::kConstant));
+}
+
 TEST_CASE("Slot display text parses back consistently", "[params]") {
   std::mt19937 rng(5);
   for (int trial = 0; trial < 500; ++trial) {
