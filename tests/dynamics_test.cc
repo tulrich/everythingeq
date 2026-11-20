@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "dsp/dynamics/dynamics_group.h"
+#include "model/presets.h"
 #include "tests/test_util.h"
 
 namespace eeq::test {
@@ -22,6 +23,29 @@ DynamicsGroup MakeGroup(const GroupParams& p) {
 
 double SineAt(size_t i, double amp) {
   return amp * std::sin(2.0 * kPi * kProbeHz * i / kFs);
+}
+
+const EngineParams& FactoryParams(const std::string& name) {
+  for (const Preset& p : FactoryPresets()) {
+    if (p.name == name) return p.params;
+  }
+  FAIL("no factory preset " << name);
+  static EngineParams none;
+  return none;
+}
+
+// Output over input level (dB) of the left channels, over the second half.
+double LevelChangeDb(const EngineParams& params, const Stereo& in) {
+  Engine e;
+  e.SetParams(params);
+  e.Prepare(kFs);
+  const Stereo out = Run(e, in);
+  double pin = 0.0, pout = 0.0;
+  for (size_t i = in.size() / 2; i < in.size(); ++i) {
+    pin += double(in.l[i]) * in.l[i];
+    pout += double(out.l[i]) * out.l[i];
+  }
+  return 10.0 * std::log10(pout / pin);
 }
 
 }  // namespace
@@ -222,6 +246,28 @@ TEST_CASE("Vowel morph target sweeps the formants", "[dynamics]") {
   const double f2 = std::atan(e.band(0).design(0).cells[1].g) * kFs / kPi;
   CAPTURE(f2);
   REQUIRE(std::abs(f2 / 2290.0 - 1.0) < 0.01);
+}
+
+TEST_CASE("Noise Gate preset closes on quiet audio and opens on loud",
+          "[dynamics]") {
+  const EngineParams& gate = FactoryParams("Noise Gate");
+  const auto n = static_cast<size_t>(kFs);
+  // Quiet audio drops by about 60 dB (above 60 Hz: the shelves sit at
+  // 20 Hz); a loud tone passes.
+  REQUIRE(LevelChangeDb(gate, Sine(n, 1000.0, 0.001, kFs)) < -55.0);
+  REQUIRE(LevelChangeDb(gate, Sine(n, 60.0, 0.001, kFs)) < -55.0);
+  REQUIRE(std::abs(LevelChangeDb(gate, Sine(n, 200.0, 0.3, kFs))) < 0.5);
+}
+
+TEST_CASE("De-Esser preset cuts loud sibilance only", "[dynamics]") {
+  const EngineParams& de_esser = FactoryParams("De-Esser");
+  const auto n = static_cast<size_t>(0.5 * kFs);
+  const double ess = LevelChangeDb(de_esser, Sine(n, 7000.0, 0.3, kFs));
+  REQUIRE(ess < -6.0);
+  REQUIRE(ess > -10.5);
+  // Quiet highs and the body of the voice pass.
+  REQUIRE(std::abs(LevelChangeDb(de_esser, Sine(n, 7000.0, 0.003, kFs))) < 0.5);
+  REQUIRE(std::abs(LevelChangeDb(de_esser, Sine(n, 300.0, 0.3, kFs))) < 0.3);
 }
 
 }  // namespace eeq::test

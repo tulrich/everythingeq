@@ -1,0 +1,43 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "Noise Gate",
+  "params": {
+    "global": {
+      "lookaheadMs": 1.5
+    },
+    "groups": [
+      {
+        "input": "InternalDry",
+        "scFilter": "HP",
+        "scHz": 60,
+        "rmsWindowMs": 10,
+        "alpha": 0.0,
+        "thresholdDb": -45,
+        "kneeDb": 4,
+        "mode": "Above",
+        "attackMs": 0.5,
+        "holdMs": 40,
+        "releaseMs": 120
+      }
+    ],
+    "bands": [
+      {
+        "type": "HighShelf",
+        "x": 20,
+        "y": -30,
+        "z": 0.7071,
+        "dynGroup": 0,
+        "dynRange": 30
+      },
+      {
+        "type": "HighShelf",
+        "x": 20,
+        "y": -30,
+        "z": 0.7071,
+        "dynGroup": 0,
+        "dynRange": 30
+      }
+    ]
+  }
+}

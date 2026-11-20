@@ -1,0 +1,31 @@
+{
+  "format": "everythingeq-preset",
+  "version": 1,
+  "name": "De-Esser",
+  "params": {
+    "groups": [
+      {
+        "input": "InternalDry",
+        "scFilter": "HP",
+        "scHz": 5000,
+        "rmsWindowMs": 5,
+        "alpha": 0.0,
+        "thresholdDb": -32,
+        "kneeDb": 8,
+        "mode": "Above",
+        "attackMs": 1,
+        "releaseMs": 60
+      }
+    ],
+    "bands": [
+      {
+        "type": "Peak",
+        "x": 6500,
+        "y": 0,
+        "z": 1.0,
+        "dynGroup": 0,
+        "dynRange": -10
+      }
+    ]
+  }
+}
