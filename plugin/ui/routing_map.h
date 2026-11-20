@@ -21,12 +21,15 @@ namespace eeq {
 
 // The dynamics routing, drawn like a subway map (ABOUT.md section 4).
 // Bands are columns, left to right like the ribbon above the graph; groups
-// are rows.  Each group's feed drops from its source's label at the top left
-// (Input, Band Sum, Sidechain) and turns right into the group's head.  An
-// assignment is a line in the band's color that runs right from the head in its
-// own lane, then turns down with a rounded corner and drops to the band's port
-// at the bottom, ending in an arrowhead (filled = Dyn A, the left port; hollow
-// = Dyn B, the right one).  Under the ports: each band's type icon.
+// are rows.  Each source (Input, Band Sum, Sidechain) is one line down from
+// its label at the top left; each group's feed branches off it and turns
+// right into the group's head.  An assignment is a line in the band's color
+// that runs right from the head along the group's row, then turns down with
+// a rounded corner and drops to the band's port at the bottom, ending in an
+// arrowhead (filled = Dyn A, the left port; hollow = Dyn B, the right one).
+// A group's lines share its row, the longer ones underneath, so the stretch
+// before each turn shows that band's color.  Under the ports: each band's
+// type icon.
 //
 // Every crossing of a group row and a port column has a faint dot.  Click
 // an empty crossing to connect that port to the group (Dyn On, Range 0; a
@@ -91,9 +94,9 @@ class RoutingMap final : public iplug::igraphics::IControl {
   };
 
   // Geometry (see kMapTopHeight and kMapBottomHeight).
-  static constexpr float kBusX[3] = {11.f, 35.f, 59.f};
-  static constexpr float kHeadL = 70.f;
-  static constexpr float kHeadW = 50.f;
+  static constexpr float kBusX[3] = {9.f, 33.f, 57.f};
+  static constexpr float kHeadL = 65.f;
+  static constexpr float kHeadW = 48.f;
   static constexpr float kBandsL = kHeadL + kHeadW + 10.f;
   static constexpr float kCorner = 6.f;
   static constexpr float kArrow = 7.5f;
@@ -248,16 +251,13 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Sources, drawn like the band side: each group's feed is its own line
-  // from its source's label down to the group's row, turning right into the
-  // head.  A source no group uses shows only its label.  Feeds from one
-  // source run side by side, the topmost group's on the right, so each
-  // turns off without crossing the ones continuing down.
+  // Sources: one line down from each label as far as its lowest group, with
+  // each group's feed branching off and turning right into the head.  Feeds
+  // share their source's line, so unused groups' (dark) go underneath.
   static const char* const kSources[] = {"IN", "SUM", "SC"};
   const ig::IColor sc_color =
       sc_connected_ ? theme::kTextDim : theme::kCaution.WithOpacity(0.7f);
   const float bus_t = mRECT.T + 19.f;
-  std::array<float, kNumGroups> feed_x{};
   std::array<bool, kNumGroups> used{};  // Some band follows the group.
   for (int b = 0; b < kNumBands; ++b) {
     for (int s = 0; s < 2; ++s) {
@@ -265,23 +265,15 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
         used[std::clamp(ports[b][s].group, 0, kNumGroups - 1)] = true;
     }
   }
-  // An unused group's feed is dark, like its stub on the band side.
   auto feed_color = [&](int gi) {
     if (!used[gi]) return theme::kGridStrong;
     return input[gi] == 2 ? sc_color : theme::kTextDim;
   };
   for (int s = 0; s < 3; ++s) {
-    std::array<int, kNumGroups> fed{};
-    int n = 0;
-    for (int gi = 0; gi < kNumGroups; ++gi) {
-      if (input[gi] == s) fed[n++] = gi;
-    }
-    for (int k = 0; k < n; ++k) {
-      feed_x[fed[k]] = BusX(s) + (0.5f * (n - 1) - k) * 3.f;
-    }
+    const bool fed = std::find(input.begin(), input.end(), s) != input.end();
     const ig::IColor c = s == 2 ? sc_color : theme::kTextDim;
     g.DrawText(
-        theme::Text(theme::kSmall, n > 0 ? c : c.WithOpacity(0.5f),
+        theme::Text(theme::kSmall, fed ? c : c.WithOpacity(0.5f),
                     ig::EAlign::Center),
         kSources[s],
         ig::IRECT(BusX(s) - 15.f, mRECT.T, BusX(s) + 15.f, mRECT.T + 17.f));
@@ -291,21 +283,23 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
                    1.6f);
     }
   }
-  // Drops first, so the feeds' runs break the drops they cross.
-  for (int gi = 0; gi < kNumGroups; ++gi) {
-    const bool sc = input[gi] == 2;
-    const ig::IColor c = feed_color(gi);
-    const float x = feed_x[gi], y = GroupY(gi);
-    if (sc && !sc_connected_) {
-      g.DrawDottedLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f, 4.f);
-    } else {
-      g.DrawLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f);
+  // Drops first, so the feeds' runs break the other sources' lines.
+  for (const bool lit : {false, true}) {
+    for (int gi = 0; gi < kNumGroups; ++gi) {
+      if (used[gi] != lit) continue;
+      const ig::IColor c = feed_color(gi);
+      const float x = BusX(input[gi]), y = GroupY(gi);
+      if (input[gi] == 2 && !sc_connected_) {
+        g.DrawDottedLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f, 4.f);
+      } else {
+        g.DrawLine(c, x, bus_t, x, y - kCorner, nullptr, 2.f);
+      }
     }
   }
   for (int gi = 0; gi < kNumGroups; ++gi) {
     const bool sc = input[gi] == 2;
     const ig::IColor c = feed_color(gi);
-    const float x = feed_x[gi], y = GroupY(gi);
+    const float x = BusX(input[gi]), y = GroupY(gi);
     const float head_l = Head(gi).L;
     g.DrawLine(background_, x + kCorner, y, head_l, y, nullptr, 4.5f);
     g.PathClear();
@@ -319,25 +313,8 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     }
   }
 
-  // Each connection runs from its group's head in its own lane, in the
-  // band's color.  The lanes of a group are stacked around its row with the
-  // leftmost port at the bottom, so each line turns down without crossing
-  // the lanes that continue right above it.
-  std::array<std::array<float, 2>, kNumBands> lane_y{};
   for (int gi = 0; gi < kNumGroups; ++gi) {
-    std::array<std::pair<int, int>, 2 * kNumBands> joined{};
-    int n = 0;
-    for (int b = 0; b < kNumBands; ++b) {  // Left to right.
-      for (int s = 0; s < 2; ++s) {
-        if (ports[b][s].on && ports[b][s].group == gi) joined[n++] = {b, s};
-      }
-    }
-    const float sp = n > 1 ? std::min(3.5f, Row() * 0.6f / (n - 1)) : 0.f;
-    for (int k = 0; k < n; ++k) {
-      const auto [b, s] = joined[k];
-      lane_y[b][s] = GroupY(gi) + (0.5f * (n - 1) - k) * sp;
-    }
-    if (n == 0) {
+    if (!used[gi]) {
       // An unused group shows a dark stub (the selected one in the accent).
       const float l = Head(gi).R;
       g.DrawLine(gi == sel_group ? theme::kAccent : theme::kGridStrong, l,
@@ -411,14 +388,15 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
     return theme::BandColor(b).WithOpacity(a);
   };
   auto line_width = [&](int b) {
-    return BandLit(v, b) || b == sel_band ? 2.6f : 2.f;
+    return BandLit(v, b) || b == sel_band ? 3.6f : 3.f;
   };
-  // Lanes first, so the drops below break the lanes they cross.
-  for (int b = 0; b < kNumBands; ++b) {
-    for (int s = 0; s < 2; ++s) {
+  // Rows first, so the drops below break the rows they cross; right to left,
+  // so the shorter runs lie on top.
+  for (int b = kNumBands - 1; b >= 0; --b) {
+    for (int s = 1; s >= 0; --s) {
       const Port& p = ports[b][s];
       if (!p.on) continue;
-      const float y = lane_y[b][s];
+      const float y = GroupY(p.group);
       g.DrawLine(band_color(b), Head(p.group).R, y, PortX(b, s) - kCorner, y,
                  nullptr, line_width(b));
     }
@@ -438,7 +416,7 @@ inline void RoutingMap::Draw(iplug::igraphics::IGraphics& g) {
         g.DrawCircle(theme::kGridStrong, x, py - 3.f, 2.5f);
         continue;
       }
-      const float y = lane_y[b][s];
+      const float y = GroupY(p.group);
       const float w = line_width(b);
       g.DrawLine(halo, x, y + kCorner, x, py - kArrow, nullptr, w + 2.5f);
       g.DrawLine(color, x, y + kCorner, x, py - kArrow, nullptr, w);
